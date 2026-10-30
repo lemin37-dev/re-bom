@@ -1,0 +1,113 @@
+# PR 이벤트를 Discord 채널로 알림
+# 필요: 저장소 Secret DISCORD_WEBHOOK_URL (Discord 채널 웹후크 URL)
+name: Discord PR 알림
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write # PR별 Discord 스레드 ID를 PR 코멘트에 기록
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    # 같은 저장소 브랜치의 PR만 (포크 PR에는 Secret이 전달되지 않음)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Discord로 전송
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          REVIEW_URL: ${{ github.event.review.html_url }}
+          REVIEWER: ${{ github.event.review.user.login }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL Secret이 없어 건너뜁니다."
+            exit 0
+          fi
+
+          URL="$PR_URL"
+          if [ "$EVENT_NAME" = "pull_request_review" ]; then
+            case "$REVIEW_STATE" in
+              approved)          LABEL="✅ 승인";       COLOR=3066993 ;;
+              changes_requested) LABEL="🛠️ 수정 요청";  COLOR=15105570 ;;
+              commented)         LABEL="💬 리뷰 코멘트"; COLOR=9807270 ;;
+              *)                 exit 0 ;;
+            esac
+            WHO="$REVIEWER"
+            URL="${REVIEW_URL:-$PR_URL}"
+          else
+            case "$ACTION" in
+              opened)           LABEL="🆕 PR 생성";      COLOR=3447003 ;;
+              reopened)         LABEL="🔄 PR 다시 열림"; COLOR=3447003 ;;
+              ready_for_review) LABEL="👀 리뷰 요청";    COLOR=16776960 ;;
+              closed)
+                if [ "$MERGED" = "true" ]; then LABEL="🎉 머지됨"; COLOR=10181046
+                else LABEL="🚫 머지 없이 닫힘"; COLOR=10070709; fi ;;
+              *) exit 0 ;;
+            esac
+            WHO="$ACTOR"
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg title "$LABEL · #$PR_NUMBER $PR_TITLE" \
+            --arg url "$URL" \
+            --arg who "$WHO" \
+            --arg author "$PR_AUTHOR" \
+            --arg branch "$HEAD_REF → $BASE_REF" \
+            --arg repo "$REPO" \
+            --argjson color "$COLOR" \
+            '{
+              username: "GitHub",
+              embeds: [{
+                title: ($title | .[0:250]),
+                url: $url,
+                color: $color,
+                fields: [
+                  {name: "작성자", value: $author, inline: true},
+                  {name: "이벤트 주체", value: $who, inline: true},
+                  {name: "브랜치", value: $branch, inline: false}
+                ],
+                footer: {text: $repo}
+              }]
+            }')
+
+          # 붙여넣기로 들어간 공백/줄바꿈 제거
+          WEBHOOK=$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')
+
+          # 웹후크는 포럼 채널 기준: PR마다 포스트 하나를 만들고, 이후 이벤트는 그 포스트에 답글로 보냄.
+          # 포스트(스레드) ID는 PR 코멘트의 숨은 표식으로 보관한다.
+          MARKER="discord-thread-id"
+          THREAD_ID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.body | contains(\"<!-- $MARKER:\")) | .body" \
+            | grep -o "$MARKER: [0-9]*" | head -n1 | awk '{print $2}' || true)
+
+          send() { # $1: URL 쿼리, $2: payload
+            curl -sS --fail-with-body -H "Content-Type: application/json" -d "$2" "$WEBHOOK?wait=true$1"
+          }
+
+          if [ -n "$THREAD_ID" ] && send "&thread_id=$THREAD_ID" "$PAYLOAD" > /dev/null; then
+            exit 0
+          fi
+
+          # 스레드가 없거나 삭제된 경우 새 포스트 생성
+          RESP=$(send "" "$(jq --arg n "#$PR_NUMBER $PR_TITLE" '. + {thread_name: $n[0:100]}' <<< "$PAYLOAD")")
+          NEW_ID=$(jq -r '.channel_id' <<< "$RESP")
+          gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+            -f body="💬 이 PR의 알림은 Discord 포럼 포스트로 전송됩니다. <!-- $MARKER: $NEW_ID -->" > /dev/null
