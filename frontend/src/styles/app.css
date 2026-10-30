@@ -1,0 +1,2 @@
+/* 앱 루트 배경 */
+.app { min-height: 100vh; background: radial-gradient(ellipse at 16% 7%, #edf0e58c 0, transparent 40%); }

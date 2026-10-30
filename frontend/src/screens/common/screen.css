@@ -1,0 +1,14 @@
+/* 화면 공통: 페이지 제목, 섹션 제목, 참고 문구, 센터 필터 배너 */
+.page-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; }
+.page-heading p { color:var(--color-muted); margin-top:10px; font-size:13px; line-height:1.8; }
+.page-heading-mark { width:82px; height:82px; border-radius:50%; background:var(--color-sage-light); color:var(--color-sage); display:flex; align-items:center; justify-content:center; margin-right:18px; transform:rotate(-12deg); }
+.section-heading { margin-bottom:22px; }
+.section-heading>div { display:flex; align-items:center; gap:11px; }
+.section-heading h2 { color:var(--color-forest); font-size:21px; font-weight:750; letter-spacing:-.7px; }
+.section-heading>p { font-size:12px; color:var(--color-muted); margin-top:7px; }
+.section-number { font-size:12px; color:var(--color-sage); font-weight:650; }
+.reference-note { font-size:10px; color:var(--color-muted); line-height:1.9; margin-top:12px; }
+.center-filter-banner { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:15px 19px; background:var(--color-sage-light); border:1px solid #dce5ce; border-radius:14px; margin-bottom:16px; color:#758564; font-size:11px; }
+.center-filter-banner>span { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.center-filter-banner strong { color:var(--color-forest); font-weight:650; }
+.center-filter-banner>button { display:flex; align-items:center; gap:5px; font-size:10px; white-space:nowrap; }
