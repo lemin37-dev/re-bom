@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write # PR별 Discord 스레드 ID를 PR 코멘트에 기록
 
 jobs:
   notify:
@@ -34,6 +35,7 @@ jobs:
           REVIEWER: ${{ github.event.review.user.login }}
           ACTOR: ${{ github.actor }}
           REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "DISCORD_WEBHOOK_URL Secret이 없어 건너뜁니다."
@@ -86,6 +88,26 @@ jobs:
               }]
             }')
 
-          # 붙여넣기로 들어간 공백/줄바꿈 제거, 실패 시 Discord 응답 본문 출력
+          # 붙여넣기로 들어간 공백/줄바꿈 제거
           WEBHOOK=$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')
-          curl -sS --fail-with-body -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK"
+
+          # 웹후크는 포럼 채널 기준: PR마다 포스트 하나를 만들고, 이후 이벤트는 그 포스트에 답글로 보냄.
+          # 포스트(스레드) ID는 PR 코멘트의 숨은 표식으로 보관한다.
+          MARKER="discord-thread-id"
+          THREAD_ID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.body | contains(\"<!-- $MARKER:\")) | .body" \
+            | grep -o "$MARKER: [0-9]*" | head -n1 | awk '{print $2}' || true)
+
+          send() { # $1: URL 쿼리, $2: payload
+            curl -sS --fail-with-body -H "Content-Type: application/json" -d "$2" "$WEBHOOK?wait=true$1"
+          }
+
+          if [ -n "$THREAD_ID" ] && send "&thread_id=$THREAD_ID" "$PAYLOAD" > /dev/null; then
+            exit 0
+          fi
+
+          # 스레드가 없거나 삭제된 경우 새 포스트 생성
+          RESP=$(send "" "$(jq --arg n "#$PR_NUMBER $PR_TITLE" '. + {thread_name: $n[0:100]}' <<< "$PAYLOAD")")
+          NEW_ID=$(jq -r '.channel_id' <<< "$RESP")
+          gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+            -f body="💬 이 PR의 알림은 Discord 포럼 포스트로 전송됩니다. <!-- $MARKER: $NEW_ID -->" > /dev/null
