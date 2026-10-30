@@ -1,0 +1,14 @@
+/* 웹 상단 헤더·브랜드 로고 (.brand/.logo는 모바일 헤더에서도 재사용) */
+.site-header { background: #ffffffed; border-bottom: 1px solid #e6e1d680; }
+.header-inner { max-width: 1344px; padding: 0 32px; height: 96px; margin: auto; display: flex; align-items: center; gap: 44px; }
+.brand { display: flex; align-items: center; gap: 13px; flex-shrink: 0; }
+.logo { font-size: 32px; font-weight: 850; color: var(--color-forest); letter-spacing: -1.8px; position: relative; }
+.logo>span,.footer-logo>span { color: var(--color-peach); }
+.logo i { position: absolute; width: 5px; height: 5px; background: var(--color-sage); border-radius: 100% 0 100% 0; top: 5px; right: -5px; transform: rotate(-15deg); }
+.brand-caption { color: var(--color-muted); font-size: 10px; line-height: 1.7; max-width: 108px; word-break: keep-all; }
+nav { display: flex; height: 100%; gap: 30px; white-space: nowrap; }
+.nav-item { position: relative; font-size: 14px; color: #747b6d; }
+.nav-item:hover { color: var(--color-forest); }
+.nav-item.active { color: var(--color-forest); font-weight: 750; }
+.nav-item.active:after { content: ''; position: absolute; height: 3px; background: var(--color-peach); bottom: 0; left: 0; right: 0; border-radius: 3px 3px 0 0; }
+.live-dot { width: 6px; height: 6px; background: #80a465; border-radius: 50%; box-shadow: 0 0 0 3px #dce6cc; margin-right: 4px; }

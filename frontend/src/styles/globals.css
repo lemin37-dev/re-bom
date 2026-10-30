@@ -1,0 +1,35 @@
+/*
+ * 전역 스타일 진입점 (src/app/layout.tsx에서 한 번만 import)
+ *
+ * import 순서가 곧 CSS 적용(cascade) 순서입니다.
+ * 기존 Vite 빌드의 순서(화면 → 마스코트 → 모바일 → 공통/웹)를 그대로 유지하고 있으니
+ * 순서를 바꾸면 같은 우선순위의 규칙끼리 덮어쓰는 결과가 달라질 수 있어요.
+ *
+ * 한글 글꼴(Noto Sans KR): fonts.css의 @font-face가 public/fonts/의 WOFF2를 유니코드 범위별로 불러옵니다.
+ */
+@import './fonts.css';
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* 공통 화면 본문 (웹·앱 공통) */
+@import '../screens/common/screen.css';
+@import '../screens/animal-detail/animal-detail.css';
+@import '../screens/adoption-guide/adoption-guide.css';
+@import '../screens/shelter-directory/shelter-directory.css';
+@import '../screens/about/about.css';
+@import '../screens/common/screen-responsive.css';
+
+/* 마스코트 테마 */
+@import './mascots.css';
+
+/* 앱(모바일 프레임) 전용 */
+@import '../mobile/styles/mobile.css';
+
+/* 공통 레이아웃·컴포넌트 + 웹 전용 */
+@import './app.css';
+@import '../web/styles/header.css';
+@import './layout.css';
+@import './ui.css';
+@import '../web/styles/search.css';
+@import './components.css';
+@import './responsive.css';

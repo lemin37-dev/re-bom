@@ -1,0 +1,4 @@
+/* 본문 컨테이너와 공통 타이포그래피 */
+.main { max-width: 1344px; margin: auto; padding: 42px 32px 50px; min-height: calc(100vh - 260px); }
+.eyebrow { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 550; color: #85906e; letter-spacing: .6px; margin-bottom: 10px; }
+h1 { font-size: 32px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.5; color: var(--color-forest); }

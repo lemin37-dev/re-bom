@@ -1,0 +1,22 @@
+/* 디자인 토큰(Tailwind v4 @theme)과 요소 기본 스타일 */
+@theme {
+  --color-forest: #3f523b;
+  --color-peach: #f2a878;
+  --color-peach-deep: #e58e5a;
+  --color-sage: #95a26f;
+  --color-sage-light: #e7ecdc;
+  --color-cream: #fbf8f2;
+  --color-ink: #2e3a2b;
+  --color-muted: #7a8173;
+  --color-line: #e6e1d6;
+  --font-sans: 'Noto Sans KR', sans-serif;
+}
+@layer base {
+  body { font-family: var(--font-sans); color: var(--color-ink); background: var(--color-cream); font-size: 14px; -webkit-font-smoothing: antialiased; }
+  button, select { cursor: pointer; }
+  button { transition: background .18s, border-color .18s, box-shadow .18s, transform .18s; text-align: inherit; }
+  button:disabled { cursor: wait; opacity: .7; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #95a26f88; outline-offset: 4px; }
+  h1,h2,h3,p { margin: 0; }
+  ::selection { background: var(--color-sage-light); }
+}

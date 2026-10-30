@@ -1,0 +1,8 @@
+/* 웹·앱 공통 소형 UI: 아이콘 버튼, 숨김 입력, 검색 소스 배지, 체크박스 */
+.icon-button { padding: 5px; color: var(--color-muted); display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+.icon-button:hover { background: #3f523b0d; }
+.hidden-input { display: none; }
+.source { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 20px; font-size: 9px; font-weight: 650; }
+.source i,.reason-chip i { width: 4px; height: 4px; background: currentColor; border-radius: 50%; flex-shrink: 0; }
+.green { background: #e3ebdc; color: #5d7251; }.peach { background: #fce6d6; color: #d18b5e; }.sage { background: #edf0e2; color: #8d9b68; }.muted-source { opacity: .7; }
+.checkbox { width: 12px; height: 12px; border: 1px solid #9eaa89; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
