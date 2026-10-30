@@ -1,0 +1,40 @@
+# 노션 일정 관리 DB의 '결정' 항목을 GitHub 이슈로 자동 등록
+# 필요: 저장소 Secret NOTION_TOKEN (노션 통합 토큰, 일정 관리 DB에 연결해 둘 것)
+# 선택: 저장소 Variable NOTION_DATA_SOURCE_ID (없으면 아래 기본값 사용)
+# 참고: schedule 은 기본 브랜치에 있는 워크플로만 실행됨
+name: 노션 결정 → 이슈
+
+on:
+  schedule:
+    - cron: "0 0-14/2 * * *" # 한국시간 09시~23시, 2시간마다
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "이슈를 만들지 않고 대상만 확인"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: notion-decision-issue
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 결정 항목 이슈 등록
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATA_SOURCE_ID: ${{ vars.NOTION_DATA_SOURCE_ID || '363b95a0-bdee-8249-b2f1-87c03f2a8871' }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: |
+          if [ -z "$NOTION_TOKEN" ]; then
+            echo "NOTION_TOKEN Secret이 없어 건너뜁니다."
+            exit 0
+          fi
+          python3 .github/scripts/notion_decisions_to_issues.py

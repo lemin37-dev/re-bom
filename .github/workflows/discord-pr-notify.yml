@@ -7,6 +7,8 @@ on:
     types: [opened, reopened, ready_for_review, closed]
   pull_request_review:
     types: [submitted]
+  issue_comment: # PR 대화 탭 일반 댓글
+    types: [created]
 
 permissions:
   contents: read
@@ -15,8 +17,11 @@ permissions:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    # 같은 저장소 브랜치의 PR만 (포크 PR에는 Secret이 전달되지 않음)
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # PR 이벤트: 같은 저장소 브랜치의 PR만 (포크 PR에는 Secret이 전달되지 않음)
+    # 댓글 이벤트: PR에 달린 사람의 댓글만 (봇 댓글 제외 → 스레드 ID 기록 댓글로 인한 반복 방지)
+    if: >-
+      (github.event_name != 'issue_comment' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.user.type != 'Bot')
     steps:
       - name: Discord로 전송
         env:
@@ -24,18 +29,24 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
           MERGED: ${{ github.event.pull_request.merged }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          PR_TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
+          PR_URL: ${{ github.event.pull_request.html_url || github.event.issue.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || github.event.issue.user.login }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           REVIEW_STATE: ${{ github.event.review.state }}
           REVIEW_URL: ${{ github.event.review.html_url }}
           REVIEWER: ${{ github.event.review.user.login }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENTER: ${{ github.event.comment.user.login }}
           ACTOR: ${{ github.actor }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
+          # 새 포스트에서 멘션할 Discord 사용자 ID (쉼표 구분, 저장소 Variables)
+          MENTION_IDS: ${{ vars.DISCORD_MENTION_IDS }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "DISCORD_WEBHOOK_URL Secret이 없어 건너뜁니다."
@@ -52,6 +63,12 @@ jobs:
             esac
             WHO="$REVIEWER"
             URL="${REVIEW_URL:-$PR_URL}"
+            BODY="$REVIEW_BODY"
+          elif [ "$EVENT_NAME" = "issue_comment" ]; then
+            LABEL="💬 댓글"; COLOR=9807270
+            WHO="$COMMENTER"
+            URL="$COMMENT_URL"
+            BODY="$COMMENT_BODY"
           else
             case "$ACTION" in
               opened)           LABEL="🆕 PR 생성";      COLOR=3447003 ;;
@@ -70,22 +87,23 @@ jobs:
             --arg url "$URL" \
             --arg who "$WHO" \
             --arg author "$PR_AUTHOR" \
-            --arg branch "$HEAD_REF → $BASE_REF" \
+            --arg head "$HEAD_REF" \
+            --arg base "$BASE_REF" \
+            --arg body "${BODY:-}" \
             --arg repo "$REPO" \
             --argjson color "$COLOR" \
             '{
               username: "GitHub",
-              embeds: [{
+              embeds: [({
                 title: ($title | .[0:250]),
                 url: $url,
                 color: $color,
-                fields: [
+                fields: ([
                   {name: "작성자", value: $author, inline: true},
-                  {name: "이벤트 주체", value: $who, inline: true},
-                  {name: "브랜치", value: $branch, inline: false}
-                ],
+                  {name: "이벤트 주체", value: $who, inline: true}
+                ] + (if $head != "" then [{name: "브랜치", value: "\($head) → \($base)", inline: false}] else [] end)),
                 footer: {text: $repo}
-              }]
+              } + (if $body != "" then {description: (if ($body | length) > 300 then $body[0:300] + "…" else $body end)} else {} end))]
             }')
 
           # 붙여넣기로 들어간 공백/줄바꿈 제거
@@ -107,7 +125,13 @@ jobs:
           fi
 
           # 스레드가 없거나 삭제된 경우 새 포스트 생성
-          RESP=$(send "" "$(jq --arg n "#$PR_NUMBER $PR_TITLE" '. + {thread_name: $n[0:100]}' <<< "$PAYLOAD")")
+          # 팀원을 멘션해 알림을 보내고 포스트 참여자로 추가되게 함
+          IDS=$(jq -cn --arg s "$MENTION_IDS" '$s | split(",") | map(gsub("\\s"; "")) | map(select(test("^[0-9]+$")))')
+          RESP=$(send "" "$(jq --arg n "#$PR_NUMBER $PR_TITLE" --argjson ids "$IDS" '. + {
+            thread_name: $n[0:100],
+            content: ($ids | map("<@\(.)>") | join(" ")),
+            allowed_mentions: {users: $ids}
+          }' <<< "$PAYLOAD")")
           NEW_ID=$(jq -r '.channel_id' <<< "$RESP")
           gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
             -f body="💬 이 PR의 알림은 Discord 포럼 포스트로 전송됩니다. <!-- $MARKER: $NEW_ID -->" > /dev/null
