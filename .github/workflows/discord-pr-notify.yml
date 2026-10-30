@@ -1,0 +1,89 @@
+# PR 이벤트를 Discord 채널로 알림
+# 필요: 저장소 Secret DISCORD_WEBHOOK_URL (Discord 채널 웹후크 URL)
+name: Discord PR 알림
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    # 같은 저장소 브랜치의 PR만 (포크 PR에는 Secret이 전달되지 않음)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Discord로 전송
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          REVIEW_URL: ${{ github.event.review.html_url }}
+          REVIEWER: ${{ github.event.review.user.login }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL Secret이 없어 건너뜁니다."
+            exit 0
+          fi
+
+          URL="$PR_URL"
+          if [ "$EVENT_NAME" = "pull_request_review" ]; then
+            case "$REVIEW_STATE" in
+              approved)          LABEL="✅ 승인";       COLOR=3066993 ;;
+              changes_requested) LABEL="🛠️ 수정 요청";  COLOR=15105570 ;;
+              commented)         LABEL="💬 리뷰 코멘트"; COLOR=9807270 ;;
+              *)                 exit 0 ;;
+            esac
+            WHO="$REVIEWER"
+            URL="${REVIEW_URL:-$PR_URL}"
+          else
+            case "$ACTION" in
+              opened)           LABEL="🆕 PR 생성";      COLOR=3447003 ;;
+              reopened)         LABEL="🔄 PR 다시 열림"; COLOR=3447003 ;;
+              ready_for_review) LABEL="👀 리뷰 요청";    COLOR=16776960 ;;
+              closed)
+                if [ "$MERGED" = "true" ]; then LABEL="🎉 머지됨"; COLOR=10181046
+                else LABEL="🚫 머지 없이 닫힘"; COLOR=10070709; fi ;;
+              *) exit 0 ;;
+            esac
+            WHO="$ACTOR"
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg title "$LABEL · #$PR_NUMBER $PR_TITLE" \
+            --arg url "$URL" \
+            --arg who "$WHO" \
+            --arg author "$PR_AUTHOR" \
+            --arg branch "$HEAD_REF → $BASE_REF" \
+            --arg repo "$REPO" \
+            --argjson color "$COLOR" \
+            '{
+              username: "GitHub",
+              embeds: [{
+                title: ($title | .[0:250]),
+                url: $url,
+                color: $color,
+                fields: [
+                  {name: "작성자", value: $author, inline: true},
+                  {name: "이벤트 주체", value: $who, inline: true},
+                  {name: "브랜치", value: $branch, inline: false}
+                ],
+                footer: {text: $repo}
+              }]
+            }')
+
+          curl -sS --fail -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
