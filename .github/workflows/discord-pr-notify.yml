@@ -86,4 +86,6 @@ jobs:
               }]
             }')
 
-          curl -sS --fail -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
+          # 붙여넣기로 들어간 공백/줄바꿈 제거, 실패 시 Discord 응답 본문 출력
+          WEBHOOK=$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')
+          curl -sS --fail-with-body -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK"
