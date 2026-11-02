@@ -5,7 +5,7 @@
 # 실행 정책 오류가 나면: powershell -ExecutionPolicy Bypass -File scripts\serve\run_api.ps1
 param(
     [int]$Port = 8000,
-    [string]$BindHost = "127.0.0.1",
+    [string]$BindHost = "0.0.0.0",
     [ValidateSet("sample", "db")][string]$Mode = "",
     [switch]$NoReload
 )

@@ -8,6 +8,7 @@
 pnpm install
 pnpm dev        # 개발 서버 (기본 http://localhost:3000, PORT 환경 변수로 변경)
 pnpm build      # 프로덕션 빌드 (동물 상세는 요청 시 렌더)
+pnpm dev:lan   # 같은 Wi-Fi의 휴대폰에서 접속할 때 (0.0.0.0 바인딩)
 pnpm start      # 빌드 결과 실행
 pnpm lint       # ESLint (eslint-config-next)
 pnpm typecheck  # tsc --noEmit
@@ -96,3 +97,23 @@ src/
 - 화면 이동은 `useExperience().navigate(href)`를 사용하세요. 모드·경로별 스크롤 위치 복원을 함께 처리합니다.
 - 동물·보호센터 정보는 검색 API(레포 루트 `scripts/serve/run_api`, 기본 http://localhost:8000)에서 옵니다. 주소는 `.env.local`의 `NEXT_PUBLIC_API_BASE_URL`로 바꿉니다.
 - 매칭 점수·이유·거리는 아직 API에 없어 화면에서 숨겨집니다(`Animal`의 선택 필드). 문장 검색은 단어 일치, 사진 검색은 미연결입니다.
+
+## 휴대폰에서 테스트 (같은 Wi-Fi)
+
+PC의 LAN IP를 `ipconfig`로 확인합니다 (예: `192.168.0.10`).
+
+1. API: `.\scripts\serve\run_api.ps1 -BindHost 0.0.0.0` (bash는 `HOST=0.0.0.0 scripts/serve/run_api.sh`)
+2. 루트 `.env`의 `REBOM_CORS_ORIGINS`에 `http://192.168.0.10:3000` 추가. 빠지면 화면은 뜨지만 데이터가 비어 보입니다.
+3. `frontend/.env.local`에 `NEXT_PUBLIC_API_BASE_URL=http://192.168.0.10:8000`
+4. `pnpm dev:lan` 후 폰에서 `http://192.168.0.10:3000` 접속
+5. 안 열리면 Windows 방화벽에서 3000, 8000 포트 인바운드를 허용합니다.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
