@@ -1,0 +1,500 @@
+{
+ "source": "data.go.kr 15098931",
+ "endpoint": "https://apis.data.go.kr/1543061/abandonmentPublicService_v2/abandonmentPublic_v2",
+ "run_id": "20261102T151220-e9a4ff",
+ "fetched_at": "2026-11-02T15:12:20+09:00",
+ "code_version": "2026-11-02",
+ "mode": "baseline",
+ "status": "ok",
+ "updated_range": [
+  "20261101",
+  "20261102"
+ ],
+ "calls": 38,
+ "warnings": [
+  "list_protect 2021-09-09~2024-06-04: 불완전(count_mismatch) 총건수 1723, 받은 건수 1721, 버린 항목 0",
+  "list_protect 2024-06-05~2026-11-02: 불완전(count_mismatch) 총건수 14575, 받은 건수 14574, 버린 항목 0"
+ ],
+ "files": [
+  {
+   "kind": "updated",
+   "file": "updated.jsonl.gz",
+   "record_count": 570,
+   "checksum": "335bd5536f088560aa05bc6135fe9f22dd0e3af75f811dfbdada09aae98eaf69"
+  },
+  {
+   "kind": "list_notice",
+   "file": "list_notice.jsonl.gz",
+   "record_count": 2467,
+   "checksum": "45cb299499c6928ce84e2c2b1c367f554ba628348f791fde101aef7bb75293e9"
+  },
+  {
+   "kind": "list_protect",
+   "file": "list_protect.jsonl.gz",
+   "record_count": 17000,
+   "checksum": "4d361c2f4a06385288b6626fc8db874b7252a52e648046e32d93d4c253fe2618"
+  },
+  {
+   "kind": "events",
+   "file": "events.jsonl.gz",
+   "record_count": 0,
+   "checksum": "5cea85078bc9587aa34a8c8d70737629804bc1bc1bebaf3a3fb4ce360c2176a8"
+  }
+ ],
+ "request_params": {
+  "updated": [
+   {
+    "bgupd": "20261101",
+    "enupd": "20261102",
+    "bgnde": "20080101",
+    "endde": "20100926",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261101",
+    "enupd": "20261102",
+    "bgnde": "20100927",
+    "endde": "20130622",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261101",
+    "enupd": "20261102",
+    "bgnde": "20130623",
+    "endde": "20160318",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261101",
+    "enupd": "20261102",
+    "bgnde": "20160319",
+    "endde": "20181213",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261101",
+    "enupd": "20261102",
+    "bgnde": "20181214",
+    "endde": "20210908",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261101",
+    "enupd": "20261102",
+    "bgnde": "20210909",
+    "endde": "20240604",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261101",
+    "enupd": "20261102",
+    "bgnde": "20240605",
+    "endde": "20261102",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   }
+  ],
+  "list_notice": [
+   {
+    "state": "notice",
+    "bgnde": "20080101",
+    "endde": "20100926",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20100927",
+    "endde": "20130622",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20130623",
+    "endde": "20160318",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20160319",
+    "endde": "20181213",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20181214",
+    "endde": "20210908",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20210909",
+    "endde": "20240604",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20240605",
+    "endde": "20261102",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   }
+  ],
+  "list_protect": [
+   {
+    "state": "protect",
+    "bgnde": "20080101",
+    "endde": "20100926",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20100927",
+    "endde": "20130622",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20130623",
+    "endde": "20160318",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20160319",
+    "endde": "20181213",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20181214",
+    "endde": "20210908",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20210909",
+    "endde": "20240604",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240605",
+    "endde": "20261102",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   }
+  ]
+ },
+ "partitions": [
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2008-01-01",
+   "end_date": "2010-09-26",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2010-09-27",
+   "end_date": "2013-06-22",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2013-06-23",
+   "end_date": "2016-03-18",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2016-03-19",
+   "end_date": "2018-12-13",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2018-12-14",
+   "end_date": "2021-09-08",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2021-09-09",
+   "end_date": "2024-06-04",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2024-06-05",
+   "end_date": "2026-11-02",
+   "total_count": 570,
+   "received_count": 570,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2008-01-01",
+   "end_date": "2010-09-26",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2010-09-27",
+   "end_date": "2013-06-22",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2013-06-23",
+   "end_date": "2016-03-18",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2016-03-19",
+   "end_date": "2018-12-13",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2018-12-14",
+   "end_date": "2021-09-08",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2021-09-09",
+   "end_date": "2024-06-04",
+   "total_count": 1,
+   "received_count": 1,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2024-06-05",
+   "end_date": "2026-11-02",
+   "total_count": 2466,
+   "received_count": 2466,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2008-01-01",
+   "end_date": "2010-09-26",
+   "total_count": 2,
+   "received_count": 2,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2010-09-27",
+   "end_date": "2013-06-22",
+   "total_count": 1,
+   "received_count": 1,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2013-06-23",
+   "end_date": "2016-03-18",
+   "total_count": 40,
+   "received_count": 40,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2016-03-19",
+   "end_date": "2018-12-13",
+   "total_count": 184,
+   "received_count": 184,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2018-12-14",
+   "end_date": "2021-09-08",
+   "total_count": 478,
+   "received_count": 478,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2021-09-09",
+   "end_date": "2024-06-04",
+   "total_count": 1723,
+   "received_count": 1721,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": false,
+   "reason": "count_mismatch",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-06-05",
+   "end_date": "2026-11-02",
+   "total_count": 14575,
+   "received_count": 14574,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": false,
+   "reason": "count_mismatch",
+   "reprocess_ids": []
+  }
+ ],
+ "page_count": {
+  "updated": 7,
+  "list_notice": 9,
+  "list_protect": 22
+ },
+ "dropped_count": 0,
+ "duplicate_count": 0,
+ "vanished_detected": 0,
+ "confirmed_missing": 0,
+ "confirmed_by": {
+  "complete_range": 0,
+  "lookup": 0
+ },
+ "still_protected": 0,
+ "reprocess_ids": [],
+ "returned": 0,
+ "dropped_fields": [
+  "careOwnerNm"
+ ]
+}
