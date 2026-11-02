@@ -1,13 +1,18 @@
 'use client'
 
-import { AnimalArt } from '@/components/animal/AnimalArt'
+import { AnimalPhoto } from '@/components/animal/AnimalPhoto'
 import { Icon } from '@/components/icons/Icon'
 import type { Animal } from '@/types/animal'
 
-/** 상세 상단 갤러리: 큰 그림 + 다른 모습 썸네일 2개 (view 0은 기본) */
+/** 상세 상단 갤러리: 큰 사진 + 공고 사진 썸네일. 사진이 없으면 일러스트 한 장 */
 export function PetGallery({ animal: a, view, onView }: { animal: Animal; view: number; onView: (view: number) => void }) {
+  const count = a.photos.length
   return <div className="pet-gallery">
-    <div className={`gallery-main gallery-view-${view}`} style={{ background: a.bg }}><AnimalArt animal={a} /><span className="gallery-count">{view + 1} / 3</span><div className="gallery-caption"><Icon name="image" size={14} />실제 사진 대신 표현한 예시 일러스트</div></div>
-    <div className="gallery-thumbs">{[1, 2].map((thumb, i) => <button key={thumb} className={`gallery-thumb gallery-view-${thumb} ${view === thumb ? 'chosen' : ''}`} style={{ background: i === 0 ? '#E7ECDC' : a.bg }} onClick={() => onView(view === thumb ? 0 : thumb)} aria-label={`${i === 0 ? '얼굴' : '전체 모습'} 일러스트 보기`} aria-pressed={view === thumb}><AnimalArt animal={a} /><span>{i === 0 ? '가까이 보기' : '다른 모습 보기'}</span></button>)}</div>
+    <div className="gallery-main" style={{ background: a.bg }}>
+      <AnimalPhoto key={view} animal={a} index={view} />
+      {count > 0 && <span className="gallery-count">{view + 1} / {count}</span>}
+      <div className="gallery-caption"><Icon name="image" size={14} />{count ? '보호소가 올린 공고 사진' : '사진이 없는 공고라 일러스트로 보여 드려요'}</div>
+    </div>
+    {count > 1 && <div className="gallery-thumbs photo-thumbs">{a.photos.map((_, i) => <button key={i} className={`gallery-thumb ${view === i ? 'chosen' : ''}`} style={{ background: a.bg }} onClick={() => onView(i)} aria-label={`사진 ${i + 1} 보기`} aria-pressed={view === i}><AnimalPhoto animal={a} index={i} small /></button>)}</div>}
   </div>
 }

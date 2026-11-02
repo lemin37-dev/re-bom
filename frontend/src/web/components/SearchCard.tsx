@@ -1,9 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { AnimalArt } from '@/components/animal/AnimalArt'
 import { Icon } from '@/components/icons/Icon'
-import { animals } from '@/data/animals'
 import { filterLabels } from '@/data/filters'
 import { useSearch } from '@/providers/SearchProvider'
 import type { FilterKey } from '@/types/filters'
@@ -20,7 +18,7 @@ export function SearchCard() {
       {photo
         ? <div className="photo-chip">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <button className="photo-preview" type="button" onClick={pickPhoto} aria-label="첨부 사진 변경">{photo === 'sample' ? <AnimalArt animal={animals[0]} small /> : <img src={photo} alt="첨부한 동물 사진" />}</button>
+            <button className="photo-preview" type="button" onClick={pickPhoto} aria-label="첨부 사진 변경"><img src={photo} alt="첨부한 동물 사진" /></button>
             <button className="photo-copy" type="button" onClick={pickPhoto}><strong>사진 1장</strong><span>이 아이와 닮은 친구</span></button>
             <button type="button" className="icon-button" onClick={() => setPhoto(null)} aria-label="첨부 사진 삭제"><Icon name="close" size={16} /></button>
           </div>

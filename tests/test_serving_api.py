@@ -100,3 +100,52 @@ def test_mode_from_env(monkeypatch):
     assert Settings(_env_file=None).data_mode is DataMode.SAMPLE
     monkeypatch.setenv("REBOM_DATA_MODE", "db")
     assert Settings(_env_file=None).data_mode is DataMode.DB
+
+
+def test_region_multiple_tokens(client):
+    body = client.get("/animals", params={"region": "서울,경기", "size": 100}).json()
+    expected = sum(
+        1
+        for r in SAMPLE
+        if any(t in f"{r['careAddr'].split()[0]} {r['orgNm'].split()[0]}" for t in ("서울", "경기"))
+    )
+    assert body["total"] == expected > 0
+
+
+def test_age_and_weight_filters(client):
+    items = client.get("/animals", params={"age_min": 2, "age_max": 7, "size": 100}).json()["items"]
+    assert items and all(2 <= i["ageYears"] <= 7 for i in items)
+    items = client.get("/animals", params={"weight_min": 8, "weight_lt": 15, "size": 100}).json()["items"]
+    assert items and all(8 <= i["weightKg"] < 15 for i in items)
+
+
+def test_text_query_matches_any_word(client):
+    body = client.get("/animals", params={"q": "처음 키우는 고양이", "size": 100}).json()
+    assert body["total"] > 0
+    assert all("고양이" in (i["breed"] or "") or i["specialMark"] for i in body["items"])
+
+
+def test_shelter_filter_and_list(client):
+    shelters = client.get("/shelters").json()
+    assert shelters["total"] == len({r["careRegNo"] for r in SAMPLE})
+    top = shelters["items"][0]
+    assert {"regNo", "name", "tel", "addr", "sido", "sigungu", "animalCount"} <= top.keys()
+    counts = [s["animalCount"] for s in shelters["items"]]
+    assert counts == sorted(counts, reverse=True)
+    body = client.get("/animals", params={"shelter": top["regNo"], "state": "protect"}).json()
+    assert body["total"] == top["animalCount"]
+
+
+def test_notice_end_sort(client):
+    items = client.get("/animals", params={"state": "protect", "sort": "notice_end", "size": 100}).json()["items"]
+    ends = [i["noticeEnd"] for i in items]
+    from datetime import date
+
+    today = date.today().strftime("%Y%m%d")
+    upcoming = [e for e in ends if e >= today]
+    assert ends[: len(upcoming)] == sorted(upcoming)
+
+
+def test_etc_species_breed_uses_full_name(client):
+    items = client.get("/animals", params={"species": "etc", "size": 100}).json()["items"]
+    assert items and all(i["breed"] and "기타축종" not in i["breed"] for i in items)

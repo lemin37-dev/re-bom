@@ -14,7 +14,6 @@ import { useMascot } from '@/providers/MascotProvider'
 import { useSearch } from '@/providers/SearchProvider'
 import { useViewMode } from '@/providers/ViewModeProvider'
 import { WebHeader } from '@/web/layout/WebHeader'
-import { PreviewControls } from './PreviewControls'
 import { SiteFooter } from './SiteFooter'
 
 /**
@@ -27,13 +26,12 @@ export function ExperienceShell({ children }: { children: ReactNode }) {
   const { theme } = useMascot()
   const { mode } = useViewMode()
   const { setSearched } = useSearch()
-  const { scrollRef, setActionTarget, mascotOpen, setMascotOpen, navigate, backToResults, switchMode } = useExperience()
+  const { scrollRef, setActionTarget, mascotOpen, setMascotOpen, navigate, backToResults } = useExperience()
   const isApp = mode === 'app'
   const detail = isAnimalDetail(pathname)
   const activeHref = activeNavHref(pathname)
 
   return <div className={`app ${isApp ? 'app-preview-mode' : 'web-preview-mode'}`} data-mascot={theme}>
-    <PreviewControls mode={mode} onChange={switchMode} />
     <div className="experience-layout">
       {isApp && <AppPreviewAside activeHref={activeHref} detail={detail} onNavigate={navigate} />}
       <div className={isApp ? 'mobile-app' : 'web-experience'}>
