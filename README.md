@@ -8,8 +8,29 @@
 ```
 re-bom/
 ├─ frontend/                 # 웹·앱 화면 (Next.js)
+├─ src/rebom/serving/        # 검색 API (FastAPI)
 └─ .github/workflows/        # PR 알림(Discord) 워크플로
 ```
+
+---
+
+## 검색 API (FastAPI)
+
+`REBOM_DATA_MODE` 로 데이터 소스를 고릅니다. 지금은 `sample`(기본, `data/sample/rescue_sample.json` 200건)만 동작하고 `db` 는 정제·적재가 붙으면 구현합니다. 설정 이름은 `.env.example` 참고.
+
+```bash
+pip install -e ".[serve,dev]"
+uvicorn rebom.serving.app:create_app --factory --reload   # http://localhost:8000/docs
+pytest
+```
+
+| 경로 | 내용 |
+|---|---|
+| `GET /health` | 상태, 데이터 모드, 건수 |
+| `GET /animals` | 목록. `species`(dog/cat/etc) `state`(protect/ended) `sex`(M/F/Q) `region` `q` `page` `size`(≤100). 접수일 최신순 |
+| `GET /animals/{desertionNo}` | 상세. 없으면 404 |
+
+응답은 camelCase 이고, 보호소 대표자 이름(`careOwnerNm`)과 동물등록번호(`rfidCd`)는 내보내지 않습니다. 나이·체중은 원문(`ageText`, `weightText`)으로 주며 숫자 파싱은 정제 단계에서 붙입니다.
 
 ---
 
