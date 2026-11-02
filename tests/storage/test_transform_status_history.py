@@ -71,13 +71,19 @@ def main():
         "2026-10-30",
     )
 
+
+    # 기존 상태 변경 통계와 새로 추가된 추정 종료 통계를 함께 검증한다.
+    # 이 테스트에서는 종료 확인 목록을 전달하지 않았으므로
+    # 추정 종료 건수는 0이어야 한다.
     assert test_stats == {
         "initial": 4,
         "changed": 2,
         "unchanged": 1,
         "new": 1,
         "not_observed_again": 1,
+        "inferred_closed": 0,
     }
+
 
     changed = {
         event["desertion_no"]: event
