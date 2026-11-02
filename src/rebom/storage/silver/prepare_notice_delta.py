@@ -1,4 +1,4 @@
-﻿"""검증된 Bronze 실행본에서 안전한 Silver 공고 증분을 준비한다."""
+"""검증된 Bronze 실행본에서 안전한 Silver 공고 증분을 준비한다."""
 
 import json
 
@@ -20,6 +20,7 @@ def content_signature(row, excluded):
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
+        default=str,
     )
 
 
