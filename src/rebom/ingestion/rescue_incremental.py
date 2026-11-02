@@ -219,7 +219,7 @@ def write_jsonl_gz(path: Path, rows: list[dict]) -> dict:
     with gzip.open(path, "wt", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    return {"file": path.name, "records": len(rows), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+    return {"file": path.name, "record_count": len(rows), "checksum": hashlib.sha256(path.read_bytes()).hexdigest()}  # 계약 5절 manifest 필드 이름
 
 
 def drop_fields(rows: list[dict], fields: tuple) -> list[dict]:
