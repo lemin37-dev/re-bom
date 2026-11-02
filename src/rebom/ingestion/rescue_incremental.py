@@ -12,9 +12,12 @@
                   다시 나타난 공고 -> "보호중 복귀" 이벤트. 종료 사유는 받지 않는다.
                   --lookup 을 주면 확정된 공고의 발생일만 조건 없이 조회해 최종 값을 받는다(필요할 때만).
 
-결과 (data/bronze/rescue/raw/dt=<실행일>/run_id=<id>/):
+결과 (bronze/rescue/raw/dt=<실행일>/run_id=<id>/):
   updated / list_notice / list_protect / lookup / events .jsonl.gz, manifest.json (partitions: 구간별 총건수·받은 건수·완전 여부)
-상태 (data/state/rescue_state.json): 마지막 성공 enupd, 보호중 공고 목록(번호 -> 발생일), 종료로 표시한 공고
+상태 (state/rescue_state.json): 마지막 성공 enupd, 보호중 공고 목록(번호 -> 발생일), 종료로 표시한 공고
+저장 위치: 환경변수 REBOM_S3_BUCKET 이 있으면 S3, 없으면 로컬 data/ (rebom.ingestion.storage).
+올리는 순서: 종류별 파일 -> events -> manifest.json(마지막, 있으면 그 실행이 끝까지 올라간 것) -> 상태 파일.
+  업로드가 하나라도 실패하면 상태를 갱신하지 않고 끝낸다. 그래야 다음 실행이 그 구간을 건너뛰지 않는다.
 
 사용 예 (레포 루트에서):
   PYTHONPATH=src python -m rebom.ingestion.rescue_incremental --dry-run         # 호출만 하고 아무것도 쓰지 않음
@@ -29,9 +32,11 @@ from __future__ import annotations
 
 import argparse
 import gzip
+from collections import Counter
 import hashlib
 import json
 import sys
+import tempfile
 import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -41,10 +46,12 @@ import requests
 
 from rebom.ingestion.rescue_api import RESCUE_URL as URL
 from rebom.ingestion.rescue_api import call, explain_error, real_items
+from rebom.ingestion.storage import UploadError, make_store
 
 ROOT = Path(__file__).resolve().parents[3]
-BRONZE = ROOT / "data" / "bronze" / "rescue" / "raw"
-STATE_PATH = ROOT / "data" / "state" / "rescue_state.json"
+DATA_DIR = ROOT / "data"  # 로컬 저장일 때 키가 이 아래에 그대로 놓인다
+RAW_PREFIX = "bronze/rescue/raw"
+STATE_KEY = "state/rescue_state.json"
 KST = timezone(timedelta(hours=9))
 
 HAPPEN_START = date(2008, 1, 1)  # API 에 있는 가장 오래된 공고
@@ -52,7 +59,8 @@ MAX_SPAN_DAYS = 1000  # 발생일 범위가 1,096일을 넘으면 오류 없이 
 PAGE_SIZE = 1000
 MAX_PARTITION_DAYS = 1095  # B 의 validate_partition 한도(양 끝 포함). 계약 3절 종료 판정 조건 ②
 MAX_VANISH_RATIO = 0.2  # 계약에는 없는 추가 안전장치: 보호중 목록에서 한 번에 이만큼 넘게 사라지면 API 이상으로 보고 중단
-MAX_LOOKUP_IDS = 100  # 불완전한 구간의 사라진 공고를 한 건씩 조회하는 상한. 넘는 공고는 재처리로 남긴다
+MAX_LOOKUP_IDS = 300  # 불완전한 구간의 사라진 공고를 한 건씩 조회하는 상한. 넘는 공고는 재처리로 남긴다(구간을 날 단위로 좁히기 때문에 평소에는 거의 없다)
+MAX_CALLS = 600  # 한 번에 쓸 호출 수 안전장치. 일 한도 10,000건의 약 6%
 DROP_FIELDS = ("careOwnerNm",)  # 보호자 실명은 저장하지 않는다(AGENTS.md). 데이터 계약 9절 방식 A
 CODE_VERSION = "2026-11-02"
 
@@ -143,6 +151,7 @@ class Fetcher:
         for bgnde, endde in ranges:
             params = {**base, "bgnde": bgnde, "endde": endde, "numOfRows": PAGE_SIZE}
             range_ids: set[str] = set()
+            by_day: Counter = Counter()  # 구간 안에서 받은 서로 다른 공고의 발생일별 건수 (불완전한 구간을 쪼갤 때 쓴다)
             dropped, duplicates, total, code = 0, 0, None, None
             for page in range(1, 200):
                 r = self._get({**params, "pageNo": page})
@@ -155,6 +164,8 @@ class Fetcher:
                         continue
                     if item["desertionNo"] in range_ids:
                         duplicates += 1
+                    else:
+                        by_day[str(item.get("happenDt", ""))] += 1
                     range_ids.add(item["desertionNo"])
                     got[item["desertionNo"]] = item
                 if len(r.items) < PAGE_SIZE or (total is not None and page * PAGE_SIZE >= total):
@@ -167,16 +178,52 @@ class Fetcher:
                 continue
             # 받은 건수는 구간 안의 서로 다른 공고번호 수다. 페이지가 밀려 중복이 생기면 빠진 건을 가리지 못하게 중복은 뺀다.
             complete, reason = partition_status(code, dash(bgnde), dash(endde), total, len(range_ids))
-            summary["partitions"].append({
-                "kind": kind, "result_code": code, "start_date": dash(bgnde), "end_date": dash(endde),
-                "total_count": total, "received_count": len(range_ids), "dropped_count": dropped, "duplicate_count": duplicates,
-                "complete": complete, "reason": reason, "reprocess_ids": [],
-            })
-            if not complete:
-                self.warnings.append(f"{kind} {dash(bgnde)}~{dash(endde)}: 불완전({reason}) 총건수 {total}, 받은 건수 {len(range_ids)}, 버린 항목 {dropped}")
+            if not complete and reason == "count_mismatch" and kind in ("list_notice", "list_protect"):
+                # 총건수보다 적게 받은 구간은 반으로 쪼개 어긋나는 날만 좁힌다. 쪼개진 구간들이 원래 구간을 대신한다(겹치지 않게).
+                leaves = self._narrow(kind, base, parse_ymd(bgnde), parse_ymd(endde), by_day, code, total, summary)
+                leaves[0]["dropped_count"], leaves[0]["duplicate_count"] = dropped, duplicates
+                parts = leaves
+            else:
+                parts = [self._part(kind, code, bgnde, endde, total, len(range_ids), complete, reason, dropped, duplicates)]
+            summary["partitions"].extend(parts)
+            for p in parts:
+                if not p["complete"]:
+                    self.warnings.append(
+                        f"{kind} {p['start_date']}~{p['end_date']}: 불완전({p['reason']}) 총건수 {p['total_count']}, 받은 건수 {p['received_count']}"
+                    )
             if kind in ("list_notice", "list_protect") and total == 0 and endde >= ymd(date.today() - timedelta(days=60)):
                 self.warnings.append(f"{kind} {dash(bgnde)}~{dash(endde)}: 최근 구간인데 0건(참고)")
         return list(got.values()), summary
+
+    @staticmethod
+    def _part(kind, code, bgnde, endde, total, received, complete, reason, dropped=0, duplicates=0) -> dict:
+        return {
+            "kind": kind, "result_code": code, "start_date": dash(bgnde), "end_date": dash(endde),
+            "total_count": total, "received_count": received, "dropped_count": dropped, "duplicate_count": duplicates,
+            "complete": complete, "reason": reason, "reprocess_ids": [],
+        }
+
+    def _count(self, kind: str, base: dict, s: date, e: date, summary: dict):
+        """구간의 totalCount 만 본다(numOfRows=1). 11/2 확인: 구조 API 의 totalCount 는 월별 합계와 연 단위 값이 일치한다."""
+        params = {**base, "bgnde": ymd(s), "endde": ymd(e), "numOfRows": 1, "pageNo": 1}
+        r = self._get(params)
+        summary["page_count"] += 1
+        summary["request_params"].append(params)
+        return r.total_count
+
+    def _narrow(self, kind: str, base: dict, s: date, e: date, by_day: Counter, code: str, total, summary: dict) -> list[dict]:
+        """총건수와 받은 건수가 다른 구간 [s, e] 를 반으로 쪼개 어긋나는 하위 구간까지 내려간다. 하루까지 내려가도 다르면 불완전로 남긴다.
+        이미 받은 항목의 발생일별 건수(by_day)로 받은 건수를 구하므로 하위 구간마다 totalCount 한 번만 더 부른다."""
+        a, b = ymd(s), ymd(e)
+        received = sum(n for day, n in by_day.items() if a <= day <= b)
+        complete, reason = partition_status(code, dash(a), dash(b), total, received)
+        if complete or s == e or reason != "count_mismatch":
+            return [self._part(kind, code, a, b, total, received, complete, reason)]
+        mid = s + (e - s) // 2
+        out: list[dict] = []
+        for lo, hi in ((s, mid), (mid + timedelta(days=1), e)):
+            out += self._narrow(kind, base, lo, hi, by_day, code, self._count(kind, base, lo, hi, summary), summary)
+        return out
 
     def lookup_id(self, desertion_no: str, happen: str | None) -> tuple[list[dict] | None, dict | None]:
         """불완전한 구간의 사라진 공고를 desertion_no 와 발생일로 한 건 조회한다. 실패하면 (None, None).
@@ -226,17 +273,13 @@ def drop_fields(rows: list[dict], fields: tuple) -> list[dict]:
     return [{k: v for k, v in r.items() if k not in fields} for r in rows]
 
 
-def load_state() -> dict:
-    if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
-    return {}
+def load_state(store) -> dict:
+    data = store.get_bytes(STATE_KEY)
+    return json.loads(data.decode("utf-8")) if data else {}
 
 
-def save_state(state: dict) -> None:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(STATE_PATH)  # 쓰다 끊겨도 이전 상태가 남게 바꿔치기
+def save_state(store, state: dict) -> None:
+    store.put_bytes(STATE_KEY, json.dumps(state, ensure_ascii=False).encode("utf-8"), overwrite=True)
 
 
 def main() -> None:
@@ -245,12 +288,13 @@ def main() -> None:
     ap.add_argument("--lookup", action="store_true", help="확정된 사라진 공고의 발생일을 조건 없이 조회해 최종 값을 받는다")
     ap.add_argument("--max-lookups", type=int, default=MAX_LOOKUP_IDS, help="불완전한 구간의 사라진 공고를 한 건씩 조회하는 상한")
     ap.add_argument("--dry-run", action="store_true", help="API 만 호출하고 파일·상태를 쓰지 않는다")
-    ap.add_argument("--max-calls", type=int, default=300, help="한 번에 쓸 최대 호출 수(일 한도 10,000건의 안전장치)")
+    ap.add_argument("--max-calls", type=int, default=MAX_CALLS, help="한 번에 쓸 최대 호출 수(일 한도 10,000건의 안전장치)")
     args = ap.parse_args()
 
     now = datetime.now(KST)
     today = now.date()
-    state = load_state()
+    store = make_store(DATA_DIR)
+    state = load_state(store)
     first_run = not state
     if first_run:
         bgupd = parse_ymd(args.since) if args.since else today - timedelta(days=1)
@@ -361,13 +405,18 @@ def main() -> None:
         log(f"dry-run: 호출 {fx.calls}번, 파일·상태는 쓰지 않음")
         return
 
-    out_dir = BRONZE / f"dt={today:%Y-%m-%d}" / f"run_id={run_id}"
-    for k, (rows, _) in kinds.items():
-        manifest["files"].append({"kind": k, **write_jsonl_gz(out_dir / f"{k}.jsonl.gz", drop_fields(rows, DROP_FIELDS))})
-    manifest["files"].append({"kind": "events", **write_jsonl_gz(out_dir / "events.jsonl.gz", events)})
-    manifest["dropped_fields"] = list(DROP_FIELDS)
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
-    log(f"저장: {out_dir.relative_to(ROOT)}")
+    # 임시 폴더에 파일을 만들고 체크섬을 계산한 뒤 저장소에 올린다. manifest 는 마지막에 올린다.
+    run_prefix = f"{RAW_PREFIX}/dt={today:%Y-%m-%d}/run_id={run_id}"
+    with tempfile.TemporaryDirectory(prefix="rebom_rescue_") as tmp:
+        staging = Path(tmp)
+        for k, (rows, _) in kinds.items():
+            manifest["files"].append({"kind": k, **write_jsonl_gz(staging / f"{k}.jsonl.gz", drop_fields(rows, DROP_FIELDS))})
+        manifest["files"].append({"kind": "events", **write_jsonl_gz(staging / "events.jsonl.gz", events)})
+        manifest["dropped_fields"] = list(DROP_FIELDS)
+        for item in manifest["files"]:
+            store.put_file(staging / item["file"], f"{run_prefix}/{item['file']}", checksum=item["checksum"])
+        store.put_bytes(f"{run_prefix}/manifest.json", json.dumps(manifest, ensure_ascii=False, indent=1).encode("utf-8"), overwrite=False)
+    log(f"저장({store.kind}): {store.describe(run_prefix)}")
 
     if aborted:
         sys.exit(2)
@@ -378,7 +427,8 @@ def main() -> None:
     # 목록에는 없지만 종료로 확정하지 못한 공고는 보호중으로 남겨 두어 다음 실행에서 다시 본다
     protected.update(still_protected)
     protected.update({v: prev[v] for v in reprocess})
-    save_state({"last_enupd": ymd(today), "protected": protected, "ended": ended, "last_run_id": run_id})
+    # 업로드가 모두 끝난 뒤에만 상태를 갱신한다
+    save_state(store, {"last_enupd": ymd(today), "protected": protected, "ended": ended, "last_run_id": run_id})
     log(f"상태 갱신: last_enupd={ymd(today)}")
 
 
@@ -387,3 +437,5 @@ if __name__ == "__main__":
         main()
     except ApiFailure as e:
         sys.exit(f"수집 실패: {e}")
+    except UploadError as e:
+        sys.exit(f"업로드 실패: {e}")

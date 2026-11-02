@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from rebom.ingestion import rescue_incremental as ri
 from rebom.ingestion.rescue_api import ApiResult
+from rebom.ingestion.storage import LocalStore
 from rebom.storage.silver.validate_manifest import validate_partition
 
 TODAY = date.today()
@@ -65,8 +66,9 @@ def test_split_vanished_needs_both_lists_complete():
     assert ri.split_vanished(["nodate"], prev, both) == ([], ["nodate"])
 
 
-def make_fake_call(records, protect_extra):
-    """notice 는 비어 있고 protect 목록에는 current 만 있다. protect_extra 만큼 totalCount 를 크게 줘 불완전 구간을 만든다."""
+def make_fake_call(records, protect_extra, null_days=None):
+    """notice 는 비어 있고 protect 목록에는 current 만 있다. protect_extra 만큼 totalCount 를 크게 줘 불완전 구간을 만들고,
+    null_days({발생일: 건수})는 그 날이 들어간 구간의 totalCount 에만 건수를 더한다(API 가 돌려주지 못하는 null 레코드)."""
     current = [r for r in records if r["processState"] == "보호중" and not r.get("hidden")]
 
     def fake_call(params, url=None, timeout=0):
@@ -80,33 +82,44 @@ def make_fake_call(records, protect_extra):
             return ApiResult(200, "00", 0, [])
         if state == "protect":
             items = [r for r in current if in_range(r)]
-            return ApiResult(200, "00", len(items) + protect_extra, items)
+            hidden = sum(n for day, n in (null_days or {}).items() if p["bgnde"] <= day <= p["endde"])
+            return ApiResult(200, "00", len(items) + protect_extra + hidden, items)
         return ApiResult(200, "00", 0, [])  # updated
 
     return fake_call
 
 
-def run_once(protect_extra):
-    """상태에 보호중 33건(P00~P29, B, C, D)이 있고 B·C·D 가 목록에서 사라진 하루를 돌린다."""
-    tmp = Path(tempfile.mkdtemp(prefix="rescue_test_"))
+def seed_scenario(store, protect_extra, null_days=None):
+    """상태에 보호중 33건(P00~P29, B, C, D)을 넣고, B·C·D 가 목록에서 사라진 하루를 만들 가짜 API 를 돌려준다."""
     prev = {f"P{i:02d}": happen(3 + i % 10) for i in range(30)}
     prev.update({"B": happen(5), "C": happen(6), "D": happen(7)})
-    (tmp / "state.json").write_text(
-        json.dumps({"last_enupd": ri.ymd(TODAY - timedelta(days=1)), "protected": prev, "ended": {}}), encoding="utf-8"
+    store.put_bytes(
+        ri.STATE_KEY,
+        json.dumps({"last_enupd": ri.ymd(TODAY - timedelta(days=1)), "protected": prev, "ended": {}}).encode("utf-8"),
     )
     records = [rec(k, 3 + i % 10, "보호중") for i, k in enumerate(k for k in prev if k not in ("B", "C", "D"))]
     # B 는 종료, C 는 아직 보호중인데 목록에서만 빠졌다, D 는 API 에서 없어졌다
     records += [rec("B", 5, "종료(입양)"), {**rec("C", 6, "보호중"), "hidden": True}]
     for r in records:
         r.setdefault("happenDt", happen(5))
-    with patch.object(ri, "ROOT", tmp), patch.object(ri, "BRONZE", tmp / "raw"), patch.object(ri, "STATE_PATH", tmp / "state.json"), \
-            patch.object(ri, "HAPPEN_START", TODAY - timedelta(days=20)), patch.object(ri, "call", make_fake_call(records, protect_extra)), \
-            patch.object(ri.time, "sleep", lambda s: None), patch.object(sys, "argv", ["rescue_incremental"]):
+    return make_fake_call(records, protect_extra, null_days)
+
+
+def run_main(store, fake_call):
+    with patch.object(ri, "make_store", lambda root: store), patch.object(ri, "HAPPEN_START", TODAY - timedelta(days=20)), \
+            patch.object(ri, "call", fake_call), patch.object(ri.time, "sleep", lambda s: None), \
+            patch.object(sys, "argv", ["rescue_incremental"]):
         ri.main()
-    run_dir = next((tmp / "raw").glob("dt=*/run_id=*"))
+
+
+def run_once(protect_extra, null_days=None):
+    tmp = Path(tempfile.mkdtemp(prefix="rescue_test_"))
+    store = LocalStore(tmp)
+    run_main(store, seed_scenario(store, protect_extra, null_days))
+    run_dir = next((tmp / "bronze" / "rescue" / "raw").glob("dt=*/run_id=*"))
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     events = [json.loads(line) for line in gzip.open(run_dir / "events.jsonl.gz", "rt", encoding="utf-8")]
-    state = json.loads((tmp / "state.json").read_text(encoding="utf-8"))
+    state = json.loads(store.get_bytes(ri.STATE_KEY).decode("utf-8"))
     return run_dir, manifest, events, state
 
 
@@ -121,8 +134,9 @@ def test_complete_partitions_confirm_vanished_by_range():
 
 
 def test_incomplete_partition_falls_back_to_one_by_one_lookup():
-    _, manifest, events, state = run_once(protect_extra=1)
-    protect = [p for p in manifest["partitions"] if p["kind"] == "list_protect"][0]
+    # B(5일 전), C(6일 전), D(7일 전)가 발생한 날마다 API 가 돌려주지 못하는 레코드가 1건씩 있다
+    _, manifest, events, state = run_once(protect_extra=0, null_days={happen(5): 1, happen(6): 1, happen(7): 1})
+    protect = next(p for p in manifest["partitions"] if p["kind"] == "list_protect" and p["start_date"] == ri.dash(happen(7)))
     assert protect["complete"] is False and protect["reason"] == "count_mismatch"
     assert manifest["confirmed_by"] == {"complete_range": 0, "lookup": 1}
     assert [(e["desertionNo"], e["confirmed_by"], e["processState"]) for e in events] == [("B", "lookup", "종료(입양)")]
@@ -132,6 +146,30 @@ def test_incomplete_partition_falls_back_to_one_by_one_lookup():
     # 확정하지 못한 C, D 는 보호중으로 남아 다음 실행에서 다시 본다
     assert "C" in state["protected"] and "D" in state["protected"]
     assert "B" not in state["protected"] and list(state["ended"]) == ["B"]
+
+
+def test_null_record_day_is_narrowed_so_only_that_day_needs_lookup():
+    tmp = Path(tempfile.mkdtemp(prefix="rescue_test_"))
+    store = LocalStore(tmp)
+    # D 가 발생한 날(7일 전)에만 API 가 돌려주지 못하는 레코드가 1건 있다
+    run_main(store, seed_scenario(store, protect_extra=0, null_days={happen(7): 1}))
+    manifest = json.loads(next((tmp / "bronze" / "rescue" / "raw").glob("dt=*/run_id=*/manifest.json")).read_text(encoding="utf-8"))
+    protect = sorted((p for p in manifest["partitions"] if p["kind"] == "list_protect"), key=lambda p: p["start_date"])
+
+    bad = [p for p in protect if not p["complete"]]
+    day = ri.dash(happen(7))
+    assert [(p["start_date"], p["end_date"], p["reason"]) for p in bad] == [(day, day, "count_mismatch")]
+    # 쪼개진 구간들은 서로 겹치지 않고 빈틈 없이 이어진다 (B 의 can_confirm_missing 이 구간 중복을 오류로 본다)
+    assert protect[0]["start_date"] == ri.dash(ri.ymd(TODAY - timedelta(days=20)))
+    assert protect[-1]["end_date"] == ri.dash(ri.ymd(TODAY))
+    for before, after in zip(protect, protect[1:]):
+        assert date.fromisoformat(after["start_date"]) - date.fromisoformat(before["end_date"]) == timedelta(days=1)
+    for p in protect:
+        assert validate_partition(p["result_code"], p["start_date"], p["end_date"], p["total_count"], p["received_count"]) == (p["complete"], p["reason"])
+
+    # B(5일 전), C(6일 전)는 완전한 구간이라 개별 조회 없이 확정되고, 불완전한 날에 발생한 D 만 개별 조회 대상이 된다
+    assert manifest["confirmed_by"] == {"complete_range": 2, "lookup": 0}
+    assert manifest["reprocess_ids"] == ["D"]
 
 
 def test_owner_name_is_not_saved():
