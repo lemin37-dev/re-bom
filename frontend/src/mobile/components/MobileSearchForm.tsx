@@ -1,9 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { AnimalArt } from '@/components/animal/AnimalArt'
 import { Icon } from '@/components/icons/Icon'
-import { animals } from '@/data/animals'
 import { useSearch } from '@/providers/SearchProvider'
 
 /** 앱 검색 박스: 여러 줄 문장 입력 · 사진 첨부 · 생활 조건 요약 */
@@ -19,7 +17,7 @@ export function MobileSearchForm() {
       {photo
         ? <div className="mobile-photo-chip">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <button type="button" onClick={pickPhoto} aria-label="첨부 사진 바꾸기"><span className="mobile-photo-thumb">{photo === 'sample' ? <AnimalArt animal={animals[0]} small /> : <img src={photo} alt="첨부한 동물 사진" />}</span><span><b>사진 1장</b>닮은 친구도 함께 찾아요</span></button>
+            <button type="button" onClick={pickPhoto} aria-label="첨부 사진 바꾸기"><span className="mobile-photo-thumb"><img src={photo} alt="첨부한 동물 사진" /></span><span><b>사진 1장</b>닮은 친구도 함께 찾아요</span></button>
             <button type="button" onClick={() => setPhoto(null)} aria-label="첨부 사진 삭제"><Icon name="close" size={16} /></button>
           </div>
         : <button className="mobile-add-photo" type="button" onClick={pickPhoto}><Icon name="image" />사진으로도 찾기<Icon name="plus" size={15} /></button>}

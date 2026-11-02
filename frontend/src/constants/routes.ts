@@ -5,7 +5,7 @@ export const ROUTES = {
   guide: '/guide',
   shelters: '/shelters',
   about: '/about',
-  animal: (id: number) => `/animals/${id}`,
+  animal: (id: string) => `/animals/${encodeURIComponent(id)}`,
 } as const
 
 /** 주 메뉴: 웹 헤더, 앱 하단 탭, 앱 미리보기 안내에서 함께 사용 */
