@@ -42,7 +42,7 @@ src/
 │  └─ styles/            # header.css, search.css
 │
 ├─ mobile/               # 앱(모바일 프레임) 전용 화면 구성·배치
-│  ├─ layout/            # MobileHeader, MobileTabs, AppPreviewAside
+│  ├─ layout/            # MobileHeader, MobileTabs
 │  ├─ screens/           # MobileSearchScreen
 │  ├─ components/        # MobileHero, MobileSearchForm, MobileSuggestions, MobileResults, MobilePetCard
 │  └─ styles/            # mobile.css (.app-preview-mode / .mobile-app 범위)
@@ -64,7 +64,7 @@ src/
 │  ├─ icons/             # Icon
 │  └─ ui/                # SectionTitle
 ├─ providers/            # 전역 상태 (Context)
-│  ├─ ViewModeProvider   # 웹/앱 모드
+│  ├─ ViewModeProvider   # 웹/앱 모드 (화면 폭 자동, NEXT_PUBLIC_VIEW_MODE 로 고정 가능)
 │  ├─ SearchProvider     # 검색어·사진·조건·정렬 등 검색 상태 (모드 전환 시 유지)
 │  ├─ MascotProvider     # 마스코트 테마
 │  └─ ExperienceProvider # 화면 이동, 스크롤 복원, 상세 하단 버튼 포털 자리
@@ -93,7 +93,8 @@ src/
 
 ## 동작 메모
 
-- 하이브리드 앱으로 구현하는 중이라 웹/앱 선택 토글은 없고, 모드는 `ViewModeProvider` 기본값(`app`)으로 고정입니다.
+- 웹/앱 화면은 화면 폭으로 자동 선택합니다(`ViewModeProvider`, 768px 이상 웹). 하이브리드 앱(웹뷰) 빌드처럼 항상 앱 화면이 필요하면 `.env.local` 에 `NEXT_PUBLIC_VIEW_MODE=app` (웹 고정은 `web`).
+- 앱 화면은 미리보기 틀 없이 화면 전체(`100dvh`)를 씁니다.
 - 화면 이동은 `useExperience().navigate(href)`를 사용하세요. 모드·경로별 스크롤 위치 복원을 함께 처리합니다.
 - 동물·보호센터 정보는 검색 API(레포 루트 `scripts/serve/run_api`, 기본 http://localhost:8000)에서 옵니다. 주소는 `.env.local`의 `NEXT_PUBLIC_API_BASE_URL`로 바꿉니다.
 - 매칭 점수·이유·거리는 아직 API에 없어 화면에서 숨겨집니다(`Animal`의 선택 필드). 문장 검색은 단어 일치, 사진 검색은 미연결입니다.

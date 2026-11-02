@@ -81,14 +81,14 @@ pnpm typecheck  # 타입 검사
 | `/shelters` | 보호센터 | 공고에서 모은 보호센터 목록, 시·도 필터, 예시 지도, 센터의 아이들 보기 |
 | `/about` | 서비스 소개 | 서비스 소개, 통계, 동작 방식, 데이터 원칙 |
 
-### 웹 / 앱 미리보기
+### 웹 / 앱 화면
 
-화면 맨 위의 토글로 **웹 화면**(넓은 화면)과 **앱 화면**(모바일 프레임)을 전환할 수 있습니다.
+화면 폭으로 **웹 화면**(768px 이상)과 **앱 화면**(그보다 좁은 화면)을 자동으로 고릅니다. 하이브리드 앱(웹뷰)으로 감쌀 때는 `frontend/.env.local` 에 `NEXT_PUBLIC_VIEW_MODE=app` 을 넣어 항상 앱 화면으로 고정합니다.
 
-- 검색어, 첨부 사진, 조건, 정렬과 보고 있는 화면은 전환해도 그대로 유지됩니다.
+- 창 크기를 바꿔 모드가 바뀌어도 검색어, 조건, 정렬과 보고 있는 화면은 그대로 유지됩니다.
 - 화면별 스크롤 위치는 모드별로 따로 기억합니다.
 - 입양 찾기 화면은 웹과 앱의 배치가 크게 달라 따로 구현했습니다. 나머지 화면은 같은 본문을 쓰고, 앱에서는 정보를 접어 보고 하단에 고정된 문의 버튼을 사용합니다.
-- 설치형 네이티브 앱이 아니라, 모바일 앱 UX를 확인하는 웹 프로토타입입니다.
+- 앱 화면은 테두리 없이 화면 전체(`100dvh`)를 씁니다.
 
 ### 폴더 구조
 
@@ -113,7 +113,7 @@ frontend/
    │  └─ styles/         # header.css, search.css
    │
    ├─ mobile/            # 앱 전용 화면 구성·배치
-   │  ├─ layout/         # MobileHeader, MobileTabs, AppPreviewAside
+   │  ├─ layout/         # MobileHeader, MobileTabs
    │  ├─ screens/        # MobileSearchScreen
    │  ├─ components/     # MobileHero, MobileSearchForm, MobileSuggestions, MobileResults, MobilePetCard
    │  └─ styles/         # mobile.css
