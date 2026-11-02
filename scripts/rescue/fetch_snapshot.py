@@ -35,6 +35,7 @@ def check_span(params: dict) -> None:
 def fetch(params: dict) -> dict[str, dict]:
     check_span(params)
     out = {}
+    total = None
     for page in range(1, 80):
         for attempt in range(4):
             try:
@@ -46,11 +47,13 @@ def fetch(params: dict) -> dict[str, dict]:
             time.sleep(3 * (attempt + 1))
         else:
             raise SystemExit(f"실패 {params} p{page}")
-        if page == 1 and r.total_count == 0:
-            print("  경고: 0건입니다. 정말 없는지, 범위가 너무 넓은지 확인하세요:", params)
+        if page == 1:
+            total = r.total_count
         for i in real_items(r.items):
             out[i["desertionNo"]] = i
         if len(r.items) < 1000:
+            if total is not None and total != len(out):
+                print(f"  경고: totalCount {total}건인데 {len(out)}건만 받았습니다:", params)
             return out
         time.sleep(0.15)
     raise SystemExit(f"페이지 80개 초과 {params}")
