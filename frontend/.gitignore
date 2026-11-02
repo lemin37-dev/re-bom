@@ -15,3 +15,4 @@ logs/
 
 # 루트 .gitignore(Python 템플릿)의 lib/ 규칙에서 프론트엔드 소스는 제외
 !/src/lib/
+!.env.example

@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -218,3 +218,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ===== Re:봄 프로젝트 =====
+# 데이터·모델 (팀 공용 샘플 data/sample/ 만 예외로 커밋)
+data/*
+!data/sample/
+models/
+*.parquet
+*.safetensors
+*.pt
+*.onnx
+
+# 로그·에디터
+logs/
+.idea/
+.vscode/
