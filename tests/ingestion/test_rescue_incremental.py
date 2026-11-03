@@ -133,6 +133,8 @@ def test_complete_partitions_confirm_vanished_by_range():
     assert manifest["confirmed_by"] == {"complete_range": 3, "lookup": 0}
     assert sorted(e["desertionNo"] for e in events) == ["B", "C", "D"]
     assert {e["confirmed_by"] for e in events} == {"complete_range"}
+    assert {e["state_source"] for e in events} == {"none"}  # 수정분에도 없어 상태를 확인할 근거가 없다(사유 미상)
+    assert {e["processState"] for e in events} == {"종료(사유 미상)"}
     assert sorted(state["ended"]) == ["B", "C", "D"]
 
 
@@ -143,6 +145,7 @@ def test_incomplete_partition_falls_back_to_one_by_one_lookup():
     assert protect["complete"] is False and protect["reason"] == "count_mismatch"
     assert manifest["confirmed_by"] == {"complete_range": 0, "lookup": 1}
     assert [(e["desertionNo"], e["confirmed_by"], e["processState"]) for e in events] == [("B", "lookup", "종료(입양)")]
+    assert events[0]["state_source"] == "lookup" and manifest["lookup_count"] == 3 and manifest["conflicting"] == 0
     assert manifest["still_protected"] == 1  # C
     assert manifest["reprocess_ids"] == ["D"]
     assert protect["reprocess_ids"] == ["D"]
@@ -187,12 +190,16 @@ def test_vanished_with_non_ended_updated_state_is_looked_up_again():
 
     # B: 조회하니 종료(입양) -> 수정분의 보호중이 아니라 조회한 상태를 쓴다
     assert events["B"]["processState"] == "종료(입양)" and events["B"]["confirmed_by"] == "complete_range"
-    # D: 조회해도 0건 -> 사라짐은 확정이므로 사유 미상
-    assert events["D"]["processState"] == "종료(사유 미상)"
-    # C: 조회하니 아직 보호중 -> 종료로 확정하지 않고 보호중으로 남긴다
-    assert "C" not in events and "C" in state["protected"] and "C" not in state["ended"]
+    assert events["B"]["state_source"] == "relookup"
+    # D: 조회해도 0건 -> 사라짐은 확정이므로 사유 미상(근거 없는 추정)
+    assert events["D"]["processState"] == "종료(사유 미상)" and events["D"]["state_source"] == "none"
+    # C: 조회하니 아직 보호중 -> 종료로 확정하지 않고 보호중으로 남기고, 어긋남을 번호별로 기록한다
+    assert events["C"] == {"event": "conflict", "desertionNo": "C", "happenDt": happen(6), "detected_at": events["C"]["detected_at"],
+                           "list_state": "보호중", "lookup_state": "보호중"}
+    assert "C" in state["protected"] and "C" not in state["ended"]
     assert sorted(state["ended"]) == ["B", "D"]
     assert manifest["still_protected"] == 1 and manifest["confirmed_missing"] == 2
+    assert manifest["conflicting"] == 1 and manifest["lookup_count"] == 3
     assert manifest["confirmed_by"] == {"complete_range": 2, "lookup": 0}
 
 

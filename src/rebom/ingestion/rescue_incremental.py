@@ -338,6 +338,9 @@ def main() -> None:
     lookup_params, lookup_pages, lookup_dropped = [], 0, 0
     updated_by_id = {i["desertionNo"]: i for i in kinds["updated"][0]}
     relooked: dict[str, dict | None] = {}  # 구간으로 확정했지만 수정분 상태가 종료가 아니어서 다시 조회한 공고 -> 조회한 종료 행(없으면 None)
+    lookup_final: dict[str, dict] = {}  # 불완전 구간이라 번호로 조회해 종료를 확인한 공고 -> 조회한 행
+    conflicts: list[dict] = []  # 수정분 상태와 번호 조회 결과가 어긋난 공고(사라짐으로 확정하지 않음)
+    lookups_used = conflicting = 0
     if not aborted:
         sure, check = split_vanished(vanished, prev, partitions)
         confirmed.update({v: "complete_range" for v in sure})
@@ -350,6 +353,7 @@ def main() -> None:
             state_text = rows[0].get("processState", "") if rows else ""
             if rows and state_text.startswith("종료"):
                 confirmed[v] = "lookup"
+                lookup_final[v] = rows[0]
                 lookup_rows += rows
             elif rows and ("보호" in state_text or "공고" in state_text):
                 still_protected[v] = prev[v]
@@ -367,7 +371,7 @@ def main() -> None:
             fx.warnings.append(f"재처리 대상 {len(reprocess)}건: 기존 상태를 유지함")
         # 구간으로 확정했는데 같은 실행의 수정분 상태가 종료가 아니면, 수정 목록이 보호중 목록보다 늦게 반영된 것일 수 있다.
         # 수정분 상태를 쓰지 않고 번호로 한 번 조회해 실제 상태를 받는다(11/3 확인: 08:50 입양 종료가 수정 목록에는 보호중으로 남아 있었다).
-        lookups_used, conflicting = len(check), 0
+        lookups_used = len(check)
         for v in [v for v, by in confirmed.items() if by == "complete_range"]:
             if not updated_by_id.get(v) or updated_by_id[v].get("processState", "").startswith("종료"):
                 continue
@@ -381,6 +385,8 @@ def main() -> None:
             if rows and ("보호" in state_text or "공고" in state_text):  # 목록과 조회가 어긋남: 종료로 확정하지 않고 다음 실행에서 다시 본다
                 del confirmed[v]
                 conflicting += 1
+                conflicts.append({"event": "conflict", "desertionNo": v, "happenDt": prev.get(v), "detected_at": now.isoformat(timespec="seconds"),
+                                  "list_state": updated_by_id[v].get("processState"), "lookup_state": state_text})
                 still_protected[v] = prev[v]
                 lookup_rows += rows
             else:  # 종료면 그 상태를 쓰고, 조회 실패나 0건이면 사라짐은 확정이므로 "종료(사유 미상)"으로 적는다
@@ -404,9 +410,17 @@ def main() -> None:
 
     events = []
     for v, by in confirmed.items():
-        final = relooked[v] if v in relooked else final_by_id.get(v)
+        if v in relooked:
+            final, source = relooked[v], "relookup"
+        elif v in lookup_final:
+            final, source = lookup_final[v], "lookup"
+        else:
+            final, source = final_by_id.get(v), "updated"
+        if not final:  # 상태를 확인할 근거가 없어 사유 미상으로 적는다(추정)
+            source = "none"
         events.append({"event": "vanished", "desertionNo": v, "happenDt": prev.get(v), "detected_at": now.isoformat(timespec="seconds"),
-                       "confirmed_by": by, "processState": final.get("processState") if final else "종료(사유 미상)"})
+                       "confirmed_by": by, "state_source": source, "processState": final.get("processState") if final else "종료(사유 미상)"})
+    events += conflicts
     for v in returned:
         events.append({"event": "returned", "desertionNo": v, "happenDt": protected.get(v), "detected_at": now.isoformat(timespec="seconds")})
 
@@ -422,6 +436,7 @@ def main() -> None:
         "vanished_detected": len(vanished), "confirmed_missing": len(confirmed),
         "confirmed_by": {by: sum(1 for b in confirmed.values() if b == by) for by in ("complete_range", "lookup")},
         "still_protected": len(still_protected), "reprocess_ids": reprocess, "returned": len(returned),
+        "conflicting": conflicting, "lookup_count": min(lookups_used, args.max_lookups),
     }
     for w in fx.warnings:
         log(f"경고: {w}")
