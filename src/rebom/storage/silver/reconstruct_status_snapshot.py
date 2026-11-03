@@ -1,8 +1,9 @@
-﻿"""부분 Bronze 증분과 기존 Silver를 조합해 상태 비교용 스냅샷을 재구성한다."""
+"""부분 Bronze 증분과 기존 Silver를 조합해 상태 비교용 스냅샷을 재구성한다."""
 
 from datetime import datetime
 
 from rebom.storage.silver.resolve_ingest_events import resolve_ingest_events
+from rebom.storage.silver.validate_closure_evidence import validate_closure_evidence
 from rebom.storage.silver.transform_status_history import transform_status_history
 
 
@@ -56,6 +57,22 @@ def reconstruct_status_snapshot(
         raise ValueError("충돌이 해결되지 않은 Silver 증분입니다.")
 
     previous = index_silver(previous_silver_rows)
+
+    # A팀 manifest의 실제 조회 구간과 lookup 결과를 먼저 확인한다.
+    # 종료 근거가 하나라도 부족하면 상태 재구성 및 이력 생성을 차단한다.
+    closure = validate_closure_evidence(
+        verified_run,
+        previous_silver_rows,
+    )
+
+    if not closure["ready"]:
+        return {
+            "ready": False,
+            "conflicts": closure["rejected"],
+            "history_rows": [],
+            "closure_evidence": closure,
+        }
+
     delta = index_silver(prepared_notice["delta_rows"])
 
     # 원래 Silver 전체 공고를 기준으로 시작한다.

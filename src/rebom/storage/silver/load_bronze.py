@@ -1,4 +1,4 @@
-﻿"""A팀 Bronze 파일의 무결성을 검증하고 Silver 입력을 준비한다."""
+"""A팀 Bronze 파일의 무결성을 검증하고 Silver 입력을 준비한다."""
 
 import gzip
 import hashlib
@@ -198,6 +198,7 @@ def load_bronze_run(manifest_path):
         "run_id": run_id,
         "fetched_at": fetched_at,
         "rows_by_kind": rows_by_kind,
+        "partitions": partitions,
         "incomplete_partitions": incomplete,
         "reprocess_ids": manifest.get("reprocess_ids", []),
     }
