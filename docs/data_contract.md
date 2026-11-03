@@ -50,15 +50,17 @@
 - **임베딩 갱신 대상 [제안]**: 사진 칸(`popfile1`~`popfile8`)이나 특징 문장(`specialMark`)이 바뀐 공고. 사진 칸은 `updTm`이 안 바뀌므로 위 내용 판정으로만 알 수 있습니다. **[결정 필요]** 갱신 대상 필드 목록 (서동현, B)
 - **상태 이력 [제안]**: API는 마지막 값만 줍니다(한 공고는 하루에 한 번만 나옴). 중간 상태는 우리가 **매일 받은 값을 쌓아서** 만들어야 하며, 이력 테이블은 B가 만듭니다. A는 수집 실행별 원본 보존으로 뒷받침합니다.
 - **복귀 [확정]**: 종료에서 보호중으로 돌아온 공고가 4건 있었습니다. B는 이력에서 "보호중 복귀"를 허용해야 합니다.
-- **사라진 공고 [제안]**: A가 "보호중 목록에서 사라짐" 이벤트를 넘깁니다. 최종 값은 필요할 때만 조회해서 넘깁니다. 검색에서 내리는 것은 B의 서비스 테이블 규칙입니다. 사라졌다가 목록에 다시 나타나면 보호중으로 되돌립니다. **종료 판정 조건 [제안]**: 보호중 목록(`notice`, `protect`)의 모든 구간 조회가 아래를 만족할 때만 "목록에서 사라짐"을 종료로 판정합니다. ① 호출이 성공하고 결과 코드가 00입니다. ② 구간 길이가 1,095일 이하입니다(넘으면 요청 전에 막음). ③ 받은 건수가 `totalCount`와 같습니다. `totalCount`가 0이어도 위 조건을 지켰다면 정상입니다(공고 기간 중인 옛 공고가 없으면 `notice` 구간은 0건이 맞음). 받은 건수가 `totalCount`보다 적은 구간이 있으면 그 구간의 부재는 종료로 바꾸지 않고, `desertion_no`로 한 건씩 조회해 확인한 뒤에 판정합니다(11/2 시험: `protect` 2023~2025 구간에서 총건수 4,796, 받은 건수 4,793). 모든 구간 결과는 manifest `partitions`에 구간, 총건수, 받은 건수와 함께 기록합니다. `desertion_no` 개별 조회까지 실패하거나 결과가 불확실하면 기존 상태를 유지하고 재처리 대상으로 `partitions`에 표시해 남깁니다(B 요청, 11/2 합의). A는 구간 판정이나 개별 조회로 확정한 공고만 사라짐 이벤트로 넘기고(`confirmed_by`=`complete_range` 또는 `lookup`), 확정하지 못한 공고는 이벤트 없이 `reprocess_ids`로 남깁니다. B는 이 이벤트를 확인된 공고(`confirmed_missing_ids`)로 받고, 확인되지 않은 공고는 기존 보호중 상태를 유지하며 `reprocess_ids`를 참고합니다 **[확정, 11/2]**(이광훈 동의).
+- **사라진 공고 [제안]**: Silver 단계의 이벤트 생성(구현 A, 아래 "사라짐 이벤트 단계")이 "보호중 목록에서 사라짐" 이벤트를 만듭니다. 수집(Bronze)은 원본 저장과 구간별 건수 기록까지만 합니다. 최종 값은 필요할 때만 조회해서 넘깁니다. 검색에서 내리는 것은 B의 서비스 테이블 규칙입니다. 사라졌다가 목록에 다시 나타나면 보호중으로 되돌립니다. **종료 판정 조건 [제안]**: 보호중 목록(`notice`, `protect`)의 모든 구간 조회가 아래를 만족할 때만 "목록에서 사라짐"을 종료로 판정합니다. ① 호출이 성공하고 결과 코드가 00입니다. ② 구간 길이가 1,095일 이하입니다(넘으면 요청 전에 막음). ③ 받은 건수가 `totalCount`와 같습니다. `totalCount`가 0이어도 위 조건을 지켰다면 정상입니다(공고 기간 중인 옛 공고가 없으면 `notice` 구간은 0건이 맞음). 받은 건수가 `totalCount`보다 적은 구간이 있으면 그 구간의 부재는 종료로 바꾸지 않고, `desertion_no`로 한 건씩 조회해 확인한 뒤에 판정합니다(11/2 시험: `protect` 2023~2025 구간에서 총건수 4,796, 받은 건수 4,793). 모든 구간 결과는 manifest `partitions`에 구간, 총건수, 받은 건수와 함께 기록합니다. `desertion_no` 개별 조회까지 실패하거나 결과가 불확실하면 기존 상태를 유지하고 재처리 대상(`reprocess_ids`)으로 남깁니다(B 요청, 11/2 합의. 11/3 이후 위치는 아래 이벤트 단계의 manifest). 이벤트 생성은 구간 판정이나 개별 조회로 확정한 공고만 사라짐 이벤트로 넘기고(`confirmed_by`=`complete_range` 또는 `lookup`), 확정하지 못한 공고는 이벤트 없이 `reprocess_ids`로 남깁니다. B는 이 이벤트를 확인된 공고(`confirmed_missing_ids`)로 받고, 확인되지 않은 공고는 기존 보호중 상태를 유지하며 `reprocess_ids`를 참고합니다 **[확정, 11/2]**(이광훈 동의).
 
-- **이벤트 필드와 상태 값 읽는 규칙 [제안, 11/3]**: `events.jsonl.gz`는 한 줄이 이벤트 한 건입니다. 11/3 실제 실행에서 사라진 공고 1건(`447509202600199`)의 `processState`가 `보호중`으로 기록된 일이 있어(수정 목록이 종료 상태를 늦게 반영) 근거를 칸으로 남깁니다. API 원본 파일(`updated`, `list_notice`, `list_protect`, `lookup`)은 바꾸지 않고, 수집기(A)가 만드는 `events`와 manifest에만 칸을 더합니다. 기존 칸의 이름과 뜻은 그대로입니다.
-  - `vanished`: `event`, `desertionNo`, `happenDt`, `detected_at`, `confirmed_by`(사라짐을 어떻게 확정했나: `complete_range` 또는 `lookup`), `state_source`(`processState` 값의 출처), `processState`.
-  - `state_source`: `lookup`(불완전 구간이라 번호로 조회해 종료를 확인), `relookup`(구간으로 확정했지만 같은 실행 수정분의 상태가 종료가 아니어서 번호로 다시 조회), `updated`(같은 실행 수정분의 종료 상태), `none`(상태를 확인할 근거가 없어 `종료(사유 미상)`으로 적음, 추정).
-  - `conflict`: 사라진 것으로 보였지만 번호 조회에서는 아직 보호중·공고중인 공고. `event`, `desertionNo`, `happenDt`, `detected_at`, `list_state`(같은 실행 수정분의 상태), `lookup_state`(번호 조회 결과). 사라짐으로 확정하지 않으므로 `vanished`는 만들지 않고, A는 보호중 상태를 유지하며 다음 실행에서 다시 봅니다. B는 확인 필요로 기록합니다.
-  - `returned`: `event`, `desertionNo`, `happenDt`, `detected_at` (변경 없음).
-  - **B가 상태를 읽는 순서**: `events.processState`를 무조건 우선하지 않고 근거 기준으로 판단합니다. `lookup`·`relookup`(조회로 확인한 값) > `updated`(수정분의 종료 상태) > `none`(종료는 맞지만 사유는 모름). `state_source` 칸이 없는 11/3 이전 실행의 `vanished`는 `confirmed_by`만 보고 판단합니다.
-  - 조회 원본은 이벤트에 복사하지 않고 같은 실행의 `lookup.jsonl.gz`에서 `desertionNo`로 찾습니다(조회가 한 번도 없으면 파일이 없음). **[결정 필요]** B가 모르는 `event` 값(`conflict`)을 건너뛰는지, 확인 필요 목록으로 받을지 (이광훈, B)
+- **사라짐 이벤트 단계 [제안, 11/3]**: 사라짐 판단과 이벤트 생성은 API 응답이 아니라 해석이라서 Silver 단계로 분리합니다(구현 A, `rebom.storage.silver.generate_ingest_events`). 수집(Bronze)은 `updated`, `list_notice`, `list_protect`와 manifest(`partitions`)만 남깁니다.
+  - **입력/출력**: 입력은 같은 `dt`/`run_id`의 Bronze 파일(체크섬 확인). 출력은 `silver/rescue/events/dt=YYYY-MM-DD/run_id=<같은 id>/`의 `events.jsonl.gz`, `lookup.jsonl.gz`(번호로 조회했을 때만, 조회 응답 사본), `manifest.json`. 올리는 순서는 events, lookup, manifest(마지막, 덮어쓰기 금지), 상태 파일입니다. 이벤트 단계의 상태는 `state/rescue_events_state.json`(보호중·종료 목록, 마지막으로 처리한 `run_id`)이고, 없으면 11/3까지 수집 상태 파일에 있던 목록을 이어받습니다. 실행 순서는 수집, 이벤트 생성, B의 이력 변환입니다.
+  - **vanished**: `event`, `desertionNo`, `happenDt`, `detected_at`, `confirmed_by`(`complete_range` 또는 `lookup`), `state_source`, `processState`.
+  - **state_source** (`processState` 값의 출처): `updated`(같은 실행 수정분의 종료 상태), `lookup`(구간이 불완전해 번호로 조회해 종료를 확인), `relookup`(구간은 완전하지만 수정분에 종료 근거가 없어 번호로 조회해 종료를 확인), `none`(번호 조회가 0건이거나 알 수 없는 상태라 `종료(사유 미상)`으로 적음, 추정).
+  - **returned**: `event`, `desertionNo`, `happenDt`, `detected_at`.
+  - **확정 전 재조회**: 구간이 완전해도 수정분에 종료 상태가 없는 사라짐은 번호로 한 번 조회한 뒤에 확정합니다. 조회에서 아직 보호중·공고중이면 확정하지 않고 보호중으로 둡니다(충돌). 호출이 실패했거나 조회 상한(기본 300건)을 넘어 확인하지 못하면 확정을 미룹니다(`lookup_deferred_ids`). 11/3 실행에서 사라짐 7건이 수정분에 없었는데 번호로 조회하니 6건은 종료가 아닌 보호중이었습니다(해당 접수일 목록이 일시적으로 그 6건을 뺐고 총건수도 같이 줄어 구간은 "완전"으로 판정됨, 지금은 목록에 다시 나와 있음).
+  - **이벤트 단계의 manifest**: `bronze_run_id`, `generated_at`, `files`(checksum 포함), `vanished_detected`, `confirmed_missing`, `confirmed_by`(`complete_range`·`lookup` 건수), `still_protected`, `reprocess_ids`, `lookup_deferred_ids`, `returned`, `conflicting`, `conflicts`(충돌 번호별 `desertionNo`, `happenDt`, `list_state`, `lookup_state`), `lookup_count`. 충돌은 이벤트가 아니라 여기에만 남깁니다(B의 이벤트 분류가 `vanished`/`returned` 밖의 종류를 오류로 보기 때문).
+  - **B가 상태를 읽는 순서 [제안]**: `events.processState`를 무조건 우선하지 않고 근거 기준으로 판단합니다. `lookup`·`relookup`(조회로 확인한 값) > `updated`(수정분의 종료 상태) > `none`(종료는 맞지만 사유는 모름). 조회 원본은 같은 실행의 이벤트 폴더 `lookup.jsonl.gz`에서 `desertionNo`로 찾습니다. `state_source`가 없는 11/3 이전 실행의 이벤트(Bronze 경로의 `events.jsonl.gz`)는 `confirmed_by`만 보고 판단합니다.
+  - **[결정 필요] B 쪽 수정**: 이벤트가 Bronze 실행 폴더에서 Silver 경로로 옮겨 가므로, `load_bronze.py`의 필수 파일(`REQUIRED_KINDS`)에서 `events`를 빼고 이벤트를 따로 읽는 연결이 필요합니다. 수정분이 옛 상태일 때(11/3의 `447509202600199`) `lookup` 결과를 현재 스냅샷에 반영해야 `current_state_conflict`가 나지 않습니다. 재처리 대상은 Bronze manifest가 아니라 이벤트 단계 manifest의 `reprocess_ids`/`lookup_deferred_ids`입니다. (이광훈)
 
 ## 4. 날짜·시각 필드의 의미
 
@@ -74,13 +76,13 @@
 
 ## 5. 원본 보존 (S3 bronze)
 
-- **경로 [제안]**: `bronze/rescue/raw/dt=YYYY-MM-DD/run_id=<id>/<종류>.jsonl.gz`, 종류는 `updated`(수정일), `list_notice`, `list_protect`, `lookup`, `events`(사라짐·복귀 이벤트).
+- **경로 [제안]**: `bronze/rescue/raw/dt=YYYY-MM-DD/run_id=<id>/<종류>.jsonl.gz`, 종류는 `updated`(수정일), `list_notice`, `list_protect`. 사라짐·복귀 이벤트와 번호 조회 응답(`lookup`)은 API 응답이 아니라 해석 결과라서 Silver 경로(`silver/rescue/events/...`, 3절 사라짐 이벤트 단계)에 둡니다.
 - **`dt`는 수집을 실행한 날**입니다(공고 날짜가 아님). 3년치 백필은 `dt=백필 실행일`에 쌓고, 받은 기간은 manifest의 `request_params`에 남깁니다.
 - **파일 형식 [제안]**: 실행당 종류별로 **파일 하나**(JSONL, gzip)로 합쳐 작은 파일이 많이 생기지 않게 합니다. 한 줄이 응답의 공고 한 건이고 가공하지 않습니다. 요청별 `totalCount`와 페이지 수는 manifest에 남깁니다.
 - 요청 파라미터와 응답의 공고 항목을 가공 없이 저장하고 **인증키는 제외**합니다.
 - **재실행 [제안]**: 실행(run)마다 새 경로에 쌓고 덮어쓰지 않습니다. "같은 날 재실행해도 건수 동일"은 B가 `desertionNo` 기준으로 MERGE해서 보장하고, 내용이 같으면 변경 없음으로 처리합니다.
 - **`run_id` [제안]**: `fetched_at`의 한국 시간 날짜·시각에서 기호를 뺀 값에 무작위 6자리를 붙인 것입니다(`2026-11-03T03:00:12+09:00` → `20261103T030012-e9a4ff`, 이광훈 동의). 한 실행의 모든 파일이 같은 `run_id`를 쓰고, 날짜·시각 부분이 `fetched_at`에서 만들어져 둘이 어긋나지 않습니다. 같은 날 다시 실행하면 값이 달라지고, `dt`도 같은 한국 날짜입니다.
-- **실행 메타 파일(manifest) [제안]**: `source`, `endpoint`, `request_params`(키 제외), `fetched_at`, `run_id`, `record_count`, `page_count`, `dropped_count`(버린 빈 객체 수), `checksum`(SHA-256), `code_version`, `partitions`(구간별 결과). `partitions`의 한 줄은 `kind`, `result_code`(문자열 `"00"`), `start_date`, `end_date`(`YYYY-MM-DD`), `total_count`, `received_count`, `dropped_count`, `duplicate_count`, `complete`, `reason`, `reprocess_ids`입니다. 앞의 다섯 개는 B의 `validate_partition` 인자와 같은 이름이라 그대로 넘길 수 있습니다. **[확정, 11/2]** 이광훈 동의: 현재 필드 이름과 `YYYY-MM-DD` 형식을 유지합니다. 받은 건수가 `totalCount`보다 적은 구간은 반으로 쪼개 어긋나는 날까지 좁혀 기록하므로 `partitions`의 길이는 실행마다 다르고, 날 단위 구간은 `start_date`와 `end_date`가 같습니다(11/2 시험: 불완전한 날은 2023-02-11, 2024-05-09, 2025-09-09). 실행 요약 필드 **[제안, 11/3]**: `vanished_detected`, `confirmed_missing`, `confirmed_by`(`complete_range`·`lookup` 건수), `still_protected`, `reprocess_ids`, `returned`, `conflicting`(충돌 건수), `lookup_count`(번호로 조회한 공고 수).
+- **실행 메타 파일(manifest) [제안]**: `source`, `endpoint`, `request_params`(키 제외), `fetched_at`, `run_id`, `record_count`, `page_count`, `dropped_count`(버린 빈 객체 수), `checksum`(SHA-256), `code_version`, `partitions`(구간별 결과). `partitions`의 한 줄은 `kind`, `result_code`(문자열 `"00"`), `start_date`, `end_date`(`YYYY-MM-DD`), `total_count`, `received_count`, `dropped_count`, `duplicate_count`, `complete`, `reason`, `reprocess_ids`입니다. 앞의 다섯 개는 B의 `validate_partition` 인자와 같은 이름이라 그대로 넘길 수 있습니다. **[확정, 11/2]** 이광훈 동의: 현재 필드 이름과 `YYYY-MM-DD` 형식을 유지합니다. 받은 건수가 `totalCount`보다 적은 구간은 반으로 쪼개 어긋나는 날까지 좁혀 기록하므로 `partitions`의 길이는 실행마다 다르고, 날 단위 구간은 `start_date`와 `end_date`가 같습니다(11/2 시험: 불완전한 날은 2023-02-11, 2024-05-09, 2025-09-09). 사라짐 요약 필드(`vanished_detected`, `confirmed_missing`, `confirmed_by` 등)는 수집 manifest에 두지 않고 3절 이벤트 단계의 manifest에 둡니다.
 - **마지막 성공 기록(워터마크) [확정, 11/2]**: A가 마지막으로 성공한 `enupd`를 기록하고, 다음 실행은 그 날짜부터(하루 겹쳐) 오늘까지 한 번에 받아 따라잡습니다. 03:00 실행이면 마지막 성공일 낮에 바뀐 공고가 "다음 날부터"로는 빠지기 때문이며, 겹친 하루는 B가 `desertion_no` 기준 UPSERT와 내용 비교로 거릅니다(이광훈 동의).
 - **[확정, 11/2]** S3 업로드 책임: A가 원본 JSONL.gz와 manifest를 올리고, B가 읽어 Silver 변환·적재합니다(이광훈 동의, PR #4 리뷰). 사진은 서동현.
 
@@ -150,7 +152,7 @@
 - [ ] 상태 이력 테이블 구조 (B). 보호중 복귀 허용은 B가 확인함(PR #4 리뷰)
 - [x] 보호소 대표자명(`careOwnerNm`)은 저장하지 않음 (팀 규칙 AGENTS.md). 전화번호 표시 범위는 서비스 쪽에서 결정
 - [x] 사라진 공고의 종료 사유: ④ + 필요할 때 ①로 결정(10/31)
-- [ ] 이벤트 `state_source`, `conflict` 이벤트, 상태 값 읽는 순서(`lookup`·`relookup` > `updated` > `none`) (이광훈, B). 3절
+- [ ] 사라짐 이벤트 단계를 Silver로 분리(경로 `silver/rescue/events/...`), 이벤트 필드 `state_source`, 상태 값 읽는 순서(`lookup`·`relookup` > `updated` > `none`), B 로더의 필수 파일 변경 (이광훈, B). 3절
 - [ ] 보호중 목록의 발생일 범위: 날짜 제한 없이 3년 이하 구간으로 나눠 전부 받기, 7/1 이전 약 9,740건 (11/2 정정)
 - [ ] 사진 처리: 몇 장, 저장 범위, 원본/리사이즈 (서동현)
 - [ ] 정제 규칙 책임: 체중·나이·색상·기타 축종 이름 (B)
