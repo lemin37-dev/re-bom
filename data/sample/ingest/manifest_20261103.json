@@ -1,0 +1,1230 @@
+{
+ "source": "data.go.kr 15098931",
+ "endpoint": "https://apis.data.go.kr/1543061/abandonmentPublicService_v2/abandonmentPublic_v2",
+ "run_id": "20261103T090045-1fe465",
+ "fetched_at": "2026-11-03T09:00:45+09:00",
+ "code_version": "2026-11-02",
+ "mode": "incremental",
+ "status": "ok",
+ "updated_range": [
+  "20261102",
+  "20261103"
+ ],
+ "calls": 92,
+ "warnings": [
+  "list_protect 2023-02-11~2023-02-11: 불완전(count_mismatch) 총건수 2, 받은 건수 1",
+  "list_protect 2024-05-09~2024-05-09: 불완전(count_mismatch) 총건수 6, 받은 건수 5",
+  "list_protect 2025-09-09~2025-09-09: 불완전(count_mismatch) 총건수 11, 받은 건수 10"
+ ],
+ "files": [
+  {
+   "kind": "updated",
+   "file": "updated.jsonl.gz",
+   "record_count": 778,
+   "checksum": "577e61e2f2e3ab9dccff54a2b9cd3619e73d0433bcaf12076731a23ccbad4553"
+  },
+  {
+   "kind": "list_notice",
+   "file": "list_notice.jsonl.gz",
+   "record_count": 1980,
+   "checksum": "7c9f9ef819ea5fbc4db7649d6ec2ab8af95370a8b0d83c6342088567cd677b4d"
+  },
+  {
+   "kind": "list_protect",
+   "file": "list_protect.jsonl.gz",
+   "record_count": 17481,
+   "checksum": "bc5d3a09d0f759a3c3c5a321f883a7b7508c8f777c009511684d56fb3db2a54d"
+  },
+  {
+   "kind": "events",
+   "file": "events.jsonl.gz",
+   "record_count": 162,
+   "checksum": "de6587b34f8a8c3971c8c7d37ede6df5db221aaa33c87050ed688adda574ce17"
+  }
+ ],
+ "request_params": {
+  "updated": [
+   {
+    "bgupd": "20261102",
+    "enupd": "20261103",
+    "bgnde": "20080101",
+    "endde": "20100926",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261102",
+    "enupd": "20261103",
+    "bgnde": "20100927",
+    "endde": "20130622",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261102",
+    "enupd": "20261103",
+    "bgnde": "20130623",
+    "endde": "20160318",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261102",
+    "enupd": "20261103",
+    "bgnde": "20160319",
+    "endde": "20181213",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261102",
+    "enupd": "20261103",
+    "bgnde": "20181214",
+    "endde": "20210908",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261102",
+    "enupd": "20261103",
+    "bgnde": "20210909",
+    "endde": "20240604",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "bgupd": "20261102",
+    "enupd": "20261103",
+    "bgnde": "20240605",
+    "endde": "20261103",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   }
+  ],
+  "list_notice": [
+   {
+    "state": "notice",
+    "bgnde": "20080101",
+    "endde": "20100926",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20100927",
+    "endde": "20130622",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20130623",
+    "endde": "20160318",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20160319",
+    "endde": "20181213",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20181214",
+    "endde": "20210908",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20210909",
+    "endde": "20240604",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "notice",
+    "bgnde": "20240605",
+    "endde": "20261103",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   }
+  ],
+  "list_protect": [
+   {
+    "state": "protect",
+    "bgnde": "20080101",
+    "endde": "20100926",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20100927",
+    "endde": "20130622",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20130623",
+    "endde": "20160318",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20160319",
+    "endde": "20181213",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20181214",
+    "endde": "20210908",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20210909",
+    "endde": "20240604",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20210909",
+    "endde": "20230121",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230122",
+    "endde": "20240604",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230122",
+    "endde": "20230928",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230122",
+    "endde": "20230526",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230122",
+    "endde": "20230325",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230122",
+    "endde": "20230222",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230122",
+    "endde": "20230206",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230207",
+    "endde": "20230222",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230207",
+    "endde": "20230214",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230207",
+    "endde": "20230210",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230211",
+    "endde": "20230214",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230211",
+    "endde": "20230212",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230211",
+    "endde": "20230211",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230212",
+    "endde": "20230212",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230213",
+    "endde": "20230214",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230215",
+    "endde": "20230222",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230223",
+    "endde": "20230325",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230326",
+    "endde": "20230526",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230527",
+    "endde": "20230928",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230929",
+    "endde": "20240604",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20230929",
+    "endde": "20240131",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240201",
+    "endde": "20240604",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240201",
+    "endde": "20240403",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240404",
+    "endde": "20240604",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240404",
+    "endde": "20240504",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240505",
+    "endde": "20240604",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240505",
+    "endde": "20240520",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240505",
+    "endde": "20240512",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240505",
+    "endde": "20240508",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240509",
+    "endde": "20240512",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240509",
+    "endde": "20240510",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240509",
+    "endde": "20240509",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240510",
+    "endde": "20240510",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240511",
+    "endde": "20240512",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240513",
+    "endde": "20240520",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240521",
+    "endde": "20240604",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240605",
+    "endde": "20261103",
+    "numOfRows": 1000,
+    "pageNo": "1..n"
+   },
+   {
+    "state": "protect",
+    "bgnde": "20240605",
+    "endde": "20250819",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250820",
+    "endde": "20261103",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250820",
+    "endde": "20260328",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250820",
+    "endde": "20251208",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250820",
+    "endde": "20251014",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250820",
+    "endde": "20250916",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250820",
+    "endde": "20250902",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250903",
+    "endde": "20250916",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250903",
+    "endde": "20250909",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250903",
+    "endde": "20250906",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250907",
+    "endde": "20250909",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250907",
+    "endde": "20250908",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250909",
+    "endde": "20250909",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250910",
+    "endde": "20250916",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20250917",
+    "endde": "20251014",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20251015",
+    "endde": "20251208",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20251209",
+    "endde": "20260328",
+    "numOfRows": 1,
+    "pageNo": 1
+   },
+   {
+    "state": "protect",
+    "bgnde": "20260329",
+    "endde": "20261103",
+    "numOfRows": 1,
+    "pageNo": 1
+   }
+  ]
+ },
+ "partitions": [
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2008-01-01",
+   "end_date": "2010-09-26",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2010-09-27",
+   "end_date": "2013-06-22",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2013-06-23",
+   "end_date": "2016-03-18",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2016-03-19",
+   "end_date": "2018-12-13",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2018-12-14",
+   "end_date": "2021-09-08",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2021-09-09",
+   "end_date": "2024-06-04",
+   "total_count": 1,
+   "received_count": 1,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "updated",
+   "result_code": "00",
+   "start_date": "2024-06-05",
+   "end_date": "2026-11-03",
+   "total_count": 777,
+   "received_count": 777,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2008-01-01",
+   "end_date": "2010-09-26",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2010-09-27",
+   "end_date": "2013-06-22",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2013-06-23",
+   "end_date": "2016-03-18",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2016-03-19",
+   "end_date": "2018-12-13",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2018-12-14",
+   "end_date": "2021-09-08",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2021-09-09",
+   "end_date": "2024-06-04",
+   "total_count": 1,
+   "received_count": 1,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_notice",
+   "result_code": "00",
+   "start_date": "2024-06-05",
+   "end_date": "2026-11-03",
+   "total_count": 1979,
+   "received_count": 1979,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2008-01-01",
+   "end_date": "2010-09-26",
+   "total_count": 2,
+   "received_count": 2,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2010-09-27",
+   "end_date": "2013-06-22",
+   "total_count": 1,
+   "received_count": 1,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2013-06-23",
+   "end_date": "2016-03-18",
+   "total_count": 40,
+   "received_count": 40,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2016-03-19",
+   "end_date": "2018-12-13",
+   "total_count": 184,
+   "received_count": 184,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2018-12-14",
+   "end_date": "2021-09-08",
+   "total_count": 478,
+   "received_count": 478,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2021-09-09",
+   "end_date": "2023-01-21",
+   "total_count": 594,
+   "received_count": 594,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-01-22",
+   "end_date": "2023-02-06",
+   "total_count": 15,
+   "received_count": 15,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-02-07",
+   "end_date": "2023-02-10",
+   "total_count": 7,
+   "received_count": 7,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-02-11",
+   "end_date": "2023-02-11",
+   "total_count": 2,
+   "received_count": 1,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": false,
+   "reason": "count_mismatch",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-02-12",
+   "end_date": "2023-02-12",
+   "total_count": 0,
+   "received_count": 0,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-02-13",
+   "end_date": "2023-02-14",
+   "total_count": 5,
+   "received_count": 5,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-02-15",
+   "end_date": "2023-02-22",
+   "total_count": 6,
+   "received_count": 6,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-02-23",
+   "end_date": "2023-03-25",
+   "total_count": 25,
+   "received_count": 25,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-03-26",
+   "end_date": "2023-05-26",
+   "total_count": 121,
+   "received_count": 121,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-05-27",
+   "end_date": "2023-09-28",
+   "total_count": 234,
+   "received_count": 234,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2023-09-29",
+   "end_date": "2024-01-31",
+   "total_count": 347,
+   "received_count": 347,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-02-01",
+   "end_date": "2024-04-03",
+   "total_count": 158,
+   "received_count": 158,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-04-04",
+   "end_date": "2024-05-04",
+   "total_count": 89,
+   "received_count": 89,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-05-05",
+   "end_date": "2024-05-08",
+   "total_count": 12,
+   "received_count": 12,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-05-09",
+   "end_date": "2024-05-09",
+   "total_count": 6,
+   "received_count": 5,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": false,
+   "reason": "count_mismatch",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-05-10",
+   "end_date": "2024-05-10",
+   "total_count": 3,
+   "received_count": 3,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-05-11",
+   "end_date": "2024-05-12",
+   "total_count": 5,
+   "received_count": 5,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-05-13",
+   "end_date": "2024-05-20",
+   "total_count": 25,
+   "received_count": 25,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-05-21",
+   "end_date": "2024-06-04",
+   "total_count": 68,
+   "received_count": 68,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2024-06-05",
+   "end_date": "2025-08-19",
+   "total_count": 2257,
+   "received_count": 2257,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-08-20",
+   "end_date": "2025-09-02",
+   "total_count": 129,
+   "received_count": 129,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-09-03",
+   "end_date": "2025-09-06",
+   "total_count": 40,
+   "received_count": 40,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-09-07",
+   "end_date": "2025-09-08",
+   "total_count": 15,
+   "received_count": 15,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-09-09",
+   "end_date": "2025-09-09",
+   "total_count": 11,
+   "received_count": 10,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": false,
+   "reason": "count_mismatch",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-09-10",
+   "end_date": "2025-09-16",
+   "total_count": 67,
+   "received_count": 67,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-09-17",
+   "end_date": "2025-10-14",
+   "total_count": 298,
+   "received_count": 298,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-10-15",
+   "end_date": "2025-12-08",
+   "total_count": 592,
+   "received_count": 592,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2025-12-09",
+   "end_date": "2026-03-28",
+   "total_count": 1461,
+   "received_count": 1461,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  },
+  {
+   "kind": "list_protect",
+   "result_code": "00",
+   "start_date": "2026-03-29",
+   "end_date": "2026-11-03",
+   "total_count": 10187,
+   "received_count": 10187,
+   "dropped_count": 0,
+   "duplicate_count": 0,
+   "complete": true,
+   "reason": "complete",
+   "reprocess_ids": []
+  }
+ ],
+ "page_count": {
+  "updated": 7,
+  "list_notice": 8,
+  "list_protect": 77
+ },
+ "dropped_count": 0,
+ "duplicate_count": 0,
+ "vanished_detected": 162,
+ "confirmed_missing": 162,
+ "confirmed_by": {
+  "complete_range": 162,
+  "lookup": 0
+ },
+ "still_protected": 0,
+ "reprocess_ids": [],
+ "returned": 0,
+ "dropped_fields": [
+  "careOwnerNm"
+ ]
+}
