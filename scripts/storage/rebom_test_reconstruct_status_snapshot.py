@@ -1,4 +1,4 @@
-﻿"""기존 Silver + 부분 증분 + 종료/복귀 이벤트를 조합하는 테스트."""
+"""기존 Silver + 부분 증분 + 종료/복귀 이벤트를 조합하는 테스트."""
 
 from rebom.storage.silver.reconstruct_status_snapshot import (
     reconstruct_status_snapshot,
@@ -7,7 +7,7 @@ from rebom.storage.silver.transform_notice import transform_notice
 
 
 def make_notice(key, state):
-    return {"desertionNo": key, "processState": state}
+    return {"desertionNo": key, "processState": state, "happenDt": "20261015"}
 
 
 # 기존 Silver의 전체 공고 4건
@@ -34,20 +34,37 @@ delta_silver = [transform_notice(row) for row in delta_raw]
 verified = {
     "run_id": "20261103T090000-abcdef",
     "fetched_at": "2026-11-03T09:00:00+09:00",
+    "partitions": [
+        {
+            "kind": kind,
+            "result_code": "00",
+            "start_date": "2026-10-01",
+            "end_date": "2026-10-31",
+            "total_count": 10,
+            "received_count": 10,
+            "complete": True,
+            "reason": "complete",
+            "reprocess_ids": [],
+        }
+        for kind in ("list_notice", "list_protect")
+    ],
     "rows_by_kind": {
         "updated": delta_raw,
         "list_notice": [],
         "list_protect": [],
+        "lookup": [make_notice("B", "종료(입양)")],
         "events": [
             {
                 "event": "vanished",
                 "desertionNo": "A",
                 "confirmed_by": "complete_range",
+                "happenDt": "20261015",
             },
             {
                 "event": "vanished",
                 "desertionNo": "B",
                 "confirmed_by": "lookup",
+                "happenDt": "20261015",
             },
             {
                 "event": "returned",
