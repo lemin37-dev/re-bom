@@ -66,7 +66,7 @@ def test_split_vanished_needs_both_lists_complete():
     assert ri.split_vanished(["nodate"], prev, both) == ([], ["nodate"])
 
 
-def make_fake_call(records, protect_extra, null_days=None):
+def make_fake_call(records, protect_extra, null_days=None, stale_updated=None):
     """notice 는 비어 있고 protect 목록에는 current 만 있다. protect_extra 만큼 totalCount 를 크게 줘 불완전 구간을 만들고,
     null_days({발생일: 건수})는 그 날이 들어간 구간의 totalCount 에만 건수를 더한다(API 가 돌려주지 못하는 null 레코드)."""
     current = [r for r in records if r["processState"] == "보호중" and not r.get("hidden")]
@@ -84,12 +84,15 @@ def make_fake_call(records, protect_extra, null_days=None):
             items = [r for r in current if in_range(r)]
             hidden = sum(n for day, n in (null_days or {}).items() if p["bgnde"] <= day <= p["endde"])
             return ApiResult(200, "00", len(items) + protect_extra + hidden, items)
-        return ApiResult(200, "00", 0, [])  # updated
+        # updated: stale_updated({번호: 발생 며칠 전})의 공고는 실제 상태와 상관없이 보호중으로 내려준다(수정 목록이 늦게 반영되는 경우)
+        stale = [{"desertionNo": no, "happenDt": happen(days), "processState": "보호중"} for no, days in (stale_updated or {}).items()]
+        items = [r for r in stale if in_range(r)]
+        return ApiResult(200, "00", len(items), items)
 
     return fake_call
 
 
-def seed_scenario(store, protect_extra, null_days=None):
+def seed_scenario(store, protect_extra, null_days=None, stale_updated=None):
     """상태에 보호중 33건(P00~P29, B, C, D)을 넣고, B·C·D 가 목록에서 사라진 하루를 만들 가짜 API 를 돌려준다."""
     prev = {f"P{i:02d}": happen(3 + i % 10) for i in range(30)}
     prev.update({"B": happen(5), "C": happen(6), "D": happen(7)})
@@ -102,7 +105,7 @@ def seed_scenario(store, protect_extra, null_days=None):
     records += [rec("B", 5, "종료(입양)"), {**rec("C", 6, "보호중"), "hidden": True}]
     for r in records:
         r.setdefault("happenDt", happen(5))
-    return make_fake_call(records, protect_extra, null_days)
+    return make_fake_call(records, protect_extra, null_days, stale_updated)
 
 
 def run_main(store, fake_call):
@@ -170,6 +173,27 @@ def test_null_record_day_is_narrowed_so_only_that_day_needs_lookup():
     # B(5일 전), C(6일 전)는 완전한 구간이라 개별 조회 없이 확정되고, 불완전한 날에 발생한 D 만 개별 조회 대상이 된다
     assert manifest["confirmed_by"] == {"complete_range": 2, "lookup": 0}
     assert manifest["reprocess_ids"] == ["D"]
+
+
+def test_vanished_with_non_ended_updated_state_is_looked_up_again():
+    # 구간은 모두 완전하고 B, C, D 가 사라졌는데, 같은 실행의 수정분에는 셋 다 보호중으로 남아 있다
+    tmp = Path(tempfile.mkdtemp(prefix="rescue_test_"))
+    store = LocalStore(tmp)
+    run_main(store, seed_scenario(store, protect_extra=0, stale_updated={"B": 5, "C": 6, "D": 7}))
+    run_dir = next((tmp / "bronze" / "rescue" / "raw").glob("dt=*/run_id=*"))
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    events = {e["desertionNo"]: e for e in (json.loads(l) for l in gzip.open(run_dir / "events.jsonl.gz", "rt", encoding="utf-8"))}
+    state = json.loads(store.get_bytes(ri.STATE_KEY).decode("utf-8"))
+
+    # B: 조회하니 종료(입양) -> 수정분의 보호중이 아니라 조회한 상태를 쓴다
+    assert events["B"]["processState"] == "종료(입양)" and events["B"]["confirmed_by"] == "complete_range"
+    # D: 조회해도 0건 -> 사라짐은 확정이므로 사유 미상
+    assert events["D"]["processState"] == "종료(사유 미상)"
+    # C: 조회하니 아직 보호중 -> 종료로 확정하지 않고 보호중으로 남긴다
+    assert "C" not in events and "C" in state["protected"] and "C" not in state["ended"]
+    assert sorted(state["ended"]) == ["B", "D"]
+    assert manifest["still_protected"] == 1 and manifest["confirmed_missing"] == 2
+    assert manifest["confirmed_by"] == {"complete_range": 2, "lookup": 0}
 
 
 def test_owner_name_is_not_saved():

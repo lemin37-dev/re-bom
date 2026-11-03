@@ -336,6 +336,8 @@ def main() -> None:
     reprocess: list[str] = []
     lookup_rows: list[dict] = []
     lookup_params, lookup_pages, lookup_dropped = [], 0, 0
+    updated_by_id = {i["desertionNo"]: i for i in kinds["updated"][0]}
+    relooked: dict[str, dict | None] = {}  # 구간으로 확정했지만 수정분 상태가 종료가 아니어서 다시 조회한 공고 -> 조회한 종료 행(없으면 None)
     if not aborted:
         sure, check = split_vanished(vanished, prev, partitions)
         confirmed.update({v: "complete_range" for v in sure})
@@ -363,6 +365,30 @@ def main() -> None:
                     p["reprocess_ids"].append(v)
         if reprocess:
             fx.warnings.append(f"재처리 대상 {len(reprocess)}건: 기존 상태를 유지함")
+        # 구간으로 확정했는데 같은 실행의 수정분 상태가 종료가 아니면, 수정 목록이 보호중 목록보다 늦게 반영된 것일 수 있다.
+        # 수정분 상태를 쓰지 않고 번호로 한 번 조회해 실제 상태를 받는다(11/3 확인: 08:50 입양 종료가 수정 목록에는 보호중으로 남아 있었다).
+        lookups_used, conflicting = len(check), 0
+        for v in [v for v, by in confirmed.items() if by == "complete_range"]:
+            if not updated_by_id.get(v) or updated_by_id[v].get("processState", "").startswith("종료"):
+                continue
+            rows, s = fx.lookup_id(v, prev.get(v)) if lookups_used < args.max_lookups else (None, None)
+            lookups_used += 1
+            if s:
+                lookup_params += s["request_params"]
+                lookup_pages += s["page_count"]
+                lookup_dropped += s["dropped_count"]
+            state_text = rows[0].get("processState", "") if rows else ""
+            if rows and ("보호" in state_text or "공고" in state_text):  # 목록과 조회가 어긋남: 종료로 확정하지 않고 다음 실행에서 다시 본다
+                del confirmed[v]
+                conflicting += 1
+                still_protected[v] = prev[v]
+                lookup_rows += rows
+            else:  # 종료면 그 상태를 쓰고, 조회 실패나 0건이면 사라짐은 확정이므로 "종료(사유 미상)"으로 적는다
+                relooked[v] = rows[0] if rows and state_text.startswith("종료") else None
+                lookup_rows += rows if relooked[v] else []
+        if relooked or conflicting:
+            log(f"  수정분 상태가 종료가 아닌 사라진 공고 재조회: 종료 {sum(1 for r in relooked.values() if r)}"
+                f", 사유 미상 {sum(1 for r in relooked.values() if not r)}, 목록과 어긋남(보호중 유지) {conflicting}")
     if args.lookup and confirmed and not aborted:
         days = sorted({prev[v] for v in confirmed if prev.get(v)})
         extra, s = fx.fetch("lookup", {}, [(d, d) for d in days])
@@ -374,12 +400,11 @@ def main() -> None:
     if lookup_rows:
         kinds["lookup"] = (lookup_rows, {"request_params": lookup_params, "partitions": [], "page_count": lookup_pages,
                                          "dropped_count": lookup_dropped, "duplicate_count": 0})
-    updated_by_id = {i["desertionNo"]: i for i in kinds["updated"][0]}
     final_by_id = {**{i["desertionNo"]: i for i in lookup_rows}, **updated_by_id}
 
     events = []
     for v, by in confirmed.items():
-        final = final_by_id.get(v)
+        final = relooked[v] if v in relooked else final_by_id.get(v)
         events.append({"event": "vanished", "desertionNo": v, "happenDt": prev.get(v), "detected_at": now.isoformat(timespec="seconds"),
                        "confirmed_by": by, "processState": final.get("processState") if final else "종료(사유 미상)"})
     for v in returned:
