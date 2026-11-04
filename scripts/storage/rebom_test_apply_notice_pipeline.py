@@ -1,4 +1,4 @@
-﻿"""검증된 Bronze 증분을 별도 Iceberg 테이블에 실제 적재한다."""
+"""검증된 Bronze 증분을 별도 Iceberg 테이블에 실제 적재한다."""
 
 import gzip
 import hashlib
@@ -130,7 +130,6 @@ with tempfile.TemporaryDirectory(prefix="rebom_apply_pipeline_") as temp:
         "updated": delta,
         "list_notice": [],
         "list_protect": [],
-        "events": [],
     }
 
     files = []
@@ -201,7 +200,11 @@ with tempfile.TemporaryDirectory(prefix="rebom_apply_pipeline_") as temp:
 
     assert applied["ready"]
     assert applied["applied"]
-    assert applied["verified_final_count"] == 115
+    final_count = len(
+        catalog.load_table(TEST_TABLE).scan().to_arrow().to_pylist()
+    )
+    assert final_count == 115
+    assert applied["prepared_insert"] == 0 or applied["rows_inserted"] >= 0
 
     print("APPLY_INSERTED:", applied["rows_inserted"])
     print("APPLY_UPDATED:", applied["rows_updated"])

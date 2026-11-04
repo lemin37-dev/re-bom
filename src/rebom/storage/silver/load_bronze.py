@@ -10,10 +10,10 @@ from pathlib import Path
 from rebom.storage.silver.validate_manifest import validate_partition
 
 
-# A팀 수집 계약에서 사용하는 파일 종류다.
-# lookup 파일은 실행 옵션에 따라 없을 수도 있다.
-REQUIRED_KINDS = {"updated", "list_notice", "list_protect", "events"}
-ALLOWED_KINDS = REQUIRED_KINDS | {"lookup"}
+# A팀 Bronze 수집 계약: 원본 데이터 3종만 허용한다.
+# events와 lookup은 별도 Silver 이벤트 단계에서 처리한다.
+REQUIRED_KINDS = {"updated", "list_notice", "list_protect"}
+ALLOWED_KINDS = REQUIRED_KINDS
 
 # 원본에 들어오더라도 Silver 적재 전에 차단할 필드다.
 FORBIDDEN_FIELDS = {"careOwnerNm", "callName", "callTel"}

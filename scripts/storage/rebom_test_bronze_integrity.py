@@ -1,4 +1,4 @@
-﻿"""A팀 Bronze manifest, 체크섬, 건수, 개인정보 검사 테스트."""
+"""A팀 Bronze manifest, 체크섬, 건수, 개인정보 검사 테스트."""
 
 import gzip
 import hashlib
@@ -22,7 +22,6 @@ with tempfile.TemporaryDirectory(prefix="rebom_bronze_integrity_") as temp:
         "updated": [{"desertionNo": "A", "processState": "보호중"}],
         "list_notice": [{"desertionNo": "A", "processState": "보호중"}],
         "list_protect": [{"desertionNo": "B", "processState": "보호중"}],
-        "events": [],
     }
 
     file_entries = []
@@ -79,7 +78,7 @@ with tempfile.TemporaryDirectory(prefix="rebom_bronze_integrity_") as temp:
 
     assert loaded["run_id"] == run_id
     assert len(loaded["rows_by_kind"]["updated"]) == 1
-    assert len(loaded["rows_by_kind"]["events"]) == 0
+    assert set(loaded["rows_by_kind"]) == {"updated", "list_notice", "list_protect"}
     assert len(loaded["incomplete_partitions"]) == 1
 
     print("VALID_FILES:", len(loaded["rows_by_kind"]))

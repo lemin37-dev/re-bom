@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from rebom.storage.cleaning.status import parse_status
 from rebom.storage.silver.resolve_ingest_events import resolve_ingest_events
 from rebom.storage.silver.validate_closure_evidence import validate_closure_evidence
 from rebom.storage.silver.transform_status_history import transform_status_history
@@ -97,6 +98,41 @@ def reconstruct_status_snapshot(
             observed_ids.add(key)
 
     events = verified_run["rows_by_kind"].get("events", [])
+    lookup_rows = verified_run["rows_by_kind"].get("lookup", [])
+    deferred_ids = set(verified_run.get("lookup_deferred_ids") or [])
+    verified_closed_ids = set()
+
+    for event in events:
+        if event.get("event") != "vanished":
+            continue
+
+        key = str(event.get("desertionNo") or "").strip()
+        if key in deferred_ids:
+            raise ValueError(f"?? ?? ??? ?? ?? ??: {key}")
+
+        if event.get("state_source") not in ("lookup", "relookup"):
+            continue
+
+        matches = [
+            row for row in lookup_rows
+            if str(row.get("desertionNo") or "").strip() == key
+            and row.get("processState") == event.get("processState")
+            and str(row.get("happenDt") or "") == str(event.get("happenDt") or "")
+        ]
+
+        if len(matches) != 1 or parse_status(event.get("processState"))[0] != "CLOSED":
+            raise ValueError(f"?? ??? ?? ???: {key}")
+
+        if key not in previous:
+            raise ValueError(f"?? Silver ??? ??: {key}")
+
+        current[key] = {
+            **previous[key],
+            "process_state_raw": event["processState"],
+            "status_group": "CLOSED",
+            "source_updated_at_raw": matches[0].get("updTm"),
+        }
+        verified_closed_ids.add(key)
     reprocess_ids = set(verified_run.get("reprocess_ids") or [])
 
     # 사라짐 이벤트가 있고 이번 실행에서 관측되지 않은 공고만
@@ -113,7 +149,7 @@ def reconstruct_status_snapshot(
         if key in reprocess_ids:
             raise ValueError(f"재확인 대상의 종료 처리 금지: {key}")
 
-        if key not in observed_ids:
+        if key not in observed_ids and key not in verified_closed_ids:
             current.pop(key, None)
 
     previous_raw = [

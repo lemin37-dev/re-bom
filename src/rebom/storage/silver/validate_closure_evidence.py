@@ -1,4 +1,4 @@
-﻿"""A팀 vanished 이벤트의 종료 근거를 수집 구간과 실제 조회 결과로 검증한다."""
+"""A팀 vanished 이벤트의 종료 근거를 수집 구간과 실제 조회 결과로 검증한다."""
 
 from datetime import date, datetime
 
@@ -140,6 +140,17 @@ def validate_closure_evidence(verified_run, previous_silver_rows):
                     ):
                         reason = f"{kind}_incomplete"
                         break
+
+
+                if reason is None and event.get("state_source") == "relookup":
+                    matches = [
+                        raw for raw in lookup.get(key, [])
+                        if normalize_day(raw.get("happenDt")) == old_day
+                        and raw.get("processState") == event.get("processState")
+                        and parse_status(raw.get("processState"))[0] == "CLOSED"
+                    ]
+                    if len(matches) != 1:
+                        reason = "relookup_closed_record_missing"
 
             elif method == "lookup":
                 # lookup이 종료 확인 근거라면 실제 조회 레코드가 있어야 한다.
