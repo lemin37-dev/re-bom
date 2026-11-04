@@ -15,9 +15,13 @@ serve = [
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.4",
 ]
+photos = [
+    "Pillow>=10",
+]
 dev = [
     "pytest>=8",
     "httpx>=0.27",
+    "Pillow>=10",
 ]
 
 [tool.setuptools.packages.find]
