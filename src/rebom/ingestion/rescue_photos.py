@@ -70,10 +70,11 @@ KST = timezone(timedelta(hours=9))
 SAFE_ID = re.compile(r"^[0-9A-Za-z_-]{1,40}$")  # 공고 번호가 경로에 들어가므로 이상한 문자는 걸러낸다
 
 # 실패 사유
-NOT_FOUND, TIMEOUT, NETWORK, SERVER_ERROR, HTTP_ERROR, BROKEN, CONVERT = (
-    "not_found", "timeout", "network_error", "server_error", "http_error", "broken_file", "convert_error",
+NOT_FOUND, TIMEOUT, NETWORK, SERVER_ERROR, HTTP_ERROR, BROKEN, CONVERT, UNSUPPORTED = (
+    "not_found", "timeout", "network_error", "server_error", "http_error", "broken_file", "convert_error", "unsupported_format",
 )
-FORMAT_EXT = {"JPEG": "jpg", "PNG": "png", "GIF": "gif", "WEBP": "webp", "BMP": "bmp", "TIFF": "tif"}
+# MPO 는 휴대폰이 여러 장(깊이 정보 등)을 한 파일에 담은 JPEG 이다. 파일은 .jpg 로 열리지만 Pillow 는 format 을 "MPO" 로 알려 준다.
+FORMAT_EXT = {"JPEG": "jpg", "MPO": "jpg", "PNG": "png", "GIF": "gif", "WEBP": "webp", "BMP": "bmp", "TIFF": "tif"}
 
 
 def log(msg: str) -> None:
@@ -125,6 +126,10 @@ class BrokenImage(Exception):
     pass
 
 
+class UnsupportedImage(Exception):
+    """사진으로는 읽히지만 FORMAT_EXT 에 없는 형식. 깨진 파일과 구분해 사유를 남긴다."""
+
+
 def open_image(data: bytes):
     """사진으로 끝까지 읽히는지 확인한다(끊긴 파일, 오류 페이지, 0바이트는 BrokenImage). (확장자, 이미지)를 돌려준다."""
     from PIL import Image
@@ -137,7 +142,7 @@ def open_image(data: bytes):
         raise BrokenImage() from None
     ext = FORMAT_EXT.get(fmt or "")
     if ext is None:
-        raise BrokenImage()
+        raise UnsupportedImage(fmt)
     return ext, img
 
 
@@ -248,6 +253,8 @@ def process_slot(store, fetch, item: dict, now: datetime) -> dict:
         ext, img = open_image(data)
     except BrokenImage:
         return failure(BROKEN)
+    except UnsupportedImage:
+        return failure(UNSUPPORTED)
     try:
         full, thumb = make_webp(img)
     except Exception:

@@ -158,6 +158,34 @@ def test_notice_and_protect_lists_are_both_read_without_duplicates(store):
     assert out["bronze_notices"] == 2 and sorted(fetch.calls) == ["http://x/a", "http://x/b"]
 
 
+def mpo_bytes():
+    """휴대폰 사진처럼 한 파일에 두 장이 든 MPO. 열면 Pillow 는 format 을 "MPO" 로 알려 주지만 파일은 JPEG 이다."""
+    out = io.BytesIO()
+    Image.new("RGB", (800, 600), (200, 100, 50)).save(out, format="MPO", save_all=True, append_images=[Image.new("RGB", (800, 600), (50, 100, 200))])
+    return out.getvalue()
+
+
+def test_mpo_phone_photo_is_stored_as_jpg(store):
+    """11/4 표본에서 정상 JPEG 9장이 broken_file 로 실패했던 원인(MPO 를 지원하지 않음)을 막는다."""
+    data = mpo_bytes()
+    assert Image.open(io.BytesIO(data)).format == "MPO"
+    seed_bronze(store, [row("111", "http://x/a")])
+    out = rp.run_photos(store, FakeFetch({"http://x/a": (data, None)}), RUN_ID, now=NOW)
+    assert out["results"] == {"success": 1}
+    assert store.get_bytes("bronze/rescue/images/111/popfile1.jpg") == data  # 받은 그대로, 확장자만 jpg
+    assert store.get_bytes("images/111/1.webp") and store.get_bytes("images/111/1_thumb.webp")
+    assert state_of(store)["notices"]["111"]["slots"]["1"]["ext"] == "jpg"
+
+
+def test_readable_but_unsupported_format_is_not_called_broken(store):
+    out = io.BytesIO()
+    Image.new("RGB", (40, 30)).save(out, format="PPM")  # 사진으로는 읽히지만 허용 형식 목록에 없음
+    seed_bronze(store, [row("111", "http://x/a")])
+    rp.run_photos(store, FakeFetch({"http://x/a": (out.getvalue(), None)}), RUN_ID, now=NOW)
+    rec = state_of(store)["notices"]["111"]["slots"]["1"]
+    assert rec["status"] == "failed" and rec["reason"] == "unsupported_format"
+
+
 @pytest.mark.parametrize("payload", [b"<html>error</html>", b"", image_bytes()[:200]])
 def test_broken_file_is_a_failure_and_nothing_is_stored(store, payload):
     seed_bronze(store, [row("111", "http://x/a")])
