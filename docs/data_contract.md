@@ -89,6 +89,7 @@
 - **[확정]** `popfile1`~`popfile8`. 3번 이후는 값이 있을 때만 응답에 나옴. 공고당 평균 2.29장(2장이 87%, 최대 8장). 평균 용량 약 260–310KB, 해상도 중앙값 약 1243×1200px, JPEG가 대부분이고 PNG 약 3%.
 - **[확정]** 주소는 전부 `http://`. 오래된 공고의 사진은 404 (2021-11 이전 전부, 2021-12 이후 대부분 열림). 그래서 **공고가 올라온 직후** S3에 저장합니다.
 - **경로 [제안]**: `bronze/rescue/images/<desertionNo>/popfile<N>_<sha256 앞 8자>.<ext>`
+- **구현 현황 [제안, 11/5]**: PR #16(Draft)에서 아래처럼 구현했고, 위 제안과 다릅니다(해시를 파일 이름에 넣지 않고 manifest에 기록). 원본 `bronze/rescue/images/<desertionNo>/popfile<N>.<확장자>`(받은 그대로, 확장자는 파일 내용으로 판단), 서비스용 `images/<desertionNo>/<N>.webp`와 가로 400px 썸네일 `<N>_thumb.webp`(서비스 이미지 서빙 설계, 11/3), 실행별 manifest `bronze/rescue/image_runs/dt=<실행일>/run_id=<사진 실행 id>/manifest.json`(항목: `desertionNo`, `slot`, `original`, `ext`, `bytes`, `sha256`, `serving.image`, `serving.thumb`). 이광훈·서동현·이민혁 님 확인 뒤 이 절의 경로 제안을 정리합니다.
 - **실패 처리 [제안]**: 다운로드가 실패하면 URL을 보존하고 상태(`failed`), 사유, 시도 횟수를 남깁니다(누락 표시).
 - 사진 해시는 서동현 님이 기록합니다.
 - **[결정 필요]** 몇 장을 받을지, 보호중만 vs 3년치, 원본만 vs 리사이즈본, 종료 공고 사진 보관, 실패 5%·PNG 처리 (서동현 협의)
