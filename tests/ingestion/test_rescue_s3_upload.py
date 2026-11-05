@@ -7,8 +7,9 @@ import pytest
 
 from rebom.ingestion import rescue_incremental as ri
 from rebom.ingestion.storage import LocalStore, S3Store, UploadError, make_store
+from rebom.storage.silver import generate_ingest_events as ge
 
-from test_rescue_incremental import run_main, seed_scenario
+from test_rescue_incremental import run_main, run_silver, seed_scenario
 
 
 class NotFound(Exception):
@@ -129,6 +130,34 @@ def test_failed_upload_keeps_previous_state():
         run_main(store, fake_call)
     assert client.objects[ri.STATE_KEY][0] == before  # 마지막 성공일이 앞으로 가지 않았다
     assert not any(k.endswith("/manifest.json") for k in client.objects)  # manifest 는 올라가지 않았다
+
+
+def test_silver_step_uploads_manifest_last_then_state():
+    client = FakeS3Client()
+    store = S3Store(client, "bucket")
+    fake_call = seed_scenario(store, protect_extra=0)
+    run_main(store, fake_call)
+    before = len(client.put_order)
+    run_silver(store, fake_call)
+    keys = client.put_order[before:]
+    silver = [k for k in keys if k.startswith("silver/rescue/events/dt=")]
+    assert silver and silver[-1].endswith("/manifest.json")  # manifest 가 마지막
+    assert keys[-1] == ge.STATE_KEY  # 상태는 업로드가 모두 끝난 뒤
+    manifest = json.loads(client.objects[silver[-1]][0])
+    for item in manifest["files"]:
+        data, meta = client.objects[silver[-1].rsplit("/", 1)[0] + "/" + item["file"]]
+        assert hashlib.sha256(data).hexdigest() == item["checksum"] == meta["sha256"]
+
+
+def test_failed_silver_upload_keeps_events_state():
+    client = FakeS3Client(fail_key="events.jsonl.gz")
+    store = S3Store(client, "bucket", retries=1)
+    fake_call = seed_scenario(store, protect_extra=0)
+    run_main(store, fake_call)
+    with pytest.raises(UploadError):
+        run_silver(store, fake_call)
+    assert ge.STATE_KEY not in client.objects  # 처리한 것으로 기록하지 않아 다음에 다시 처리할 수 있다
+    assert not any(k.startswith("silver/") and k.endswith("/manifest.json") for k in client.objects)
 
 
 def test_local_store_default_keeps_old_layout(tmp_path):
