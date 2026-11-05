@@ -90,6 +90,12 @@
 - **[확정]** 주소는 전부 `http://`. 오래된 공고의 사진은 404 (2021-11 이전 전부, 2021-12 이후 대부분 열림). 그래서 **공고가 올라온 직후** S3에 저장합니다.
 - **경로 [제안]**: `bronze/rescue/images/<desertionNo>/popfile<N>_<sha256 앞 8자>.<ext>`
 - **구현 현황 [제안, 11/5]**: PR #16(Draft)에서 아래처럼 구현했고, 위 제안과 다릅니다(해시를 파일 이름에 넣지 않고 manifest에 기록). 원본 `bronze/rescue/images/<desertionNo>/popfile<N>.<확장자>`(받은 그대로, 확장자는 파일 내용으로 판단), 서비스용 `images/<desertionNo>/<N>.webp`와 가로 400px 썸네일 `<N>_thumb.webp`(서비스 이미지 서빙 설계, 11/3), 실행별 manifest `bronze/rescue/image_runs/dt=<실행일>/run_id=<사진 실행 id>/manifest.json`(항목: `desertionNo`, `slot`, `original`, `ext`, `bytes`, `sha256`, `serving.image`, `serving.thumb`). 이광훈·서동현·이민혁 님 확인 뒤 이 절의 경로 제안을 정리합니다.
+- **manifest 규칙 [제안, 11/5, 이광훈 님 확인 대기]** (11/4 이광훈 님 답변 기준):
+  - 항목은 `desertionNo`, `slot`, `original`, `ext`, `bytes`, `sha256`, `serving`입니다. `desertion_no`, `image_slot`으로의 이름 변환은 Silver가 하는 것으로 제안하며, 필드 이름은 확인 대기입니다.
+  - `run_id`(사진 실행 id)와 `bronze_run_id`는 manifest 맨 위에 한 번만 있고 항목마다는 붙지 않습니다.
+  - `files`에는 그 실행에서 새로 저장한 사진만 담고, 업로드가 모두 성공한 칸만 기록합니다. 이미 저장한 사진은 다시 받지 않고 다시 적지도 않으므로, B는 기존 사진 경로를 유지하고 새로 온 항목만 반영합니다(이광훈 님 답변: "기존 Silver 사진 경로를 유지하고 새로 저장되거나 변경된 사진만 갱신").
+  - `status`는 실행 중 `in_progress`, 끝나면 `ok`, 업로드가 끊기면 `aborted`이고 같은 파일을 덮어씁니다. B는 `ok` 또는 `aborted`인 manifest만 읽습니다.
+  - 같은 칸의 사진 주소가 바뀌어도 A는 다시 받지 않습니다(변경 감지 안 함, 11/2~11/4 비교로 하루 10여 칸). 필요하면 별도 작업으로 정합니다.
 - **실패 처리 [제안]**: 다운로드가 실패하면 URL을 보존하고 상태(`failed`), 사유, 시도 횟수를 남깁니다(누락 표시).
 - 사진 해시는 서동현 님이 기록합니다.
 - **[결정 필요]** 몇 장을 받을지, 보호중만 vs 3년치, 원본만 vs 리사이즈본, 종료 공고 사진 보관, 실패 5%·PNG 처리 (서동현 협의)
