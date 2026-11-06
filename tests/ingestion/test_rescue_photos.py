@@ -441,3 +441,24 @@ def test_killed_run_keeps_manifest_and_state_in_agreement(store, monkeypatch):
     listed = {(f["desertionNo"], f["slot"]) for f in m["files"]}
     recorded = {(no, int(s)) for no, n in notices.items() for s, r in n["slots"].items() if r["status"] == "success"}
     assert recorded <= listed
+
+
+def test_manifest_updated_at_moves_on_each_write_while_generated_at_stays(store, monkeypatch):
+    # 정체 판단 기준: generated_at 은 실행 시작 시각 그대로, updated_at 은 manifest 를 쓸 때마다 갱신된다.
+    monkeypatch.setattr(rp, "CHECKPOINT_EVERY", 1)
+    seed_bronze(store, [row("111", "http://x/a"), row("222", "http://x/b")])
+    seen = []
+
+    def fetch(url):
+        m = read_manifest(store, "r1")
+        if m is not None:
+            seen.append((m["status"], m["generated_at"], m["updated_at"]))
+        return image_bytes(), None
+
+    rp.run_photos(store, fetch, RUN_ID, now=NOW, photo_run_id="r1")
+    assert seen and seen[0][0] == "in_progress"  # 두 번째 칸을 받기 전에는 첫 체크포인트의 in_progress 가 보인다
+    final = read_manifest(store, "r1")
+    assert final["status"] == "ok"
+    assert final["generated_at"] == NOW.isoformat(timespec="seconds")
+    assert all(g == final["generated_at"] for _, g, _ in seen)
+    assert datetime.fromisoformat(final["updated_at"]) >= datetime.fromisoformat(final["generated_at"])

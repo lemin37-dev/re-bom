@@ -278,10 +278,12 @@ def manifest_entry(item: dict, rec: dict) -> dict:
     }
 
 
-def write_manifest(store, key: str, photo_run_id: str, bronze_run_id: str, now: datetime, status: str, summary: dict, stored: list, failed: list) -> None:
+def write_manifest(store, key: str, photo_run_id: str, bronze_run_id: str, now: datetime, status: str, summary: dict, stored: list, failed: list, updated_at: datetime | None = None) -> None:
+    # generated_at 은 실행 시작 시각이고 바뀌지 않는다. updated_at 은 manifest 를 쓸 때마다 갱신돼, in_progress 가 멈췄는지 판단하는 기준이 된다.
     manifest = {
         "source": "rescue_photos", "run_id": photo_run_id, "bronze_run_id": bronze_run_id,
-        "generated_at": now.isoformat(timespec="seconds"), "code_version": CODE_VERSION, "status": status,
+        "generated_at": now.isoformat(timespec="seconds"), "updated_at": (updated_at or now).isoformat(timespec="seconds"),
+        "code_version": CODE_VERSION, "status": status,
         "counts": {"stored": len(stored), "failed": len(failed), **summary},
         "files": stored,  # 이번 실행에서 새로 저장한 사진
         "failed": failed,  # 이번 실행에서 실패한 칸 (failed 는 다음 실행이 다시 시도, gave_up 은 포기)
@@ -313,7 +315,7 @@ def run_photos(store, fetch, run_id: str, limit: int | None = None, delay: float
 
     def checkpoint(status: str) -> None:
         # manifest 를 먼저 쓰고 기록을 저장한다. 기록에 success 로 남은 사진이 어느 manifest 에도 없는 일이 없게 하려는 순서다.
-        write_manifest(store, manifest_key, photo_run_id, run_id, now, status, summary, stored, failed)
+        write_manifest(store, manifest_key, photo_run_id, run_id, now, status, summary, stored, failed, updated_at=datetime.now(KST))
         state["last_bronze_run_id"] = run_id
         state["updated_at"] = now.isoformat(timespec="seconds")
         save_state(store, state)
