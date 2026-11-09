@@ -1,0 +1,18 @@
+# 웹 화면 + 검색 API. 적용은 사람이 한다: kubectl apply -k infra/k8s/web (README.md)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rebom-web
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rebom
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - api.yaml
+  - web.yaml
+  - ingress.yaml
+images:
+  - name: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/api
+    newTag: develop
+  - name: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/web
+    newTag: develop

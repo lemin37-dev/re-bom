@@ -1,0 +1,69 @@
+# 검색 API (FastAPI). 이미지: infra/docker/api.Dockerfile
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      nodeSelector:
+        rebom/pool: main
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: api
+          image: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/api:develop
+          imagePullPolicy: Always # develop 태그를 덮어쓰므로 다시 띄울 때마다 새로 받는다
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: REBOM_DATA_MODE
+              value: sample
+            # 브라우저는 같은 주소(/api)로 부르므로 CORS 는 필요 없다. 로컬 개발 기본값만 둔다
+            - name: REBOM_CORS_ORIGINS
+              value: http://localhost:3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

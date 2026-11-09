@@ -1,0 +1,48 @@
+# k3s 기본 Traefik. /api/... 는 /api 를 떼고 검색 API 로, 나머지는 웹 화면으로.
+# FastAPI 경로(/animals, /shelters, /health)에는 /api 가 없어서 앞에서 뗀다(StripPrefix).
+# 나중에 CloudFront 의 /api/* 도 그대로 여기로 들어온다.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api
+spec:
+  stripPrefix:
+    prefixes:
+      - /api
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  annotations:
+    # <네임스페이스>-<미들웨어 이름>@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: rebom-web-strip-api@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-root
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  name: http

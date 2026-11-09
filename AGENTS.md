@@ -44,6 +44,7 @@
 2. **마이그레이션은 새 파일로**: 이미 있는 `db/migrations/*.sql` 은 수정하지 않고 다음 번호 파일을 추가한다. 스키마를 바꾸면 `docs/data_contract.md` 도 함께 고친다.
 3. **DAG는 호출만**: `dags/` 에는 태스크 순서와 호출만 둔다. 실제 처리 로직은 `src/rebom/<역할>/` 함수로 만든다.
 4. **커밋하면 안 되는 파일**: `data/sample/` 을 제외한 `data/` 아래 파일, 모델 가중치(`*.pt`, `*.safetensors`, `*.onnx`), `*.parquet`, 로그.
+5. **인프라 적용은 사람만**: `terraform apply`·`destroy`·`import`·`state` 변경, 그리고 클라우드·클러스터 리소스를 직접 만들거나 바꾸거나 지우는 명령(aws CLI 생성·수정·삭제, `kubectl apply`·`delete`, `helm install`·`upgrade`·`uninstall` 등)은 AI 도구가 실행하지 않는다. `fmt`·`validate`·`plan` 같은 읽기 작업까지만 하고, 적용할 명령문을 적어서 사람에게 넘긴다.
 
 ## 작업 습관
 - 코드를 바꾸면 관련 테스트를 `tests/` 에 추가하거나 고치고 `pytest` 를 실행한다.
