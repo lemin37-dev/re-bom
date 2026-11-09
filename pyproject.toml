@@ -7,9 +7,17 @@ name = "rebom"
 version = "0.1.0"
 description = "Re:봄 유기동물 입양 멀티모달 검색 파이프라인"
 requires-python = ">=3.11"
-dependencies = []
+# 수집(src/rebom/ingestion)이 쓰는 기본 의존성
+dependencies = [
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
 
 [project.optional-dependencies]
+# 수집 결과를 S3 에 올릴 때 (REBOM_S3_BUCKET). 수집 이미지 infra/docker/ingest.Dockerfile
+ingest = [
+    "boto3>=1.34",
+]
 serve = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",

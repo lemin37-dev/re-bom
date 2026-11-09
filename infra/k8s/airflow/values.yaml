@@ -1,0 +1,123 @@
+# Apache Airflow 공식 Helm 차트 (apache-airflow/airflow) 개발용 구성. k3s(EC2 1대).
+# 차트 버전은 Argo CD Application(infra/k8s/argocd/apps/airflow.yaml)에서 고정한다: 1.22.0 (Airflow 3.2.2, 2026-06-01 배포)
+# 비밀값은 여기 쓰지 않는다. 미리 만든 K8s Secret 이름만 적는다 (README.md "Secret 만들기").
+
+# Airflow 버전: 차트 1.22.0 기본값과 같지만 명시해 둔다 (차트를 올려도 Airflow 가 따라 바뀌지 않게).
+# apache/airflow:3.2.2 공식 이미지에 amazon(9.29.0)·cncf-kubernetes(10.17.1) provider 가 들어 있다 (constraints-3.2.2).
+defaultAirflowTag: "3.2.2"
+airflowVersion: "3.2.2"
+
+# ── 실행기 ──
+# 노드 1대·DAG 1개. 무거운 수집은 KubernetesPodOperator 가 rebom-ingest 네임스페이스에 따로 파드를 띄우므로 실행기는 가볍게.
+executor: LocalExecutor
+
+# 모든 구성 요소를 k3s 서버 노드에
+nodeSelector:
+  rebom/pool: main
+
+# 스케줄러(LocalExecutor 라 태스크도 여기서 돈다)가 수집 파드를 띄울 권한.
+# 차트가 만드는 권한은 airflow 네임스페이스 안뿐이다. rebom-ingest 네임스페이스 권한은 infra/k8s/ingest/rbac.yaml.
+allowPodLaunching: true
+
+# ── Argo CD 로 관리할 때 필요한 설정 ──
+# 차트가 무작위로 만드는 키는 렌더링할 때마다 바뀌어 Argo CD 가 계속 "다름"으로 보고 파드를 다시 띄운다.
+# 그래서 키는 사람이 한 번 만든 Secret 을 쓴다.
+fernetKeySecretName: airflow-fernet-key # 키: fernet-key
+apiSecretKeySecretName: airflow-api-secret-key # 키: api-secret-key
+jwtSecretName: airflow-jwt-secret # 키: jwt-secret
+
+# DB 초기화·업그레이드 Job: Helm hook 대신 Argo CD 동기화 때 돈다
+migrateDatabaseJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+  jobAnnotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
+# 기본 관리자(admin/admin)를 만드는 Job 은 끈다. 비밀번호가 레포에 남기 때문. 관리자는 README 대로 직접 만든다.
+createUserJob:
+  enabled: false
+
+# ── 구성 요소 ──
+# LocalExecutor 에서는 workers 값이 스케줄러의 로그 디스크(PVC, 기본 100Gi)에 쓰인다.
+# 로그는 S3 로 올라가므로 PVC 를 만들지 않는다 (서버 디스크 50GB).
+workers:
+  persistence:
+    enabled: false
+
+scheduler:
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 768Mi }
+    limits: { memory: 2Gi } # LocalExecutor 라 태스크 프로세스도 여기 메모리를 쓴다
+
+dagProcessor:
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { memory: 1Gi }
+
+apiServer:
+  replicas: 1
+  service:
+    type: ClusterIP # 화면은 SSM 6443 포워딩 + kubectl port-forward 로만
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { memory: 1536Mi }
+
+# deferrable 연산자를 쓰지 않으므로 끈다 (쓰게 되면 켠다)
+triggerer:
+  enabled: false
+
+statsd:
+  enabled: false
+
+# Redis 는 CeleryExecutor 용이다. 켜 두면 렌더링마다 비밀번호가 바뀌어 Argo CD 가 계속 "다름"으로 본다
+redis:
+  enabled: false
+
+# 메타 DB: RDS PostgreSQL(infra/terraform/database) 의 airflow DB. 차트 내장 PostgreSQL 은 쓰지 않는다.
+# 접속 주소(비밀번호 포함)는 미리 만든 Secret 에서만 읽는다 (README "Secret 만들기"):
+#   airflow-metadata-connection  키 connection = postgresql://airflow:<비밀번호>@<RDS 주소>:5432/airflow?sslmode=require
+data:
+  metadataSecretName: airflow-metadata-connection
+
+postgresql:
+  enabled: false
+
+# ── DAG: git-sync 로 develop 의 dags/ 를 받는다 ──
+dags:
+  gitSync:
+    enabled: true
+    repo: https://github.com/lemin37-dev/re-bom.git # public 레포라 자격 증명 불필요
+    branch: develop
+    rev: HEAD
+    ref: develop
+    depth: 1
+    subPath: dags
+    period: 60s
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+# ── 로그: S3 원격 로그. 노드 역할(인스턴스 프로파일)로 쓴다, AWS 키 없음 ──
+logs:
+  persistence:
+    enabled: false # 파드가 지워져도 로그는 S3 에 남는다
+
+config:
+  core:
+    default_timezone: Asia/Seoul
+    load_examples: "False"
+  logging:
+    remote_logging: "True"
+    remote_base_log_folder: s3://rebom-data-559987919299/logs/airflow
+    remote_log_conn_id: aws_default
+    encrypt_s3_logs: "False" # 버킷 기본 암호화(SSE)를 쓴다
+
+# aws_default 연결: 키 없이 기본 자격 증명(노드 역할, IMDSv2 hop 2)을 쓴다
+env:
+  - name: AIRFLOW_CONN_AWS_DEFAULT
+    value: "aws://?region_name=ap-northeast-2"
