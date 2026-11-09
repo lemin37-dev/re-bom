@@ -1,4 +1,4 @@
-﻿"""A팀 사진 Manifest를 B팀 Silver Iceberg에 반영한다."""
+"""A팀 사진 Manifest를 B팀 Silver Iceberg에 반영한다."""
 
 import json
 import tempfile
@@ -104,10 +104,35 @@ def process_photo_manifest(
         ):
             raise RuntimeError("기존 Journal Manifest 경로 불일치")
 
+        table = catalog.load_table(table_name)
+
+        if table.location().rstrip("/") != expected_location.rstrip("/"):
+            raise RuntimeError("Iceberg 테이블 저장 위치 불일치")
+
+        current_rows = _index_rows(
+            table.scan().to_arrow().to_pylist()
+        )
+
+        for photo in manifest["rows"]:
+            key = (photo["desertion_no"], photo["image_slot"])
+            current = current_rows.get(key)
+
+            if current is None:
+                raise RuntimeError(
+                    f"Journal 존재하지만 Iceberg 행 누락: {key}"
+                )
+
+            for field in PHOTO_FIELDS:
+                if current.get(field) != photo[field]:
+                    raise RuntimeError(
+                        f"Journal과 Iceberg 데이터 불일치: {key}, {field}"
+                    )
+
         return {
             "run_id": run_id,
             "result": "ALREADY_PROCESSED",
             "applied_count": existing["applied_count"],
+            "iceberg_verified": True,
         }
 
     table = catalog.load_table(table_name)
