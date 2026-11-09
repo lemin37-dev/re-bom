@@ -1,0 +1,15 @@
+#!/bin/bash
+# k3s 추가 노드 설치 (처음 켤 때 한 번). 서버가 준비될 때까지 기다렸다가 붙는다. 로그: /var/log/cloud-init-output.log
+set -euo pipefail
+
+snap install aws-cli --classic
+${ecr_setup}
+TOKEN="$(/snap/bin/aws ssm get-parameter --region ${region} --name '${token_parameter}' --with-decryption --query Parameter.Value --output text)"
+
+for i in $(seq 1 60); do
+  if curl -sk --max-time 3 ${server_url}/ping >/dev/null; then break; fi
+  sleep 10
+done
+
+curl -sfL https://get.k3s.io | ${install_env} K3S_URL="${server_url}" K3S_TOKEN="$TOKEN" sh -s - agent \
+  --node-label rebom/pool=extra
