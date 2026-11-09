@@ -27,6 +27,12 @@ variable "github_repo" {
   default     = "lemin37-dev/re-bom"
 }
 
+variable "github_oidc_sub_repo" {
+  description = "GitHub OIDC 토큰 sub 의 레포 부분. 이 레포는 immutable subject 가 켜져 있어 <owner>@<owner id>/<repo>@<repo id> 모양이다. 확인: gh api repos/lemin37-dev/re-bom/actions/oidc/customization/sub 의 sub_claim_prefix 에서 repo: 뒤. 이름이 바뀌어도 그대로라 같은 이름 레포로 가로채는 것을 막는다"
+  type        = string
+  default     = "lemin37-dev@298081278/re-bom@1439136237"
+}
+
 variable "github_push_refs" {
   description = "이미지를 올릴 수 있는 브랜치. 머지된 코드만 올리도록 develop 만 둔다 (PR 브랜치에서는 못 올림)"
   type        = list(string)

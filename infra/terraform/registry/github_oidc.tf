@@ -35,10 +35,11 @@ data "aws_iam_policy_document" "github_trust" {
     }
 
     # 이 레포의 지정한 브랜치에서 돈 워크플로만. 포크·PR 에서는 못 맡는다.
+    # 실제 sub (11/9 CloudTrail): repo:lemin37-dev@298081278/re-bom@1439136237:ref:refs/heads/develop (immutable subject)
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for ref in var.github_push_refs : "repo:${var.github_repo}:ref:${ref}"]
+      values   = [for ref in var.github_push_refs : "repo:${var.github_oidc_sub_repo}:ref:${ref}"]
     }
   }
 }
