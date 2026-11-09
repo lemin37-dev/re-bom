@@ -1,7 +1,10 @@
 import type { Animal, AnimalShelter, ShelterSummary, Species } from '@/types/animal'
 
-/** 검색 API 주소. frontend/.env.local 의 NEXT_PUBLIC_API_BASE_URL 로 바꿀 수 있습니다. */
-export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+/**
+ * 검색 API 주소. 기본은 같은 주소의 /api (k3s·CloudFront 배포: /api 를 검색 API 로 넘김).
+ * 로컬 개발은 frontend/.env.local 에 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 (.env.example 참고).
+ */
+export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || '/api').replace(/\/$/, '')
 
 // ── 검색 API 응답 모양 (src/rebom/serving/schemas.py) ──
 type ApiShelter = AnimalShelter
