@@ -8,8 +8,9 @@ resource "aws_db_parameter_group" "this" {
 
   # 암호화되지 않은 접속은 받지 않는다 (PostgreSQL 15 이상 기본값이지만 명시)
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot" # 정적 파라미터. 안 적으면 plan 마다 바뀐다고 나온다
   }
 
   # 1초 넘게 걸린 쿼리만 로그에 남긴다 (검색 API 튜닝용)
