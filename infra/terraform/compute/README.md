@@ -32,7 +32,7 @@ terraform apply
 
 | 변수 | 기본 | 언제 바꾸나 |
 |---|---|---|
-| `server_state` | `stopped` | 쓸 때 `running`, 안 쓸 때 `stopped` 로 두고 apply. 꺼 두면 EC2 요금은 안 나가고 디스크 요금만 남음 |
+| `server_state` | `stopped` | 쓸 때 `running`, 안 쓸 때 `stopped` 로 두고 apply. 꺼 두면 EC2 요금은 안 나가고 디스크 요금만 남음. `scripts/infra/dev-power.ps1` 로 손으로 끄고 켤 거면 `manual` (테라폼이 전원을 건드리지 않음) |
 | `install_k3s` | `false` | Airflow 작업을 시작할 때 `true` (아래 주의) |
 | `server_instance_type` | `t3.xlarge` | 메모리가 모자랄 때 `t3.2xlarge`. 노드를 늘리기보다 먼저 검토 |
 | `agent_count` | `0` | 노드를 더 붙일 때 1 이상. `install_k3s = true` 가 먼저 필요 |

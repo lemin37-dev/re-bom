@@ -28,13 +28,13 @@ variable "server_volume_gb" {
 }
 
 variable "server_state" {
-  description = "서버 전원. running | stopped. 쓰지 않을 때 stopped 로 두고 apply 하면 EC2 요금이 나가지 않는다(디스크 요금은 남음)"
+  description = "서버 전원. running | stopped | manual. running/stopped 는 apply 때 그 상태로 맞춘다(쓰지 않을 때 stopped 면 EC2 요금이 안 나감, 디스크 요금은 남음). manual 은 테라폼이 전원을 건드리지 않는다: scripts/infra/dev-power.ps1 로 손으로 끄고 켤 때 쓴다"
   type        = string
   default     = "stopped"
 
   validation {
-    condition     = contains(["running", "stopped"], var.server_state)
-    error_message = "server_state 는 running 또는 stopped 여야 한다."
+    condition     = contains(["running", "stopped", "manual"], var.server_state)
+    error_message = "server_state 는 running, stopped, manual 중 하나여야 한다."
   }
 }
 

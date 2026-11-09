@@ -19,3 +19,8 @@ output "master_user_secret_arn" {
 output "security_group_id" {
   value = aws_security_group.rds.id
 }
+
+output "identifier" {
+  description = "RDS 인스턴스 이름 (scripts/infra/dev-power.ps1 이 읽는다)"
+  value       = aws_db_instance.this.identifier
+}

@@ -57,9 +57,18 @@ resource "aws_instance" "server" {
   }
 }
 
+# 전원. server_state = "manual" 이면 만들지 않는다 (스크립트로 끄고 켜도 plan 이 되돌리지 않게).
+# 이 리소스를 없애도 인스턴스 전원은 바뀌지 않는다 (테라폼 상태에서만 빠짐).
 resource "aws_ec2_instance_state" "server" {
+  count = var.server_state == "manual" ? 0 : 1
+
   instance_id = aws_instance.server.id
   state       = var.server_state
+}
+
+moved {
+  from = aws_ec2_instance_state.server
+  to   = aws_ec2_instance_state.server[0]
 }
 
 # 추가 노드: k3s agent. 처음 켜질 때 서버에 알아서 붙는다. agent_count 로 늘리고 줄인다.
