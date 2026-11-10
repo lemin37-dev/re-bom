@@ -29,7 +29,7 @@ terraform apply
 ## 적용 후
 
 - 로컬 `.env` 에 `REBOM_S3_BUCKET=rebom-data-<계정ID>` (출력 `data_bucket`)
-- CloudFront(OAC)의 `images/*` 읽기 허용은 CloudFront 구성 때 버킷 정책에 추가한다 (`AWS:SourceArn` = 배포 ARN 조건)
+- CloudFront(OAC)의 `images/*` 읽기 허용: `infra/terraform/edge` apply 뒤 출력 `distribution_arn` 을 `terraform.tfvars` 의 `images_cdn_distribution_arn` 에 넣고 다시 apply 한다 (`AWS:SourceArn` = 배포 ARN 조건). 비워 두면 허용 문장이 없다
 
 ## 주의
 

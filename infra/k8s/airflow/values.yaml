@@ -62,10 +62,21 @@ dagProcessor:
 apiServer:
   replicas: 1
   service:
-    type: ClusterIP # 화면은 SSM 6443 포워딩 + kubectl port-forward 로만
+    type: ClusterIP
   resources:
     requests: { cpu: 100m, memory: 512Mi }
     limits: { memory: 1536Mi }
+
+# 화면: Traefik 호스트 규칙 airflow.localhost -> api-server.
+# SSM 으로 서버 80(Traefik)을 내 PC 8080 에 붙이고 http://airflow.localhost:8080 로 연다 (README "화면 접속").
+# CloudFront 는 Host 를 origin 주소로 바꿔 보내므로 밖에서는 이 규칙에 닿지 않는다.
+ingress:
+  apiServer:
+    enabled: true
+    ingressClassName: traefik
+    pathType: Prefix
+    hosts:
+      - name: airflow.localhost
 
 # deferrable 연산자를 쓰지 않으므로 끈다 (쓰게 되면 켠다)
 triggerer:

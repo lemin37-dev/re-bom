@@ -79,12 +79,39 @@ data "aws_iam_policy_document" "tls_only" {
   }
 }
 
-# CloudFront(OAC)의 images/* 읽기 허용은 CloudFront를 만들 때 이 정책에 문장을 더한다.
+# CloudFront(OAC)가 데이터 버킷의 images/* 만 읽게 한다. 배포는 infra/terraform/edge 에서 만든다.
+# 순서: edge apply -> 출력 distribution_arn 을 images_cdn_distribution_arn 에 넣고 storage apply.
+data "aws_iam_policy_document" "data_bucket" {
+  source_policy_documents = [data.aws_iam_policy_document.tls_only["data"].json]
+
+  dynamic "statement" {
+    for_each = var.images_cdn_distribution_arn == "" ? [] : [var.images_cdn_distribution_arn]
+
+    content {
+      sid       = "CloudFrontReadImages"
+      effect    = "Allow"
+      actions   = ["s3:GetObject"]
+      resources = ["${aws_s3_bucket.this["data"].arn}/images/*"]
+
+      principals {
+        type        = "Service"
+        identifiers = ["cloudfront.amazonaws.com"]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "AWS:SourceArn"
+        values   = [statement.value]
+      }
+    }
+  }
+}
+
 resource "aws_s3_bucket_policy" "this" {
   for_each = aws_s3_bucket.this
 
   bucket = each.value.id
-  policy = data.aws_iam_policy_document.tls_only[each.key].json
+  policy = each.key == "data" ? data.aws_iam_policy_document.data_bucket.json : data.aws_iam_policy_document.tls_only[each.key].json
 
   depends_on = [aws_s3_bucket_public_access_block.this]
 }
