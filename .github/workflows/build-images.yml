@@ -1,8 +1,10 @@
-# develop 에 머지되면 검색 API·웹 화면 이미지를 빌드해 ECR 에 올린다.
+# develop 에 머지되면 검색 API·웹 화면·수집 이미지를 빌드해 ECR 에 올리고,
+# deploy/dev 브랜치의 infra/k8s/web 태그를 바꿔 커밋한다 → Argo CD 가 그 브랜치를 보고 배포한다(infra/k8s/argocd).
 # 필요: 저장소 Variable AWS_ECR_PUSH_ROLE_ARN (infra/terraform/registry 출력 github_push_role_arn).
 #   비밀값이 아니라 Secret 이 아니어도 된다. AWS 키는 쓰지 않는다(OIDC).
 # 역할은 develop 브랜치 워크플로만 맡을 수 있다. 수동 실행도 develop 을 골라야 한다.
 # 태그: develop(덮어씀) + sha-<커밋 7자리>
+# 수집(ingest) 이미지는 Airflow DAG 가 :develop 을 매번 새로 받아 쓰므로 deploy/dev 에 태그를 기록하지 않는다.
 name: 이미지 빌드 (ECR)
 
 on:
@@ -13,16 +15,19 @@ on:
       - "pyproject.toml"
       - "data/sample/**"
       - "infra/docker/api*"
+      - "infra/docker/ingest*"
       - ".dockerignore"
       - "frontend/**"
       - "infra/docker/web*"
+      - "infra/k8s/web/**"
+      - ".github/scripts/update_deploy_branch.sh"
       - ".github/workflows/build-images.yml"
   workflow_dispatch:
     inputs:
       target:
         description: "빌드할 이미지"
         type: choice
-        options: [all, api, web]
+        options: [all, api, web, ingest]
         default: all
 
 permissions:
@@ -42,6 +47,8 @@ jobs:
     outputs:
       api: ${{ steps.pick.outputs.api }}
       web: ${{ steps.pick.outputs.web }}
+      ingest: ${{ steps.pick.outputs.ingest }}
+      k8s: ${{ steps.filter.outputs.k8s }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -49,7 +56,9 @@ jobs:
         with:
           filters: |
             api:
-              - "src/**"
+              - "src/rebom/serving/**"
+              - "src/rebom/common/**"
+              - "src/rebom/__init__.py"
               - "pyproject.toml"
               - "data/sample/**"
               - "infra/docker/api*"
@@ -59,19 +68,33 @@ jobs:
               - "frontend/**"
               - "infra/docker/web*"
               - ".github/workflows/build-images.yml"
+            ingest:
+              - "src/rebom/ingestion/**"
+              - "src/rebom/common/**"
+              - "src/rebom/__init__.py"
+              - "pyproject.toml"
+              - "infra/docker/ingest*"
+              - ".dockerignore"
+              - ".github/workflows/build-images.yml"
+            k8s:
+              - "infra/k8s/web/**"
+              - ".github/scripts/update_deploy_branch.sh"
       - id: pick
         env:
           EVENT: ${{ github.event_name }}
           TARGET: ${{ inputs.target }}
           API_CHANGED: ${{ steps.filter.outputs.api }}
           WEB_CHANGED: ${{ steps.filter.outputs.web }}
+          INGEST_CHANGED: ${{ steps.filter.outputs.ingest }}
         run: |
           if [ "$EVENT" = "workflow_dispatch" ]; then
             [ "$TARGET" = all ] || [ "$TARGET" = api ] && echo "api=true" >> "$GITHUB_OUTPUT" || echo "api=false" >> "$GITHUB_OUTPUT"
             [ "$TARGET" = all ] || [ "$TARGET" = web ] && echo "web=true" >> "$GITHUB_OUTPUT" || echo "web=false" >> "$GITHUB_OUTPUT"
+            [ "$TARGET" = all ] || [ "$TARGET" = ingest ] && echo "ingest=true" >> "$GITHUB_OUTPUT" || echo "ingest=false" >> "$GITHUB_OUTPUT"
           else
             echo "api=$API_CHANGED" >> "$GITHUB_OUTPUT"
             echo "web=$WEB_CHANGED" >> "$GITHUB_OUTPUT"
+            echo "ingest=$INGEST_CHANGED" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -89,15 +112,25 @@ jobs:
             repo: rebom/web
             dockerfile: infra/docker/web.Dockerfile
             context: frontend
+          - name: ingest
+            repo: rebom/ingest
+            dockerfile: infra/docker/ingest.Dockerfile
+            context: .
     steps:
       - name: 바뀐 것만 빌드
         id: skip
         env:
           API: ${{ needs.changes.outputs.api }}
           WEB: ${{ needs.changes.outputs.web }}
+          INGEST: ${{ needs.changes.outputs.ingest }}
           NAME: ${{ matrix.name }}
         run: |
-          if [ "$NAME" = api ]; then want="$API"; else want="$WEB"; fi
+          case "$NAME" in
+            api) want="$API" ;;
+            web) want="$WEB" ;;
+            ingest) want="$INGEST" ;;
+            *) want=false ;;
+          esac
           echo "run=$want" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
@@ -146,3 +179,28 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # 빌드가 끝나면 deploy/dev 에 새 태그를 기록한다. deploy/dev 는 CI 만 쓰는 브랜치(사람은 손대지 않음).
+  deploy:
+    needs: [changes, build]
+    if: >-
+      github.ref == 'refs/heads/develop' &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true' || needs.changes.outputs.k8s == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # deploy/dev 에 커밋·push
+    concurrency:
+      group: deploy-dev # 한 번에 하나만. 밀린 실행은 가장 최근 것만 남는다
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # deploy/dev 와 이번 커밋을 같이 다룬다
+
+      - name: deploy/dev 태그 갱신
+        env:
+          SHA: ${{ github.sha }}
+          API_BUILT: ${{ needs.changes.outputs.api }}
+          WEB_BUILT: ${{ needs.changes.outputs.web }}
+          REGISTRY: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com
+        run: bash .github/scripts/update_deploy_branch.sh

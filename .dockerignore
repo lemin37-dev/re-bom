@@ -1,4 +1,4 @@
-# api 이미지(infra/docker/api.Dockerfile) 빌드 컨텍스트. 필요한 것만 넣는다.
+# api·ingest 이미지(infra/docker/api.Dockerfile, ingest.Dockerfile) 빌드 컨텍스트. 필요한 것만 넣는다.
 # .env, data/(sample 제외), node_modules, .next, 테라폼 상태 등은 들어가지 않는다.
 *
 !pyproject.toml

@@ -1,0 +1,55 @@
+# Argo CD 공식 Helm 차트 (argo/argo-cd) 최소 구성. 개발 k3s(EC2 1대)용.
+# 차트 버전은 README 의 helm 명령에서 고정한다: 10.11.1 (Argo CD v3.5.6, 2026-10-23 배포)
+# 설치는 사람이 한다 (AGENTS.md 5번). 바꾼 뒤에는 helm upgrade 로 다시 적용.
+
+global:
+  # 모든 구성 요소를 k3s 서버 노드에
+  nodeSelector:
+    rebom/pool: main
+
+configs:
+  cm:
+    # 레포를 확인하는 주기. 기본 120s. deploy/dev 에 커밋되면 최대 이 시간 안에 반영된다
+    timeout.reconciliation: 120s
+    exec.enabled: false
+    admin.enabled: true # 초기 admin 계정으로만 로그인 (SSO 없음)
+  params:
+    # TLS 는 Argo CD 가 자체 인증서로 처리한다. 밖으로 열지 않으므로 이대로 둔다
+    server.insecure: false
+  # 레포가 public 이라 repositories 자격 증명은 넣지 않는다
+
+# HA 끔: 모두 replicas 1
+controller:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 768Mi }
+
+server:
+  replicas: 1
+  service:
+    type: ClusterIP # UI 는 SSM 6443 포워딩 + kubectl port-forward 로만
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+repoServer:
+  replicas: 1
+  resources:
+    requests: { cpu: 20m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+redis:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+# SSO(dex), 알림, ApplicationSet 은 쓰지 않는다
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+applicationSet:
+  replicas: 0 # 차트에 끄는 스위치가 없어 0 대로 둔다 (CRD 는 남음)
