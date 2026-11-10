@@ -21,8 +21,8 @@ spec:
         runAsNonRoot: true
       containers:
         - name: api
-          image: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/api:develop
-          imagePullPolicy: Always # develop 태그를 덮어쓰므로 다시 띄울 때마다 새로 받는다
+          image: rebom-api # 실제 주소·태그는 kustomization.yaml 의 images
+          imagePullPolicy: Always # 태그가 develop 이어도 새로 받게. sha- 태그면 다이제스트만 확인하고 넘어간다
           ports:
             - name: http
               containerPort: 8000

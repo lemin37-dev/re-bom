@@ -1,18 +1,22 @@
-# 웹 화면 + 검색 API. 적용은 사람이 한다: kubectl apply -k infra/k8s/web (README.md)
+# 웹 화면 + 검색 API.
+# 배포는 Argo CD 가 deploy/dev 브랜치의 이 폴더대로 한다 (infra/k8s/argocd). 직접 kubectl apply 하지 않는다.
+# 이미지 태그는 아래 images 에서만 관리한다. develop 브랜치에서는 develop 으로 두고,
+# CI 가 deploy/dev 에서 빌드한 쪽만 sha-<커밋 7자리> 로 바꿔 커밋한다 (kustomize edit set image).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: rebom-web
 labels:
-  - pairs:
-      app.kubernetes.io/part-of: rebom
-    includeSelectors: false
+- pairs:
+    app.kubernetes.io/part-of: rebom
 resources:
-  - namespace.yaml
-  - api.yaml
-  - web.yaml
-  - ingress.yaml
+- namespace.yaml
+- api.yaml
+- web.yaml
+- ingress.yaml
 images:
-  - name: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/api
-    newTag: develop
-  - name: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/web
-    newTag: develop
+- name: rebom-api
+  newName: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/api
+  newTag: sha-32f88ea
+- name: rebom-web
+  newName: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/web
+  newTag: sha-32f88ea
