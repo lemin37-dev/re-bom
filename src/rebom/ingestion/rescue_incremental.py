@@ -1,28 +1,24 @@
-"""구조동물 공고 증분 수집. docs/data_contract.md 의 2·3·5·8절을 구현한다.
+"""구조동물 공고 증분 수집 (Bronze). docs/data_contract.md 의 2·5·8절을 구현한다.
+
+수집은 API 가 준 것을 고치지 않고 저장하고, 수집이 빠짐없이 됐는지를 구간별로 기록하는 데까지만 한다.
+사라진 공고를 찾고 확정하는 일(해석)은 Silver 단계 rebom.storage.silver.generate_ingest_events 가 이 결과를 읽어서 한다.
 
 매일 한 번 실행한다.
   ① 수정일 증분   bgupd=마지막 성공일, enupd=오늘 (+ 발생일 범위를 3년 이하로 나눠서)
   ② 보호중 목록   state=notice, state=protect 전부 (발생일 범위를 나눠서)
-  ③ 사라진 공고   이전 실행의 보호중 목록에는 있고 이번에는 없는 공고. 구간별로 판정한다(계약 3절 종료 판정 조건).
-                  - 그 공고의 발생일을 덮는 notice·protect 구간이 모두 완전하면(결과 코드 00, 1,095일 이하, 받은 건수 = totalCount)
-                    "종료(사유 미상)" 이벤트로 확정한다(confirmed_by=complete_range).
-                  - 덮는 구간 중 하나라도 불완전하면 desertion_no + 발생일로 한 건씩 조회한다.
-                    종료로 확인되면 이벤트(confirmed_by=lookup), 아직 보호중이면 유지, 조회 실패·0건·불확실이면
-                    기존 상태를 유지하고 partitions 의 reprocess_ids 에 남겨 다음 실행에서 다시 본다.
-                  다시 나타난 공고 -> "보호중 복귀" 이벤트. 종료 사유는 받지 않는다.
-                  --lookup 을 주면 확정된 공고의 발생일만 조건 없이 조회해 최종 값을 받는다(필요할 때만).
+  구간마다 결과 코드·totalCount·받은 건수·완전 여부를 manifest 의 partitions 에 남긴다. 받은 건수가 totalCount 보다 적은 구간은
+  반으로 쪼개 어긋나는 날까지 좁힌다.
 
 결과 (bronze/rescue/raw/dt=<실행일>/run_id=<id>/):
-  updated / list_notice / list_protect / lookup / events .jsonl.gz, manifest.json (partitions: 구간별 총건수·받은 건수·완전 여부)
-상태 (state/rescue_state.json): 마지막 성공 enupd, 보호중 공고 목록(번호 -> 발생일), 종료로 표시한 공고
+  updated / list_notice / list_protect .jsonl.gz, manifest.json (partitions: 구간별 총건수·받은 건수·완전 여부)
+상태 (state/rescue_state.json): 마지막 성공 enupd, 마지막 run_id. (11/3 까지 이 파일에 있던 보호중·종료 목록은 Silver 단계가 따로 보관한다.)
 저장 위치: 환경변수 REBOM_S3_BUCKET 이 있으면 S3, 없으면 로컬 data/ (rebom.ingestion.storage).
-올리는 순서: 종류별 파일 -> events -> manifest.json(마지막, 있으면 그 실행이 끝까지 올라간 것) -> 상태 파일.
+올리는 순서: 종류별 파일 -> manifest.json(마지막, 있으면 그 실행이 끝까지 올라간 것) -> 상태 파일.
   업로드가 하나라도 실패하면 상태를 갱신하지 않고 끝낸다. 그래야 다음 실행이 그 구간을 건너뛰지 않는다.
 
 사용 예 (레포 루트에서):
   PYTHONPATH=src python -m rebom.ingestion.rescue_incremental --dry-run         # 호출만 하고 아무것도 쓰지 않음
   PYTHONPATH=src python -m rebom.ingestion.rescue_incremental --since 20261101  # 첫 실행(상태 없음)의 수정일 시작일
-  PYTHONPATH=src python -m rebom.ingestion.rescue_incremental --lookup          # 확정된 사라진 공고의 최종 값도 조회
 
 인증키는 .env 의 DATA_GO_KR_SERVICE_KEY. 출력·로그·파일에 남기지 않고, 오류는 예외 종류만 기록한다.
 보호자 실명(careOwnerNm)은 저장하지 않는다(AGENTS.md).
@@ -58,11 +54,9 @@ HAPPEN_START = date(2008, 1, 1)  # API 에 있는 가장 오래된 공고
 MAX_SPAN_DAYS = 1000  # 발생일 범위가 1,096일을 넘으면 오류 없이 0건이 나온다 (11/2 확인)
 PAGE_SIZE = 1000
 MAX_PARTITION_DAYS = 1095  # B 의 validate_partition 한도(양 끝 포함). 계약 3절 종료 판정 조건 ②
-MAX_VANISH_RATIO = 0.2  # 계약에는 없는 추가 안전장치: 보호중 목록에서 한 번에 이만큼 넘게 사라지면 API 이상으로 보고 중단
-MAX_LOOKUP_IDS = 300  # 불완전한 구간의 사라진 공고를 한 건씩 조회하는 상한. 넘는 공고는 재처리로 남긴다(구간을 날 단위로 좁히기 때문에 평소에는 거의 없다)
 MAX_CALLS = 600  # 한 번에 쓸 호출 수 안전장치. 일 한도 10,000건의 약 6%
 DROP_FIELDS = ("careOwnerNm",)  # 보호자 실명은 저장하지 않는다(AGENTS.md). 데이터 계약 9절 방식 A
-CODE_VERSION = "2026-11-02"
+CODE_VERSION = "2026-11-03"
 
 
 def log(msg: str) -> None:
@@ -237,30 +231,6 @@ class Fetcher:
         return [i for i in items if i["desertionNo"] == desertion_no], summary
 
 
-def diff_states(prev_protected: dict, ended: dict, current_ids: set) -> tuple[list[str], list[str]]:
-    """(사라진 공고, 복귀한 공고). 사라짐 = 이전 보호중이었는데 이번 목록에 없음, 복귀 = 종료로 표시했는데 목록에 다시 나타남."""
-    vanished = sorted(set(prev_protected) - current_ids)
-    returned = sorted(set(ended) & current_ids)
-    return vanished, returned
-
-
-def covering_partition(partitions: list[dict], kind: str, happen: str) -> dict | None:
-    """발생일(YYYYMMDD)을 덮는 구간. 구간들은 겹치지 않는다."""
-    d = dash(happen)
-    return next((p for p in partitions if p["kind"] == kind and p["start_date"] <= d <= p["end_date"]), None)
-
-
-def split_vanished(vanished: list[str], prev_protected: dict, partitions: list[dict]) -> tuple[list[str], list[str]]:
-    """(구간 판정으로 확정, 한 건씩 확인 필요). 발생일을 덮는 notice·protect 구간이 모두 완전해야 확정한다.
-    notice 에서 protect 로 옮겨 갔을 수도 있어 둘 다 본다. 발생일을 모르면 확인 필요로 둔다."""
-    sure, check = [], []
-    for v in vanished:
-        happen = prev_protected.get(v)
-        cover = [covering_partition(partitions, k, happen) for k in ("list_notice", "list_protect")] if happen else []
-        (sure if cover and all(p and p["complete"] for p in cover) else check).append(v)
-    return sure, check
-
-
 def write_jsonl_gz(path: Path, rows: list[dict]) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, "wt", encoding="utf-8") as f:
@@ -285,8 +255,6 @@ def save_state(store, state: dict) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--since", help="수정일 조회 시작일 YYYYMMDD (상태가 없는 첫 실행에서만 쓰임, 기본: 어제)")
-    ap.add_argument("--lookup", action="store_true", help="확정된 사라진 공고의 발생일을 조건 없이 조회해 최종 값을 받는다")
-    ap.add_argument("--max-lookups", type=int, default=MAX_LOOKUP_IDS, help="불완전한 구간의 사라진 공고를 한 건씩 조회하는 상한")
     ap.add_argument("--dry-run", action="store_true", help="API 만 호출하고 파일·상태를 쓰지 않는다")
     ap.add_argument("--max-calls", type=int, default=MAX_CALLS, help="한 번에 쓸 최대 호출 수(일 한도 10,000건의 안전장치)")
     args = ap.parse_args()
@@ -315,114 +283,11 @@ def main() -> None:
         bad = sum(not p["complete"] for p in s["partitions"])
         log(f"  {k}: {len(rows):,}건 · 페이지 {s['page_count']} · 버린 항목 {s['dropped_count']} · 불완전 구간 {bad}/{len(s['partitions'])}")
 
-    protected = {i["desertionNo"]: i.get("happenDt", "") for k in ("list_notice", "list_protect") for i in kinds[k][0]}
-    prev = state.get("protected", {})
-    ended = state.get("ended", {})
-    vanished, returned = ([], []) if first_run else diff_states(prev, ended, set(protected))
-    log(f"  보호중 {len(protected):,}건 (이전 {len(prev):,}) · 사라짐 {len(vanished)} · 복귀 {len(returned)}")
-
-    # 보호중 목록이 비었거나 한꺼번에 많이 사라지면 API 이상으로 보고 상태를 갱신하지 않는다.
+    # 보호중 목록이 비었으면 API 이상으로 보고 상태를 갱신하지 않는다.
     aborted = None
-    if not protected:
+    if not any(kinds[k][0] for k in ("list_notice", "list_protect")):
         aborted = "보호중 목록이 0건"
-    elif prev and len(vanished) > len(prev) * MAX_VANISH_RATIO:
-        aborted = f"보호중 {len(vanished)}/{len(prev)}건이 한꺼번에 사라짐"
-    if aborted:
         fx.warnings.append(f"중단: {aborted}. 상태를 갱신하지 않음")
-
-    # 사라진 공고 확정. 구간이 완전하면 바로, 불완전하면 한 건씩 조회해서 확인한다. 확인 못 하면 기존 상태를 유지하고 재처리로 남긴다.
-    confirmed: dict[str, str] = {}  # 공고번호 -> complete_range | lookup
-    still_protected: dict[str, str] = {}  # 목록에서 빠졌지만 개별 조회로 보호중임을 확인한 공고 (번호 -> 발생일)
-    reprocess: list[str] = []
-    lookup_rows: list[dict] = []
-    lookup_params, lookup_pages, lookup_dropped = [], 0, 0
-    updated_by_id = {i["desertionNo"]: i for i in kinds["updated"][0]}
-    relooked: dict[str, dict | None] = {}  # 구간으로 확정했지만 수정분 상태가 종료가 아니어서 다시 조회한 공고 -> 조회한 종료 행(없으면 None)
-    lookup_final: dict[str, dict] = {}  # 불완전 구간이라 번호로 조회해 종료를 확인한 공고 -> 조회한 행
-    conflicts: list[dict] = []  # 수정분 상태와 번호 조회 결과가 어긋난 공고(사라짐으로 확정하지 않음)
-    lookups_used = conflicting = 0
-    if not aborted:
-        sure, check = split_vanished(vanished, prev, partitions)
-        confirmed.update({v: "complete_range" for v in sure})
-        for n, v in enumerate(check):
-            rows, s = fx.lookup_id(v, prev.get(v)) if n < args.max_lookups else (None, None)
-            if s:
-                lookup_params += s["request_params"]
-                lookup_pages += s["page_count"]
-                lookup_dropped += s["dropped_count"]
-            state_text = rows[0].get("processState", "") if rows else ""
-            if rows and state_text.startswith("종료"):
-                confirmed[v] = "lookup"
-                lookup_final[v] = rows[0]
-                lookup_rows += rows
-            elif rows and ("보호" in state_text or "공고" in state_text):
-                still_protected[v] = prev[v]
-                lookup_rows += rows
-            else:  # 조회 실패, 0건(API 에서 사라졌거나 발생일이 틀림), 알 수 없는 상태
-                reprocess.append(v)
-        log(f"  사라진 공고 {len(vanished)}건: 구간 확정 {len(sure)} · 개별 조회 {len(check)}"
-            f" -> 종료 확정 {len(confirmed) - len(sure)}, 아직 보호중 {len(still_protected)}, 재처리 {len(reprocess)}")
-        for v in reprocess:
-            for k in ("list_notice", "list_protect"):
-                p = covering_partition(partitions, k, prev[v]) if prev.get(v) else None
-                if p and not p["complete"]:
-                    p["reprocess_ids"].append(v)
-        if reprocess:
-            fx.warnings.append(f"재처리 대상 {len(reprocess)}건: 기존 상태를 유지함")
-        # 구간으로 확정했는데 같은 실행의 수정분 상태가 종료가 아니면, 수정 목록이 보호중 목록보다 늦게 반영된 것일 수 있다.
-        # 수정분 상태를 쓰지 않고 번호로 한 번 조회해 실제 상태를 받는다(11/3 확인: 08:50 입양 종료가 수정 목록에는 보호중으로 남아 있었다).
-        lookups_used = len(check)
-        for v in [v for v, by in confirmed.items() if by == "complete_range"]:
-            if not updated_by_id.get(v) or updated_by_id[v].get("processState", "").startswith("종료"):
-                continue
-            rows, s = fx.lookup_id(v, prev.get(v)) if lookups_used < args.max_lookups else (None, None)
-            lookups_used += 1
-            if s:
-                lookup_params += s["request_params"]
-                lookup_pages += s["page_count"]
-                lookup_dropped += s["dropped_count"]
-            state_text = rows[0].get("processState", "") if rows else ""
-            if rows and ("보호" in state_text or "공고" in state_text):  # 목록과 조회가 어긋남: 종료로 확정하지 않고 다음 실행에서 다시 본다
-                del confirmed[v]
-                conflicting += 1
-                conflicts.append({"event": "conflict", "desertionNo": v, "happenDt": prev.get(v), "detected_at": now.isoformat(timespec="seconds"),
-                                  "list_state": updated_by_id[v].get("processState"), "lookup_state": state_text})
-                still_protected[v] = prev[v]
-                lookup_rows += rows
-            else:  # 종료면 그 상태를 쓰고, 조회 실패나 0건이면 사라짐은 확정이므로 "종료(사유 미상)"으로 적는다
-                relooked[v] = rows[0] if rows and state_text.startswith("종료") else None
-                lookup_rows += rows if relooked[v] else []
-        if relooked or conflicting:
-            log(f"  수정분 상태가 종료가 아닌 사라진 공고 재조회: 종료 {sum(1 for r in relooked.values() if r)}"
-                f", 사유 미상 {sum(1 for r in relooked.values() if not r)}, 목록과 어긋남(보호중 유지) {conflicting}")
-    if args.lookup and confirmed and not aborted:
-        days = sorted({prev[v] for v in confirmed if prev.get(v)})
-        extra, s = fx.fetch("lookup", {}, [(d, d) for d in days])
-        lookup_rows += extra
-        lookup_params += s["request_params"]
-        lookup_pages += s["page_count"]
-        lookup_dropped += s["dropped_count"]
-        log(f"  lookup: 발생일 {len(days)}개 -> {len(extra):,}건")
-    if lookup_rows:
-        kinds["lookup"] = (lookup_rows, {"request_params": lookup_params, "partitions": [], "page_count": lookup_pages,
-                                         "dropped_count": lookup_dropped, "duplicate_count": 0})
-    final_by_id = {**{i["desertionNo"]: i for i in lookup_rows}, **updated_by_id}
-
-    events = []
-    for v, by in confirmed.items():
-        if v in relooked:
-            final, source = relooked[v], "relookup"
-        elif v in lookup_final:
-            final, source = lookup_final[v], "lookup"
-        else:
-            final, source = final_by_id.get(v), "updated"
-        if not final:  # 상태를 확인할 근거가 없어 사유 미상으로 적는다(추정)
-            source = "none"
-        events.append({"event": "vanished", "desertionNo": v, "happenDt": prev.get(v), "detected_at": now.isoformat(timespec="seconds"),
-                       "confirmed_by": by, "state_source": source, "processState": final.get("processState") if final else "종료(사유 미상)"})
-    events += conflicts
-    for v in returned:
-        events.append({"event": "returned", "desertionNo": v, "happenDt": protected.get(v), "detected_at": now.isoformat(timespec="seconds")})
 
     manifest = {
         "source": "data.go.kr 15098931", "endpoint": URL, "run_id": run_id, "fetched_at": now.isoformat(timespec="seconds"),
@@ -433,10 +298,6 @@ def main() -> None:
         "page_count": {k: s["page_count"] for k, (_, s) in kinds.items()},
         "dropped_count": sum(s["dropped_count"] for _, s in kinds.values()),
         "duplicate_count": sum(s["duplicate_count"] for _, s in kinds.values()),
-        "vanished_detected": len(vanished), "confirmed_missing": len(confirmed),
-        "confirmed_by": {by: sum(1 for b in confirmed.values() if b == by) for by in ("complete_range", "lookup")},
-        "still_protected": len(still_protected), "reprocess_ids": reprocess, "returned": len(returned),
-        "conflicting": conflicting, "lookup_count": min(lookups_used, args.max_lookups),
     }
     for w in fx.warnings:
         log(f"경고: {w}")
@@ -451,7 +312,6 @@ def main() -> None:
         staging = Path(tmp)
         for k, (rows, _) in kinds.items():
             manifest["files"].append({"kind": k, **write_jsonl_gz(staging / f"{k}.jsonl.gz", drop_fields(rows, DROP_FIELDS))})
-        manifest["files"].append({"kind": "events", **write_jsonl_gz(staging / "events.jsonl.gz", events)})
         manifest["dropped_fields"] = list(DROP_FIELDS)
         for item in manifest["files"]:
             store.put_file(staging / item["file"], f"{run_prefix}/{item['file']}", checksum=item["checksum"])
@@ -460,15 +320,8 @@ def main() -> None:
 
     if aborted:
         sys.exit(2)
-    for v in confirmed:
-        ended[v] = today.isoformat()
-    for v in returned:
-        ended.pop(v, None)
-    # 목록에는 없지만 종료로 확정하지 못한 공고는 보호중으로 남겨 두어 다음 실행에서 다시 본다
-    protected.update(still_protected)
-    protected.update({v: prev[v] for v in reprocess})
-    # 업로드가 모두 끝난 뒤에만 상태를 갱신한다
-    save_state(store, {"last_enupd": ymd(today), "protected": protected, "ended": ended, "last_run_id": run_id})
+    # 업로드가 모두 끝난 뒤에만 상태를 갱신한다. 다른 키(Silver 단계가 이어받기 전의 보호중·종료 목록)는 그대로 둔다.
+    save_state(store, {**state, "last_enupd": ymd(today), "last_run_id": run_id})
     log(f"상태 갱신: last_enupd={ymd(today)}")
 
 
