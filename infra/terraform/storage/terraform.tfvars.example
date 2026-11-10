@@ -1,3 +1,6 @@
 # 복사해서 terraform.tfvars 로 쓴다 (terraform.tfvars 는 커밋하지 않음)
 account_id = "559987919299"
 profile    = "rebom"
+
+# infra/terraform/edge apply 뒤 출력 distribution_arn 을 넣는다 (CloudFront 가 images/* 를 읽게)
+# images_cdn_distribution_arn = "arn:aws:cloudfront::559987919299:distribution/XXXXXXXXXXXXXX"

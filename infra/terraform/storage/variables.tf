@@ -20,3 +20,9 @@ variable "noncurrent_version_days" {
   type        = number
   default     = 30
 }
+
+variable "images_cdn_distribution_arn" {
+  description = "데이터 버킷 images/* 를 읽을 CloudFront 배포 ARN (infra/terraform/edge 출력 distribution_arn). 비우면 허용 문장을 넣지 않는다"
+  type        = string
+  default     = ""
+}

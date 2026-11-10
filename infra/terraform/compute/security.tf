@@ -1,6 +1,6 @@
 # 노드 보안그룹: 바깥에서 들어오는 규칙은 하나도 없다.
 # 접속은 SSM 세션·포트포워딩으로만 한다(SSH 22, k3s API 6443, Airflow 화면 모두 닫힘).
-# 나중에 웹을 열 때는 80/443 을 CloudFront 관리형 프리픽스 목록에만 연다.
+# 웹은 CloudFront VPC origin 으로 연다: 80 을 CloudFront-VPCOrigins-Service-SG 에서만 받는 규칙은 infra/terraform/edge 에 있다.
 resource "aws_security_group" "node" {
   name        = "rebom-dev-k3s-node"
   description = "k3s nodes. No inbound from outside; access via SSM only"
