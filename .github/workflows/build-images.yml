@@ -135,6 +135,10 @@ jobs:
 
       - uses: actions/checkout@v4
         if: steps.skip.outputs.run == 'true'
+        with:
+          # frontend/public 의 이미지·폰트(*.webp, *.woff2 등)는 Git LFS 에 있다 (.gitattributes).
+          # 받지 않으면 130바이트짜리 포인터 파일이 이미지에 들어가 화면에서 깨진다. web 만 필요 (약 4MB)
+          lfs: ${{ matrix.name == 'web' }}
 
       - name: AWS 역할 맡기 (OIDC)
         if: steps.skip.outputs.run == 'true'
