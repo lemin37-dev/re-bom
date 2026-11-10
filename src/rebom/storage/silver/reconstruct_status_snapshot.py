@@ -160,10 +160,25 @@ def reconstruct_status_snapshot(
     ]
 
     # 이미 확인한 이벤트 분류 함수를 다시 사용한다.
+    resolution_events = []
+
+    for event in events:
+        if event.get("event") == "returned":
+            key = str(event.get("desertionNo") or "").strip()
+
+            if key not in previous and key in observed_ids and key in current:
+                state = to_status_raw(current[key])["processState"]
+                group, _ = parse_status(state)
+
+                if group == "PROTECTING":
+                    continue
+
+        resolution_events.append(event)
+
     resolved = resolve_ingest_events(
         previous_raw,
         current_raw,
-        events,
+        resolution_events,
     )
 
     if resolved["conflicts"]:
