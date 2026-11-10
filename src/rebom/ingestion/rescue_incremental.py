@@ -138,7 +138,7 @@ class Fetcher:
             if r.ok:
                 return r
             if r.result_code == "22":
-                raise SystemExit("일일 호출 한도 초과(코드 22)")
+                raise SystemExit(f"일일 호출 한도 초과(코드 22): {explain_error(r)}")
             log(f"  응답 오류: {explain_error(r)}, 재시도 {attempt + 1}/4")
             time.sleep(3 * (attempt + 1))
         raise ApiFailure(f"4번 재시도 후에도 실패: {params.get('state') or 'updated'} {params.get('bgnde')}")
