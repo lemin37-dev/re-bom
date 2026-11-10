@@ -32,6 +32,8 @@ class ApiResult:
     result_code: str | None = None
     total_count: int | None = None
     items: list[dict[str, Any]] = field(default_factory=list)
+    error_name: str | None = None  # 게이트웨이 오류 이름(errMsg). 예: SERVICE_KEY_IS_NOT_REGISTERED_ERROR
+    body_kind: str | None = None  # 본문 최상위 키 이름(response / OpenAPI_ServiceResponse 등). 본문 내용은 보관하지 않는다
 
     @property
     def ok(self) -> bool:
@@ -52,9 +54,23 @@ def call(params: dict[str, Any] | None = None, timeout: float = 30.0, url: str =
     resp = requests.get(url, params=query, timeout=timeout)  # 오류 메시지에 키가 담기므로 호출하는 쪽은 예외 종류만 출력한다
     result = ApiResult(status_code=resp.status_code)
     try:
-        body = resp.json()["response"]
-    except (ValueError, KeyError):
+        data = resp.json()
+    except ValueError:
         return result
+    if not isinstance(data, dict) or not data:
+        return result
+    result.body_kind = next(iter(data))
+    if "OpenAPI_ServiceResponse" in data:
+        # 게이트웨이 오류(키 오류 등)는 HTTP 401·403 등으로 오고, 정상 응답과 모양이 다르다.
+        #   {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {"errMsg": ..., "returnReasonCode": "30"}}}
+        header = (data["OpenAPI_ServiceResponse"] or {}).get("cmmMsgHeader") or {}
+        code = header.get("returnReasonCode")
+        result.result_code = str(code) if code is not None else None
+        result.error_name = header.get("errMsg")
+        return result
+    if "response" not in data:
+        return result
+    body = data["response"]
     result.result_code = str(body.get("header", {}).get("resultCode"))
     b = body.get("body", {})
     result.total_count = int(b["totalCount"]) if b.get("totalCount") is not None else None
@@ -70,5 +86,11 @@ def real_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def explain_error(result: ApiResult) -> str:
+    """로그용 한 줄. HTTP 상태, 본문 모양(최상위 키 이름), 결과 코드, 오류 이름, 힌트만 담는다. 키나 본문 내용은 넣지 않는다."""
     hint = ERROR_HINTS.get(result.result_code or "")
-    return f"status={result.status_code}, resultCode={result.result_code}" + (f" ({hint})" if hint else "")
+    parts = [f"status={result.status_code}"]
+    if result.body_kind:
+        parts.append(f"본문={result.body_kind}")
+    parts.append(f"resultCode={result.result_code}")
+    detail = ", ".join(x for x in (result.error_name, hint) if x)
+    return ", ".join(parts) + (f" ({detail})" if detail else "")
