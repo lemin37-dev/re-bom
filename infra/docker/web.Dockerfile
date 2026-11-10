@@ -10,6 +10,11 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
+# public/ 의 이미지·폰트는 Git LFS 파일이다. LFS 를 받지 않고 체크아웃하면 포인터 텍스트만 들어와 화면에서 깨지므로 여기서 막는다
+RUN if grep -rlq '^version https://git-lfs.github.com/spec/v1' public; then \
+      echo "public/ 에 Git LFS 포인터 파일이 있습니다. git lfs pull (CI 는 checkout lfs: true) 후 다시 빌드하세요:" >&2; \
+      grep -rl '^version https://git-lfs.github.com/spec/v1' public | head -5 >&2; exit 1; \
+    fi
 ARG NEXT_PUBLIC_API_BASE_URL=/api
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
