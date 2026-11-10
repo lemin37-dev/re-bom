@@ -1,4 +1,4 @@
-# scripts/infra — 개발 인프라 끄기/켜기
+# scripts/infra — 개발 인프라 끄기/켜기, 관리 화면 열기
 
 스케줄러가 생기기 전까지 쓰는 손 스위치. **사람이 직접 실행한다** (AGENTS.md 5번).
 
@@ -6,6 +6,7 @@
 |---|---|
 | `dev-power.ps1` | Windows PowerShell 7 용 (주로 이것) |
 | `dev-power.sh` | macOS·Linux·Git Bash 용. 같은 동작 |
+| `dev-tunnel.ps1` / `dev-tunnel.sh` | SSM 포트포워딩 한 번(서버 80 → 내 PC 8080)으로 `http://argocd.localhost:8080`, `http://airflow.localhost:8080`, 웹 `http://localhost:8080` 을 연다. `-LocalPort` / `--port` 로 바꾼다 |
 
 대상: 태그 `Project=rebom`, `Stage=dev` 인 EC2 전부(k3s 서버, 추가 노드) + RDS `rebom-dev-pg`(`infra/terraform/database` 출력 `identifier` 가 있으면 그 값).
 끄지 않는 것: S3, ECR, Secrets Manager, VPC (NAT·로드밸런서·탄력적 IP 는 없다. S3 게이트웨이 엔드포인트는 무료).

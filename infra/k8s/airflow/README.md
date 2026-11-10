@@ -123,14 +123,15 @@ kubectl -n airflow exec -it deploy/airflow-api-server -- airflow users create --
 
 ## 화면 접속
 
-1. SSM 6443 포트포워딩을 켜 둔다
-2. 다른 터미널에서:
+1. SSM 으로 서버 80(Traefik)을 내 PC 8080 에 붙인다 (kubectl 필요 없음, Argo CD·웹과 같은 터널)
 
 ```powershell
-kubectl -n airflow port-forward svc/airflow-api-server 8080:8080
+.\scripts\infra\dev-tunnel.ps1        # bash: scripts/infra/dev-tunnel.sh
 ```
 
-3. 브라우저 `http://localhost:8080`. 웹 화면 확인(80→8080)과 포트가 겹치면 `8081:8080` 처럼 바꾼다.
+2. 브라우저 `http://airflow.localhost:8080`
+   - Traefik 호스트 규칙 `airflow.localhost` → `airflow-api-server` (values `ingress.apiServer`). CloudFront 는 Host 를 origin 주소로 바꿔 보내서 밖에서는 이 규칙에 닿지 않는다
+   - kubectl 로 붙여도 된다: `kubectl -n airflow port-forward svc/airflow-api-server 8081:8080` → `http://localhost:8081`
 
 ## DAG 반영 방식
 

@@ -42,15 +42,17 @@ kubectl -n argocd get pods -w     # application-controller, repo-server, server,
 
 ## 화면 접속
 
-1. SSM 6443 포트포워딩을 켜 둔다 (kubectl 용)
-2. 다른 터미널에서 Argo CD 서버를 내 PC 8443 에 붙인다
+1. SSM 으로 서버 80(Traefik)을 내 PC 8080 에 붙인다 (kubectl 필요 없음)
 
-```bash
-kubectl -n argocd port-forward svc/argocd-server 8443:443
+```powershell
+.\scripts\infra\dev-tunnel.ps1        # bash: scripts/infra/dev-tunnel.sh
 ```
 
-3. 브라우저에서 `https://localhost:8443` (자체 서명 인증서 경고는 넘어간다)
-4. 사용자 `admin`, 비밀번호는 처음 설치 때 만들어진 값
+2. 브라우저에서 `http://argocd.localhost:8080` (`*.localhost` 는 브라우저가 내 PC 로 보낸다, hosts 파일 수정 불필요)
+   - Traefik 호스트 규칙 `argocd.localhost` → `argocd-server`(values `server.ingress`). Traefik 이 HTTP 로 넘기므로 `server.insecure: true` 다. 내 PC ~ 서버 구간은 SSM 터널이 암호화한다
+   - CloudFront 는 Host 를 origin 주소로 바꿔 보내서 밖에서는 이 규칙에 닿지 않는다 (`infra/terraform/edge`)
+   - kubectl 로 붙여도 된다: `kubectl -n argocd port-forward svc/argocd-server 8081:80` → `http://localhost:8081`
+3. 사용자 `admin`, 비밀번호는 처음 설치 때 만들어진 값
 
 ```powershell
 $p = kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}"
@@ -59,7 +61,7 @@ $p = kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.dat
 
 bash: `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d`
 
-5. 로그인 뒤 User Info → Update Password 로 바꾸고, 초기 비밀번호 Secret 을 지운다: `kubectl -n argocd delete secret argocd-initial-admin-secret`. 비밀번호는 팀 비밀번호 관리 도구에만 둔다 (레포·노션·채팅에 적지 않음).
+4. 로그인 뒤 User Info → Update Password 로 바꾸고, 초기 비밀번호 Secret 을 지운다: `kubectl -n argocd delete secret argocd-initial-admin-secret`. 비밀번호는 팀 비밀번호 관리 도구에만 둔다 (레포·노션·채팅에 적지 않음).
 
 ## Application 등록
 
