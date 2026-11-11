@@ -10,7 +10,7 @@ WORKDIR /src
 COPY pyproject.toml ./
 COPY src ./src
 RUN python -m venv /opt/venv \
- && /opt/venv/bin/pip install ".[ingest]"
+ && /opt/venv/bin/pip install ".[ingest,photos]"
 
 FROM python:3.12-slim
 ENV PATH=/opt/venv/bin:$PATH \
