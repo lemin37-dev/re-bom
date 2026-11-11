@@ -1,4 +1,4 @@
-﻿"""AWS Glue Catalog와 S3 Iceberg 연결."""
+"""AWS Glue Catalog와 S3 Iceberg 연결."""
 
 import os
 
@@ -7,7 +7,7 @@ from pyiceberg.catalog import load_catalog
 
 
 def get_aws_catalog(profile=None, region=None):
-    profile = profile or os.getenv("AWS_PROFILE", "rebom-seoul")
+    profile = profile if profile is not None else os.getenv("AWS_PROFILE")
     region = region or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
 
     session = boto3.Session(
@@ -24,7 +24,6 @@ def get_aws_catalog(profile=None, region=None):
 
     properties = {
         "type": "glue",
-        "glue.profile-name": profile,
         "glue.region": region,
         "s3.region": region,
         "s3.access-key-id": frozen.access_key,
@@ -33,5 +32,8 @@ def get_aws_catalog(profile=None, region=None):
 
     if frozen.token:
         properties["s3.session-token"] = frozen.token
+
+    if profile:
+        properties["glue.profile-name"] = profile
 
     return load_catalog("rebom_aws", **properties)
