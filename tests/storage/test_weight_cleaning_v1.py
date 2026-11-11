@@ -16,8 +16,8 @@ def test_small_animal_outliers_and_uncertain_units():
     for species in ("개", "고양이", "[개]", "[고양이]"):
         for weight in ("205(Kg)", "800(Kg)", "2500(Kg)", "99~101(Kg)"):
             assert parse_weight(weight, species) == (None, None, "over_100kg_unverified")
-    assert parse_weight("330g(Kg)", "고양이") == (None, None, "ambiguous_unit")
-    assert parse_weight("18g(Kg)", "개") == (None, None, "ambiguous_unit")
+    assert parse_weight("330g(Kg)", "고양이") == (0.33, 0.33, "parsed_grams")
+    assert parse_weight("18g(Kg)", "개") == (0.018, 0.018, "parsed_grams")
     assert parse_weight("12...00(Kg)", "개") == (None, None, "ambiguous")
     assert parse_weight("100(Kg)", "개") == (100.0, 100.0, "parsed_single")
 

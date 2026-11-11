@@ -20,6 +20,13 @@ def parse_weight(weight, species_name=None):
     if value in ("", "-"):
         return None, None, "missing"
 
+    gram_match = re.fullmatch(
+        r"(\d+(?:[.,]\d+)?)\s*g", value, flags=re.IGNORECASE
+    )
+    if gram_match:
+        number = float(gram_match.group(1).replace(",", ".")) / 1000
+        return number, number, "parsed_grams"
+
     if re.search(r"[gG]", value):
         return None, None, "ambiguous_unit"
 
