@@ -1,4 +1,4 @@
-﻿
+
 from rebom.storage.cleaning.age import parse_age
 from rebom.storage.cleaning.breed import parse_breed
 from rebom.storage.cleaning.color import parse_color
@@ -14,7 +14,7 @@ def transform_notice(raw, source_type=None):
         raise ValueError("desertionNo is required")
 
     birth_year, age_note = parse_age(raw.get("age"))
-    weight_min, weight_max, weight_status = parse_weight(raw.get("weight"))
+    weight_min, weight_max, weight_status = parse_weight(raw.get("weight"), raw.get("upKindNm"))
     status_group, closure_reason = parse_status(raw.get("processState"))
     color_normalized, color_status = parse_color(raw.get("colorCd"))
     breed = parse_breed(raw)
