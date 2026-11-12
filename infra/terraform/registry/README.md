@@ -2,7 +2,7 @@
 
 | 리소스 | 내용 |
 |---|---|
-| `aws_ecr_repository.this` | `rebom/ingest`(수집), `rebom/api`(검색 API), `rebom/web`(웹 화면) (비공개, 올릴 때 취약점 검사, 태그 덮어쓰기 허용) |
+| `aws_ecr_repository.this` | `rebom/ingest`(수집), `rebom/api`(검색 API), `rebom/web`(웹 화면), `rebom/storage`(정제·Silver, `src/rebom/storage`) (비공개, 올릴 때 취약점 검사, 태그 덮어쓰기 허용) |
 | `aws_ecr_lifecycle_policy.this` | 태그 없는 이미지 7일 뒤 삭제, `sha-` 태그는 최근 30개만 |
 | `aws_iam_openid_connect_provider.github` | GitHub Actions 가 AWS 키 없이 로그인하는 공급자 (계정당 하나) |
 | `aws_iam_role.github_push` | `rebom-github-ecr-push`. `lemin37-dev/re-bom` 의 `develop` 브랜치 워크플로만 맡을 수 있고, 우리 저장소에 올리기만 가능 |
