@@ -19,8 +19,9 @@ ENV PATH=/opt/venv/bin:$PATH \
 RUN useradd --system --uid 10002 --no-create-home rebom-storage
 
 COPY --from=build /opt/venv /opt/venv
+COPY scripts/storage/rebom_run_aws_real_silver_test.py /app/scripts/storage/rebom_run_aws_real_silver_test.py
 
-WORKDIR /tmp
+WORKDIR /app
 USER 10002
 
 ENTRYPOINT ["python"]
