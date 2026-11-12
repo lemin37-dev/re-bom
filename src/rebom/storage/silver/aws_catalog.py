@@ -7,7 +7,7 @@ from pyiceberg.catalog import load_catalog
 
 
 def get_aws_catalog(profile=None, region=None):
-    profile = profile if profile is not None else os.getenv("AWS_PROFILE")
+    profile = (profile if profile is not None else os.getenv("AWS_PROFILE")) or None
     region = region or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
 
     session = boto3.Session(
