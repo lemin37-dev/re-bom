@@ -5,11 +5,16 @@
 
   rescue_incremental     → python -m rebom.ingestion.rescue_incremental                      Bronze 수집
   generate_ingest_events → python -m rebom.storage.silver.generate_ingest_events             사라짐·복귀 이벤트
+  rescue_photos          → python -m rebom.ingestion.rescue_photos --limit 2000               새 사진·재시도 칸
 
 - 이벤트는 수집이 성공해야(상태 파일의 last_run_id 가 가리키는 Bronze 실행이 ok) 돈다.
-- 이미지의 ENTRYPOINT 는 수집 모듈로 고정이라, 이벤트 task 는 cmds 로 실행할 모듈을 바꾼다.
-- 사진 수집(rescue_photos)은 이 DAG 에 없다. 첫 전체 수집(백필)은 --limit 로 나눠 수동으로 하고(docs/data_contract.md 6절),
-  끝난 뒤 새 사진만 받는 task 를 별도 PR 로 추가한다.
+- 이미지의 ENTRYPOINT 는 수집 모듈로 고정이라, 이벤트·사진 task 는 cmds 로 실행할 모듈을 바꾼다.
+- 사진은 수집 뒤에 이벤트와 나란히 돈다. 둘 다 같은 last_run_id 를 읽고, 상태 파일이 서로 다르다
+  (state/rescue_events_state.json, state/rescue_photos_state.json).
+- 사진의 첫 전체 수집(백필)은 11/11~11/12 에 수동 파드로 끝냈다(docs/data_contract.md 6절). 이 task 는 그 뒤에 생긴
+  새 칸과 실패(failed) 칸 재시도만 받는다. 이미 받은 칸은 사진 주소가 바뀌어도 다시 받지 않는다(같은 문서, 별도 작업).
+- --limit 2000 은 하루 처리량이 아니라 상한이다. 하루 새 칸은 약 120~550칸(11/3~11/12 측정)이라 평소에는 그만큼만 하고 끝나고,
+  며칠 밀려도 하루 이틀에 따라잡는다. 2000칸 모두 받아도 약 30분(칸당 약 0.9초, 백필 측정).
 - 밀린 날은 상태 파일(state/rescue_state.json)의 마지막 성공일부터 한 번에 따라잡으므로 catchup 을 켜지 않는다.
 - 동시에 두 개가 돌면 상태 파일이 꼬이므로 max_active_runs=1.
 - API 키는 K8s Secret rebom-ingest(네임스페이스 rebom-ingest)의 DATA_GO_KR_SERVICE_KEY 를 환경변수로 받는다.
@@ -55,7 +60,7 @@ def pod_task(task_id: str, name: str, cmds: list[str] | None = None, arguments: 
 
 with DAG(
     dag_id="rescue_ingest",
-    description="구조동물 공고 증분 수집 → S3 bronze, 사라짐·복귀 이벤트",
+    description="구조동물 공고 증분 수집 → S3 bronze, 사라짐·복귀 이벤트, 새 사진",
     schedule="0 3 * * *",
     start_date=pendulum.datetime(2026, 11, 1, tz="Asia/Seoul"),
     catchup=False,
@@ -81,4 +86,11 @@ with DAG(
         arguments=[],  # 시험할 때는 ["--dry-run"]
     )
 
-    rescue_incremental >> generate_ingest_events
+    rescue_photos = pod_task(
+        task_id="rescue_photos",
+        name="rescue-photos",
+        cmds=["python", "-m", "rebom.ingestion.rescue_photos"],
+        arguments=["--limit", "2000"],  # 상한. 시험할 때는 ["--dry-run"]
+    )
+
+    rescue_incremental >> [generate_ingest_events, rescue_photos]

@@ -28,6 +28,30 @@ def test_dag_schedule_and_guards():
     assert ast.literal_eval(kw["max_active_runs"]) == 1
 
 
+def _pod_tasks() -> dict[str, dict[str, ast.expr]]:
+    tasks = {}
+    for node in ast.walk(_tree()):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "pod_task":
+            kw = {k.arg: k.value for k in node.keywords}
+            tasks[ast.literal_eval(kw["task_id"])] = kw
+    return tasks
+
+
+def test_photo_task_runs_photos_module_with_limit():
+    """사진 task 는 사진 모듈을 상한(--limit)과 함께 부른다. 상한이 없으면 밀린 날 한 번에 오래 돈다."""
+    kw = _pod_tasks()["rescue_photos"]
+    assert ast.literal_eval(kw["cmds"]) == ["python", "-m", "rebom.ingestion.rescue_photos"]
+    args = ast.literal_eval(kw["arguments"])
+    assert "--limit" in args
+    assert int(args[args.index("--limit") + 1]) > 0
+
+
+def test_photo_task_runs_after_incremental():
+    """사진은 Bronze 수집(last_run_id 갱신) 뒤에 돌아야 한다. 이벤트와는 나란히."""
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert "rescue_incremental >> [generate_ingest_events, rescue_photos]" in src
+
+
 def test_dag_only_calls_no_rebom_logic():
     """DAG 는 호출만 둔다 (AGENTS.md 3번): rebom 패키지를 import 하지 않는다."""
     for node in ast.walk(_tree()):
