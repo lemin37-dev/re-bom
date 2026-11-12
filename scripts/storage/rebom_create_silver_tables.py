@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 
 import pyarrow as pa
@@ -19,6 +19,7 @@ S = pa.string()
 I = pa.int32()
 F = pa.float64()
 D = pa.date32()
+B = pa.bool_()
 
 # 기존 Python 정제 함수가 반환하는 컬럼을 기준으로 정의한다.
 # desertion_no와 care_reg_no는 숫자가 아닌 식별자이므로 문자열로 보존한다.
@@ -27,6 +28,8 @@ notice_fields = [
     ("notice_no", S),
     ("care_reg_no", S),
     ("special_mark", S),
+    ("info_text", S),
+    ("rfid_yn", B),
     ("happen_place", S),
     ("org_name", S),
     ("sex_code", S),
@@ -39,6 +42,8 @@ notice_fields = [
     ("weight_raw", S),
     ("weight_min_kg", F),
     ("weight_max_kg", F),
+    ("weight_kg", F),
+    ("size", S),
     ("weight_parse_status", S),
     ("process_state_raw", S),
     ("status_group", S),
@@ -46,21 +51,30 @@ notice_fields = [
     ("closure_reason_code", S),
     ("happen_date", D),
     ("notice_start_date", D),
+    ("notice_date", D),
     ("notice_end_date", D),
     ("color_raw", S),
     ("color_normalized", S),
     ("color_parse_status", S),
+    ("color_tag", pa.list_(S)),
+    ("color_pattern", S),
     ("species_code", S),
     ("species_name", S),
     ("breed_code", S),
     ("breed_name_raw", S),
     ("breed_full_name_raw", S),
+    ("is_mix", B),
+    ("u60_at_notice", B),
 ]
 
 image_fields = [
     ("desertion_no", S),
     ("image_slot", I),
     ("source_url", S),
+    ("original_s3_key", S),
+    ("serving_s3_key", S),
+    ("thumb_s3_key", S),
+    ("sha256", S),
 ]
 
 shelter_fields = [

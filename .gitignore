@@ -233,3 +233,6 @@ models/
 logs/
 .idea/
 .vscode/
+
+# Local Silver execution journals and snapshots
+.local/

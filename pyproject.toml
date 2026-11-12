@@ -26,6 +26,11 @@ serve = [
 photos = [
     "Pillow>=10",
 ]
+storage = [
+    "pyiceberg[glue,pyarrow]==0.12.0",
+    "pyarrow==26.0.1",
+    "boto3==1.43.71",
+]
 dev = [
     "pytest>=8",
     "httpx>=0.27",
