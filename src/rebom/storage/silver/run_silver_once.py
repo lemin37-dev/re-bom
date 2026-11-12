@@ -8,6 +8,7 @@ from pathlib import Path
 
 import boto3
 
+from rebom.storage.silver.environment_config import get_silver_environment
 from rebom.storage.silver.fetch_run_inputs import (
     RUN_ID_PATTERN,
     fetch_run_inputs,
@@ -18,14 +19,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--bucket", required=True)
+    parser.add_argument("--environment", choices=("test", "prod"), default="test")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--apply-image", action="store_true")
     parser.add_argument("--check-image", action="store_true")
     parser.add_argument(
         "--s3-state-prefix",
-        default="bench_tmp/b-storage-test/journal-recovery-20261111",
+        default=None,
     )
     args = parser.parse_args()
+    config = get_silver_environment(args.environment)
+    if args.s3_state_prefix is None:
+        args.s3_state_prefix = config.s3_state_prefix
 
     if not RUN_ID_PATTERN.fullmatch(args.run_id):
         parser.error("Invalid run_id")
@@ -64,6 +69,8 @@ def main():
         command = [
             sys.executable,
             str(runner),
+            "--environment",
+            args.environment,
             "--bronze-manifest",
             fetched["bronze_manifest"],
             "--event-manifest",
@@ -98,14 +105,8 @@ def main():
             for kind in ("updated", "list_notice", "list_protect"):
                 raw_notices.extend(bronze["rows_by_kind"][kind])
 
-            image_table = (
-                "rebom_silver.silver_animal_image_real_20261111_test"
-            )
-            image_location = (
-                "s3://rebom-data-559987919299/"
-                "bench_tmp/b-storage-test/iceberg/real-bronze-20261111/"
-                "silver_animal_image_real_20261111_test"
-            )
+            image_table = config.image_table
+            image_location = config.table_location(image_table)
 
             if args.check_image:
                 from rebom.storage.silver.image_incremental import (

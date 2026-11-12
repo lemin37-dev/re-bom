@@ -21,6 +21,7 @@ import pyarrow.parquet as pq
 
 from rebom.storage.silver.apply_silver_pipeline import prepare_arrow
 from rebom.storage.silver.aws_catalog import get_aws_catalog
+from rebom.storage.silver.environment_config import get_silver_environment
 from rebom.storage.silver.prepare_silver_pipeline import prepare_silver_pipeline
 from rebom.storage.silver.reconcile_run_journal import reconcile_run
 from rebom.storage.silver.run_journal import journal_path, read_run
@@ -30,9 +31,10 @@ from rebom.storage.silver.run_journal import STAGES
 import boto3
 
 
-PREFIX = "s3://rebom-data-559987919299/bench_tmp/b-storage-test/iceberg/real-bronze-20261111/"
-NOTICE_NAME = "rebom_silver.silver_animal_notice_real_20261111_test"
-HISTORY_NAME = "rebom_silver.silver_animal_status_history_real_20261111_test"
+TEST_CONFIG = get_silver_environment("test")
+PREFIX = f"{TEST_CONFIG.iceberg_prefix.rstrip('/')}/"
+NOTICE_NAME = TEST_CONFIG.notice_table
+HISTORY_NAME = TEST_CONFIG.history_table
 NOTICE_KEYS = ("desertion_no",)
 HISTORY_KEYS = ("run_id", "desertion_no", "observed_on", "event_type")
 DEFAULT_JOURNAL = Path(".local") / "rebom" / "aws-real-20261111-journal"
@@ -57,8 +59,8 @@ def get_tables():
     catalog = get_aws_catalog()
     notice = catalog.load_table(NOTICE_NAME)
     history = catalog.load_table(HISTORY_NAME)
-    validate_table(notice, "silver_animal_notice_real_20261111_test")
-    validate_table(history, "silver_animal_status_history_real_20261111_test")
+    validate_table(notice, NOTICE_NAME.split(".")[-1])
+    validate_table(history, HISTORY_NAME.split(".")[-1])
     return catalog, notice, history
 
 
@@ -161,6 +163,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bronze-manifest", type=Path, required=True)
     parser.add_argument("--event-manifest", type=Path, required=True)
+    parser.add_argument("--environment", choices=("test", "prod"), default="test")
     parser.add_argument("--apply", action="store_true", help="Write to isolated B-test Glue tables")
     parser.add_argument("--journal-dir", type=Path, default=DEFAULT_JOURNAL)
     parser.add_argument("--s3-state-bucket")
@@ -169,6 +172,7 @@ def parse_args():
 
 
 def execute(args):
+    get_silver_environment(args.environment)
     for path in (args.bronze_manifest, args.event_manifest):
         if not path.is_file():
             raise FileNotFoundError(path)
