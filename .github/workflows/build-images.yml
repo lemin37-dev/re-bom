@@ -1,10 +1,10 @@
-# develop 에 머지되면 검색 API·웹 화면·수집 이미지를 빌드해 ECR 에 올리고,
+# develop 에 머지되면 검색 API·웹 화면·수집·정제(storage) 이미지를 빌드해 ECR 에 올리고,
 # deploy/dev 브랜치의 infra/k8s/web 태그를 바꿔 커밋한다 → Argo CD 가 그 브랜치를 보고 배포한다(infra/k8s/argocd).
 # 필요: 저장소 Variable AWS_ECR_PUSH_ROLE_ARN (infra/terraform/registry 출력 github_push_role_arn).
 #   비밀값이 아니라 Secret 이 아니어도 된다. AWS 키는 쓰지 않는다(OIDC).
 # 역할은 develop 브랜치 워크플로만 맡을 수 있다. 수동 실행도 develop 을 골라야 한다.
 # 태그: develop(덮어씀) + sha-<커밋 7자리>
-# 수집(ingest) 이미지는 Airflow DAG 가 :develop 을 매번 새로 받아 쓰므로 deploy/dev 에 태그를 기록하지 않는다.
+# 수집(ingest)·정제(storage) 이미지는 Airflow DAG 가 :develop 을 매번 새로 받아 쓰므로 deploy/dev 에 태그를 기록하지 않는다.
 name: 이미지 빌드 (ECR)
 
 on:
@@ -16,6 +16,8 @@ on:
       - "data/sample/**"
       - "infra/docker/api*"
       - "infra/docker/ingest*"
+      - "infra/docker/storage*"
+      - "scripts/storage/rebom_run_aws_real_silver_test.py"
       - ".dockerignore"
       - "frontend/**"
       - "infra/docker/web*"
@@ -27,7 +29,7 @@ on:
       target:
         description: "빌드할 이미지"
         type: choice
-        options: [all, api, web, ingest]
+        options: [all, api, web, ingest, storage]
         default: all
 
 permissions:
@@ -48,6 +50,7 @@ jobs:
       api: ${{ steps.pick.outputs.api }}
       web: ${{ steps.pick.outputs.web }}
       ingest: ${{ steps.pick.outputs.ingest }}
+      storage: ${{ steps.pick.outputs.storage }}
       k8s: ${{ steps.filter.outputs.k8s }}
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +79,15 @@ jobs:
               - "infra/docker/ingest*"
               - ".dockerignore"
               - ".github/workflows/build-images.yml"
+            storage:
+              - "src/rebom/storage/**"
+              - "src/rebom/common/**"
+              - "src/rebom/__init__.py"
+              - "pyproject.toml"
+              - "infra/docker/storage*"
+              - "scripts/storage/rebom_run_aws_real_silver_test.py" # storage.Dockerfile 이 이미지에 복사하는 실행기
+              - ".dockerignore"
+              - ".github/workflows/build-images.yml"
             k8s:
               - "infra/k8s/web/**"
               - ".github/scripts/update_deploy_branch.sh"
@@ -86,15 +98,18 @@ jobs:
           API_CHANGED: ${{ steps.filter.outputs.api }}
           WEB_CHANGED: ${{ steps.filter.outputs.web }}
           INGEST_CHANGED: ${{ steps.filter.outputs.ingest }}
+          STORAGE_CHANGED: ${{ steps.filter.outputs.storage }}
         run: |
           if [ "$EVENT" = "workflow_dispatch" ]; then
             [ "$TARGET" = all ] || [ "$TARGET" = api ] && echo "api=true" >> "$GITHUB_OUTPUT" || echo "api=false" >> "$GITHUB_OUTPUT"
             [ "$TARGET" = all ] || [ "$TARGET" = web ] && echo "web=true" >> "$GITHUB_OUTPUT" || echo "web=false" >> "$GITHUB_OUTPUT"
             [ "$TARGET" = all ] || [ "$TARGET" = ingest ] && echo "ingest=true" >> "$GITHUB_OUTPUT" || echo "ingest=false" >> "$GITHUB_OUTPUT"
+            [ "$TARGET" = all ] || [ "$TARGET" = storage ] && echo "storage=true" >> "$GITHUB_OUTPUT" || echo "storage=false" >> "$GITHUB_OUTPUT"
           else
             echo "api=$API_CHANGED" >> "$GITHUB_OUTPUT"
             echo "web=$WEB_CHANGED" >> "$GITHUB_OUTPUT"
             echo "ingest=$INGEST_CHANGED" >> "$GITHUB_OUTPUT"
+            echo "storage=$STORAGE_CHANGED" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -116,6 +131,10 @@ jobs:
             repo: rebom/ingest
             dockerfile: infra/docker/ingest.Dockerfile
             context: .
+          - name: storage
+            repo: rebom/storage
+            dockerfile: infra/docker/storage.Dockerfile
+            context: .
     steps:
       - name: 바뀐 것만 빌드
         id: skip
@@ -123,12 +142,14 @@ jobs:
           API: ${{ needs.changes.outputs.api }}
           WEB: ${{ needs.changes.outputs.web }}
           INGEST: ${{ needs.changes.outputs.ingest }}
+          STORAGE: ${{ needs.changes.outputs.storage }}
           NAME: ${{ matrix.name }}
         run: |
           case "$NAME" in
             api) want="$API" ;;
             web) want="$WEB" ;;
             ingest) want="$INGEST" ;;
+            storage) want="$STORAGE" ;;
             *) want=false ;;
           esac
           echo "run=$want" >> "$GITHUB_OUTPUT"

@@ -65,6 +65,13 @@ data "aws_iam_policy_document" "node" {
     actions   = ["ssm:GetParameter"]
     resources = [aws_ssm_parameter.k3s_token.arn]
   }
+
+  # Glue 읽기 권한
+  statement {
+    sid       = "GlueTable"
+    actions   = ["glue:GetDatabase", "glue:GetTable", "glue:UpdateTable"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "node" {
