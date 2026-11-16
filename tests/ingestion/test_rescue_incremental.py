@@ -170,6 +170,28 @@ def test_bronze_saves_only_raw_files_and_keeps_other_state_keys():
     assert "protected" in state  # 이어받기 전의 보호중 목록은 지우지 않는다
 
 
+def test_xcom_has_run_id_only_inside_airflow_pod():
+    tmp = Path(tempfile.mkdtemp(prefix="rescue_test_"))
+    store = LocalStore(tmp)
+    xcom = tmp / "airflow" / "xcom" / "return.json"
+    # XCom 폴더가 없으면(로컬 실행) 쓰지 않는다
+    with patch.object(ri, "XCOM_FILE", xcom):
+        run_main(store, seed_scenario(store, protect_extra=0))
+    assert not xcom.exists()
+    # 폴더가 있으면(파드 안) 상태 파일과 같은 run_id 와 manifest 위치를 쓴다
+    xcom.parent.mkdir(parents=True)
+    tmp2 = Path(tempfile.mkdtemp(prefix="rescue_test_"))
+    store2 = LocalStore(tmp2)
+    with patch.object(ri, "XCOM_FILE", xcom):
+        run_main(store2, seed_scenario(store2, protect_extra=0))
+    got = json.loads(xcom.read_text(encoding="utf-8"))
+    state = json.loads(store2.get_bytes(ri.STATE_KEY).decode("utf-8"))
+    assert got["run_id"] == state["last_run_id"]
+    assert got["dt"] == f"{TODAY:%Y-%m-%d}"
+    assert got["manifest"] == f"{ri.RAW_PREFIX}/dt={got['dt']}/run_id={got['run_id']}/manifest.json"
+    assert store2.get_bytes(got["manifest"])  # 가리키는 manifest 가 실제로 있다
+
+
 def test_vanished_without_updated_evidence_is_looked_up_before_confirming():
     # 구간은 모두 완전하고 B, C, D 가 사라졌는데 수정분에는 셋 다 없다
     r = run_once(protect_extra=0)
