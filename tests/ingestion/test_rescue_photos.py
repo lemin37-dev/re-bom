@@ -376,6 +376,8 @@ def test_manifest_lists_stored_photos_with_paths_and_checksums(store):
         "desertionNo": "111", "slot": 1, "original": "bronze/rescue/images/111/popfile1.jpg", "ext": "jpg",
         "bytes": len(jpg), "sha256": hashlib.sha256(jpg).hexdigest(),
         "serving": {"image": "images/111/1.webp", "thumb": "images/111/1_thumb.webp"},
+        # 계약 6절(11/16): 받은 주소와 버전. 처음 받은 사진은 버전 1이고 대체한 버전이 없다
+        "source_url": "http://x/a", "version": 1, "replaces": None, "first_seen_at": NOW.isoformat(timespec="seconds"),
     }
     assert next(f for f in m["files"] if f["slot"] == 2)["original"].endswith("popfile2.png")
     for f in m["files"]:  # manifest 에 적힌 경로는 실제로 저장돼 있다
@@ -398,9 +400,12 @@ def test_manifest_records_failures_without_urls(store):
     fetch = FakeFetch({"http://x/a": (None, "not_found"), "http://x/b": (image_bytes(), None)})
     rp.run_photos(store, fetch, RUN_ID, now=NOW, photo_run_id="r1")
     m = read_manifest(store, "r1")
-    assert m["failed"] == [{"desertionNo": "111", "slot": 1, "status": "failed", "reason": "not_found", "attempts": 1}]
+    assert m["failed"] == [{
+        "desertionNo": "111", "slot": 1, "status": "failed", "reason": "not_found", "attempts": 1,
+        "version": 1, "replaces": None, "first_seen_at": NOW.isoformat(timespec="seconds"),
+    }]
     assert m["counts"]["stored"] == 1 and m["counts"]["failed"] == 1
-    assert "http://" not in json.dumps(m)
+    assert "http://" not in json.dumps(m["failed"])  # 실패 목록에는 주소를 남기지 않는다(저장한 사진의 source_url 은 계약 6절대로 남김)
 
 
 def test_empty_run_still_writes_a_manifest_and_dry_run_does_not(store):
@@ -462,3 +467,112 @@ def test_manifest_updated_at_moves_on_each_write_while_generated_at_stays(store,
     assert final["generated_at"] == NOW.isoformat(timespec="seconds")
     assert all(g == final["generated_at"] for _, g, _ in seen)
     assert datetime.fromisoformat(final["updated_at"]) >= datetime.fromisoformat(final["generated_at"])
+
+
+# ---------- 사진 교체 (계약 6절, 11/16 합의) ----------
+
+RUN2 = "20261105T100101-bbbbbb"
+RUN3 = "20261106T100101-cccccc"
+RUN4 = "20261107T100101-dddddd"
+
+
+def run_with(store, run_id, url, fetch, day, **kw):
+    """공고 111 의 1번 칸 주소를 url 로 둔 수집 실행을 만들고 사진 수집을 돌린다."""
+    seed_bronze(store, [row("111", url)], run_id=run_id)
+    return rp.run_photos(store, fetch, run_id, now=NOW + timedelta(days=day), photo_run_id=f"p{day}", **kw)
+
+
+def slot1(store):
+    return rp.slot_versions(state_of(store)["notices"]["111"]["slots"]["1"])
+
+
+def test_replaced_photo_is_saved_as_new_version_without_touching_the_old_one(store):
+    old, new = image_bytes(color=(10, 10, 10)), image_bytes(color=(250, 250, 250))
+    fetch = FakeFetch({"http://x/a": (old, None), "http://x/b": (new, None)})
+    run_with(store, RUN_ID, "http://x/a", fetch, 0)
+    run_with(store, RUN2, "http://x/b", fetch, 1)
+    # 옛 사진은 그대로, 새 사진은 _v002 키에
+    assert store.get_bytes("bronze/rescue/images/111/popfile1.jpg") == old
+    assert store.get_bytes("bronze/rescue/images/111/popfile1_v002.jpg") == new
+    assert store.get_bytes("images/111/1_v002.webp") and store.get_bytes("images/111/1_v002_thumb.webp")
+    m = read_manifest(store, "p1", dt="2026-11-05")
+    assert m["counts"]["replaced"] == 1
+    assert [(f["version"], f["replaces"], f["source_url"], f["original"]) for f in m["files"]] == [
+        (2, 1, "http://x/b", "bronze/rescue/images/111/popfile1_v002.jpg")]
+    assert m["files"][0]["first_seen_at"] == (NOW + timedelta(days=1)).isoformat(timespec="seconds")
+    assert [(v["version"], v["status"]) for v in slot1(store)] == [(1, "success"), (2, "success")]
+    # 같은 주소는 다시 받지 않는다
+    out = run_with(store, RUN3, "http://x/b", fetch, 2)
+    assert out["to_process"] == 0 and fetch.calls.count("http://x/b") == 1
+
+
+def test_replaced_url_404_keeps_old_photo_and_gives_up_only_that_version(store):
+    old = image_bytes()
+    fetch = FakeFetch({"http://x/a": (old, None), "http://x/b": (None, "not_found")})
+    run_with(store, RUN_ID, "http://x/a", fetch, 0)
+    for day, expected in ((1, "failed"), (2, "failed"), (3, "gave_up")):
+        run_with(store, RUN2, "http://x/b", fetch, day)
+        m = read_manifest(store, f"p{day}", dt=f"2026-11-0{4 + day}")
+        assert m["files"] == []
+        assert [(f["version"], f["replaces"], f["reason"], f["status"]) for f in m["failed"]] == [(2, 1, "replaced_not_found", expected)]
+        # 최초 발견 시각은 재시도해도 바뀌지 않는다
+        assert m["failed"][0]["first_seen_at"] == (NOW + timedelta(days=1)).isoformat(timespec="seconds")
+    assert [(v["version"], v["status"]) for v in slot1(store)] == [(1, "success"), (2, "gave_up")]
+    assert store.get_bytes("bronze/rescue/images/111/popfile1.jpg") == old  # 옛 사진은 그대로
+    out = run_with(store, RUN3, "http://x/b", fetch, 4)  # 포기한 버전은 다시 시도하지 않는다
+    assert out["to_process"] == 0 and fetch.calls.count("http://x/b") == rp.MAX_ATTEMPTS
+
+
+def test_after_a_404_version_the_next_url_replaces_the_404_version(store):
+    """v1 정상 → v2 404 → v3 정상. replaces 는 직전 주소의 버전(404 였어도)을 가리킨다."""
+    fetch = FakeFetch({"http://x/a": (image_bytes(), None), "http://x/b": (None, "not_found"), "http://x/c": (image_bytes(color=(1, 2, 3)), None)})
+    run_with(store, RUN_ID, "http://x/a", fetch, 0)
+    run_with(store, RUN2, "http://x/b", fetch, 1)
+    run_with(store, RUN3, "http://x/c", fetch, 2)  # 주소가 또 바뀌면 시도 횟수는 처음부터
+    m = read_manifest(store, "p2", dt="2026-11-06")
+    assert [(f["version"], f["replaces"], f["original"]) for f in m["files"]] == [(3, 2, "bronze/rescue/images/111/popfile1_v003.jpg")]
+    assert [(v["version"], v["status"], v["attempts"]) for v in slot1(store)] == [(1, "success", 1), (2, "failed", 1), (3, "success", 1)]
+    # v2 는 최신 주소가 아니므로 더 시도하지 않는다
+    run_with(store, RUN4, "http://x/c", fetch, 3)
+    assert fetch.calls.count("http://x/b") == 1
+
+
+def test_version_and_first_seen_are_fixed_even_if_limit_postpones_the_download(store):
+    """재실행해도 같은 주소는 같은 버전·같은 키·같은 최초 발견 시각이다(이광훈 님 요청)."""
+    seed_bronze(store, [row("111", "http://x/a"), row("222", "http://x/z", happen="20261102")])
+    fetch = FakeFetch({"http://x/a": (image_bytes(), None), "http://x/b": (image_bytes(color=(5, 5, 5)), None), "http://x/z": (image_bytes(), None)})
+    rp.run_photos(store, fetch, RUN_ID, now=NOW)
+    # 다음 날 111 의 주소가 바뀌었는데 상한 때문에 이번에는 222 쪽 새 칸만 받는다고 하자 (222 가 더 최근 발생이라 먼저)
+    seed_bronze(store, [row("111", "http://x/b"), row("222", "http://x/z", happen="20261102"), row("333", "http://x/z", happen="20261103")], run_id=RUN2)
+    rp.run_photos(store, fetch, RUN2, now=NOW + timedelta(days=1), limit=1, photo_run_id="p1")
+    pending = slot1(store)[-1]
+    assert (pending["version"], pending["status"], pending["replaces"]) == (2, "pending", 1)
+    first_seen = pending["first_seen_at"]
+    assert first_seen == (NOW + timedelta(days=1)).isoformat(timespec="seconds")
+    # 그다음 날 받는다. 번호와 최초 발견 시각은 처음 정한 그대로
+    seed_bronze(store, [row("111", "http://x/b")], run_id=RUN3)
+    rp.run_photos(store, fetch, RUN3, now=NOW + timedelta(days=2), photo_run_id="p2")
+    f = read_manifest(store, "p2", dt="2026-11-06")["files"][0]
+    assert (f["version"], f["replaces"], f["first_seen_at"]) == (2, 1, first_seen)
+    assert f["original"] == "bronze/rescue/images/111/popfile1_v002.jpg"
+
+
+def test_old_state_records_without_version_are_read_as_version_1(store):
+    """11/16 이전 기록(version·previous 없음)은 옮기지 않고 버전 1로 읽는다."""
+    legacy = {"status": "success", "attempts": 1, "reason": None, "ext": "jpg", "bytes": 10, "sha256": "ab",
+              "source_url": "http://x/a", "stored_at": "2026-11-11T14:03:04+09:00"}
+    store.put_bytes(rp.STATE_KEY, json.dumps({"version": 1, "notices": {"111": {"slots": {"1": legacy}}}}).encode("utf-8"))
+    assert rp.slot_versions(legacy)[0] | {} == {**legacy, "version": 1, "replaces": None, "first_seen_at": "2026-11-11T14:03:04+09:00"}
+    fetch = FakeFetch({"http://x/b": (image_bytes(), None)})
+    run_with(store, RUN2, "http://x/a", fetch, 1)
+    assert fetch.calls == []  # 같은 주소라 받지 않는다
+    run_with(store, RUN3, "http://x/b", fetch, 2)
+    rec = state_of(store)["notices"]["111"]["slots"]["1"]
+    assert rec["version"] == 2 and rec["replaces"] == 1 and rec["previous"][0]["sha256"] == "ab"
+
+
+def test_version_keys_sort_in_version_order():
+    keys = [rp.original_key("1", 1, "jpg", v) for v in (1, 2, 10, 3)]
+    assert keys[0] == "bronze/rescue/images/1/popfile1.jpg"
+    assert sorted(keys[1:]) == [rp.original_key("1", 1, "jpg", v) for v in (2, 3, 10)]  # 세 자리라 v010 이 v002 뒤
+    assert rp.serving_key("1", 2, thumb=True, version=12) == "images/1/2_v012_thumb.webp"
