@@ -395,17 +395,16 @@ def test_manifest_has_only_photos_new_in_that_run(store):
     assert [f["desertionNo"] for f in read_manifest(store, "r2", dt="2026-11-05")["files"]] == ["222"]
 
 
-def test_manifest_records_failures_without_urls(store):
+def test_manifest_records_failures_with_urls(store):
     seed_bronze(store, [row("111", "http://x/a", "http://x/b")])
     fetch = FakeFetch({"http://x/a": (None, "not_found"), "http://x/b": (image_bytes(), None)})
     rp.run_photos(store, fetch, RUN_ID, now=NOW, photo_run_id="r1")
     m = read_manifest(store, "r1")
     assert m["failed"] == [{
         "desertionNo": "111", "slot": 1, "status": "failed", "reason": "not_found", "attempts": 1,
-        "version": 1, "replaces": None, "first_seen_at": NOW.isoformat(timespec="seconds"),
+        "source_url": "http://x/a", "version": 1, "replaces": None, "first_seen_at": NOW.isoformat(timespec="seconds"),
     }]
     assert m["counts"]["stored"] == 1 and m["counts"]["failed"] == 1
-    assert "http://" not in json.dumps(m["failed"])  # 실패 목록에는 주소를 남기지 않는다(저장한 사진의 source_url 은 계약 6절대로 남김)
 
 
 def test_empty_run_still_writes_a_manifest_and_dry_run_does_not(store):
@@ -514,7 +513,7 @@ def test_replaced_url_404_keeps_old_photo_and_gives_up_only_that_version(store):
         run_with(store, RUN2, "http://x/b", fetch, day)
         m = read_manifest(store, f"p{day}", dt=f"2026-11-0{4 + day}")
         assert m["files"] == []
-        assert [(f["version"], f["replaces"], f["reason"], f["status"]) for f in m["failed"]] == [(2, 1, "replaced_not_found", expected)]
+        assert [(f["version"], f["replaces"], f["reason"], f["status"], f["source_url"]) for f in m["failed"]] == [(2, 1, "replaced_not_found", expected, "http://x/b")]
         # 최초 발견 시각은 재시도해도 바뀌지 않는다
         assert m["failed"][0]["first_seen_at"] == (NOW + timedelta(days=1)).isoformat(timespec="seconds")
     assert [(v["version"], v["status"]) for v in slot1(store)] == [(1, "success"), (2, "gave_up")]

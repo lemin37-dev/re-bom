@@ -347,10 +347,10 @@ def manifest_entry(item: dict, rec: dict) -> dict:
 
 
 def failed_entry(item: dict, rec: dict) -> dict:
-    # 실패 목록에는 주소를 남기지 않는다(로그·인계에 주소를 넣지 않는 원칙). 버전 정보로 어느 교체가 실패했는지 알 수 있다.
+    # 실패한 주소(source_url)도 남긴다. Silver 이력 테이블이 실패 버전도 같은 칸으로 기록하고, 그 주소를 받을 공식 경로가 manifest 뿐이다(계약 6절, 11/16).
     return {
         "desertionNo": item["no"], "slot": item["slot"], "status": rec["status"], "reason": rec["reason"], "attempts": rec["attempts"],
-        "version": rec["version"], "replaces": rec["replaces"], "first_seen_at": rec["first_seen_at"],
+        "source_url": rec.get("source_url"), "version": rec["version"], "replaces": rec["replaces"], "first_seen_at": rec["first_seen_at"],
     }
 
 
