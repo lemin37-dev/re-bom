@@ -1,4 +1,4 @@
-﻿"""사진 Manifest 자동 탐색, 정체 감지 및 Silver 처리."""
+"""사진 Manifest 자동 탐색, 정체 감지 및 Silver 처리."""
 
 import argparse
 import json
@@ -43,6 +43,14 @@ def get_config():
         "iceberg/silver_animal_image_b_test",
     ).rstrip("/")
 
+    history_table_name = os.getenv(
+        "REBOM_PHOTO_HISTORY_TABLE", ""
+    ).strip()
+
+    expected_history_location = os.getenv(
+        "REBOM_PHOTO_HISTORY_LOCATION", ""
+    ).rstrip("/")
+
     stale_seconds = int(
         os.getenv("REBOM_PHOTO_STALE_SECONDS", "600")
     )
@@ -55,6 +63,8 @@ def get_config():
         "journal_prefix": journal_prefix,
         "manifest_prefix": manifest_prefix,
         "expected_location": expected_location,
+        "history_table_name": history_table_name,
+        "expected_history_location": expected_history_location,
         "stale_seconds": stale_seconds,
     }
 
@@ -87,6 +97,27 @@ def validate_config(config):
 
     if config["stale_seconds"] <= 0:
         raise RuntimeError("정체 판단 기준은 양수여야 합니다")
+
+    history_name = config["history_table_name"]
+    history_location = config["expected_history_location"]
+
+    if bool(history_name) != bool(history_location):
+        raise RuntimeError("사진 이력 테이블 설정이 불완전합니다")
+
+    if history_name:
+        expected_history_name = (
+            "rebom_silver.silver_animal_image_version_history_b_test"
+        )
+        expected_history_path = (
+            f"s3://{EXPECTED_BUCKET}/{TEST_PREFIX}iceberg/"
+            "silver_animal_image_version_history_b_test"
+        )
+
+        if history_name != expected_history_name:
+            raise RuntimeError("허용되지 않은 사진 이력 테이블")
+
+        if history_location != expected_history_path:
+            raise RuntimeError("사진 이력 테스트 저장 위치 불일치")
 
     expected_table = config["table_name"].split(".", 1)[1]
     expected_path = (
@@ -211,6 +242,10 @@ def main():
             table_name=config["table_name"],
             expected_location=config["expected_location"],
             journal_prefix=config["journal_prefix"],
+            history_table_name=config["history_table_name"] or None,
+            expected_history_location=(
+                config["expected_history_location"] or None
+            ),
             apply=args.apply,
         )
 
