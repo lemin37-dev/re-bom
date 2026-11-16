@@ -1,0 +1,1 @@
+{"time": "2026-11-13T14:05+09:00", "window": null, "dry_run": true, "stopped": [], "server_state": "running", "dag_check": "idle: running/queued dag runs = 0", "db_state": "available", "decision": "dry-run: would stop EC2 ['i-00d51057503809599'] and RDS"}

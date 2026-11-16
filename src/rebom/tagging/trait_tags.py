@@ -41,6 +41,21 @@ test 300 에서 늠름 태그 정확도 49%(51/100). 답과 다른 늠름 49개 
 고개를 숙이거나 위에서 찍혀 주둥이가 길어 보이는 착시(#142)도 문구로 막는다.
 근거(evidence)에도 얼굴 부위만 쓰게 한다.
 
+v7 (2026-11-16, 사용자 결정): 얼굴은 모델이 귀염/늠름을 직접 고르지 않는다. v6 새 사진 100장에서
+같은 사진의 1·2회차 답이 귀염↔늠름으로 뒤집히고 근거 문장도 그 답에 맞춰 정반대로 쓰였다(예: '주둥이가 길고
+갸름' ↔ '주둥이가 짧고 둥긂'). 근거가 판단 이유가 아니라 답에 맞춘 설명이라 근거로 오류를 가릴 수 없었다.
+그래서 얼굴은 특징 칸(어린 강아지 여부, 주둥이, 얼굴선, 눈)을 고르게 하고, 태그는 코드가 정한다
+(face_from_features: 어린 강아지면 귀염, 늠름 쪽 특징 2개 이상이면 늠름, 귀염 쪽 2개 이상이면 귀염, 아니면 중간,
+안 보임 2개 이상이면 판단 어려움). 털은 v5 그대로. v6 코드 백업: data/eval/photo_tags/_trait_tags_v6_backup.py.
+귀·표정 칸(ears, expression)도 받되 태그 규칙에는 넣지 않고 기록만 한다(2026-11-16 lemin 제안: 요소를 따로 뽑아 애매한 요소를 버리고 합치는 방식 평가용).
+
+v8 (2026-11-16, 사용자 결정): 얼굴 요소 네 가지를 각각 태그로 붙이고, 인상도 요소를 합쳐 만든다.
+귀(늘어짐/반쯤 섬/섬), 표정(순함/보통/당당함), 주둥이(짧음/김), 눈매(둥글함/날카로움). 얼굴선 칸은 뺀다.
+v7 100장에서 주둥이는 '보통'이 70%였고 칸별 1·2회차 일치는 귀 97%, 주둥이 94%, 표정 89%, 눈 77%였다.
+주둥이·눈매는 애매하면 '애매함'(태그 없음). 화면 요소 태그는 element_tags, 2회 일치 칸만 쓰려면 agreed_features.
+인상 = 애매한 요소(가운데 보기·안 보임·회차 간 불일치)를 버리고 남은 요소의 귀염 쪽·늠름 쪽 수 차이가 2 이상인 쪽.
+v7 코드 백업: data/eval/photo_tags/_trait_tags_v7_backup.py.
+
 공고의 품종(kindNm)은 입력에 넣지 않는다. 질문지를 바꾸면 PROMPT_VERSION 을 올리고 다시 돌린다.
 """
 from __future__ import annotations
@@ -51,7 +66,7 @@ from dataclasses import dataclass
 from statistics import mean
 from typing import Sequence
 
-PROMPT_VERSION = "trait-vision-v6"
+PROMPT_VERSION = "trait-vision-v8"
 UNSURE = "판단 어려움"
 NO_TAG = "애매함"  # 털: 태그를 붙이지 않는 가운데 보기
 
@@ -80,6 +95,63 @@ TAG_LABELS: dict[str, dict[str, str]] = {
     "fur": {"복슬복슬": "복슬복슬", "매끈": "짧은 털"},
     "face": {"귀염": "귀염", "늠름": "늠름"},
 }
+
+
+HIDDEN = "안 보임"
+AMBIG = "애매함"
+# 얼굴 요소 칸 (v8). 보기 순서 = (귀염 쪽, 가운데, 늠름 쪽, 안 보임). puppy 만 예/아니오/모름.
+FACE_FEATURES: dict[str, tuple[str, ...]] = {
+    "puppy": ("예", "아니오", "모름"),
+    "ears": ("늘어짐", "반쯤 섬", "섬", HIDDEN),
+    "expression": ("순함", "보통", "당당함", HIDDEN),
+    "muzzle": ("짧음", AMBIG, "김", HIDDEN),
+    "eyes": ("둥글함", AMBIG, "날카로움", HIDDEN),
+}
+FEATURE_NAMES = {"puppy": "어린 강아지", "ears": "귀", "expression": "표정", "muzzle": "주둥이", "eyes": "눈매"}
+ELEMENT_KEYS = ("ears", "expression", "muzzle", "eyes")
+# 화면에 보일 요소 태그. 가운데 보기(보통·애매함)와 안 보임은 태그 없음. 귀 '반쯤 섬'은 태그로 보이되 인상 합치기에는 안 씀.
+ELEMENT_TAGS: dict[str, tuple[str, ...]] = {
+    "ears": ("늘어짐", "반쯤 섬", "섬"),
+    "expression": ("순함", "당당함"),
+    "muzzle": ("짧음", "김"),
+    "eyes": ("둥글함", "날카로움"),
+}
+IMPRESSION_MARGIN = 2  # 귀염 쪽 요소 수와 늠름 쪽 요소 수의 차이가 이만큼 이상일 때만 인상 태그
+
+
+def element_tags(f: dict[str, str]) -> dict[str, str]:
+    """요소 칸 → 화면에 보일 요소 태그 (태그 없는 요소는 빠짐)."""
+    return {k: f[k] for k in ELEMENT_KEYS if f.get(k) in ELEMENT_TAGS[k]}
+
+
+def agreed_features(runs: Sequence[dict[str, str]]) -> dict[str, str]:
+    """여러 실행에서 모두 같은 값이 나온 칸만 남긴다 (회차마다 다른 칸은 애매한 요소로 버림)."""
+    if not runs:
+        return {}
+    return {k: runs[0][k] for k in FACE_FEATURES if all(r.get(k) == runs[0].get(k) for r in runs)}
+
+
+def face_from_features(f: dict[str, str]) -> str:
+    """요소 칸 → 얼굴 인상(귀염/중간/늠름/판단 어려움). 가운데 보기·안 보임·빠진 칸은 버리고 남은 요소를 합친다.
+
+    어린 강아지면 귀염. 아니면 귀염 쪽(짧음·둥글함·늘어짐·순함)과 늠름 쪽(김·날카로움·섬·당당함) 수의
+    차이가 IMPRESSION_MARGIN 이상인 쪽. 요소가 3개 이상 안 보이면 판단 어려움, 나머지는 중간(태그 없음).
+    """
+    if sum(f.get(k) == HIDDEN for k in ELEMENT_KEYS) >= 3:
+        return UNSURE
+    if f.get("puppy") == "예":
+        return "귀염"
+    cute = sum(f.get(k) == FACE_FEATURES[k][0] for k in ELEMENT_KEYS)
+    brave = sum(f.get(k) == FACE_FEATURES[k][2] for k in ELEMENT_KEYS)
+    if cute - brave >= IMPRESSION_MARGIN:
+        return "귀염"
+    if brave - cute >= IMPRESSION_MARGIN:
+        return "늠름"
+    return "중간"
+
+
+def features_text(f: dict[str, str]) -> str:
+    return " · ".join(f"{FEATURE_NAMES[k]} {f.get(k, '')}" for k in FACE_FEATURES)
 
 
 def display_tag(ax: str, value: str) -> str | None:
@@ -120,25 +192,36 @@ USER_PROMPT = f"""사진에서 가장 크게, 가운데에 보이는 개 한 마
 [털 인상]
 {_lines("fur")}
 
-[얼굴 인상]
-{_lines("face")}
-얼굴 인상은 머리(얼굴)만 보세요. 몸 크기, 체형, 다리, 나이는 보지 마세요.
-다 큰 개라는 것만으로 늠름이 아닙니다. 다 큰 개라도 얼굴이 둥글거나 뭉툭하면 귀염이나 중간입니다.
-고개를 숙이거나 위에서 찍히면 주둥이가 실제보다 길어 보입니다. 주둥이 길이는 얼굴 전체와 비교해서 보세요.
-눈빛, 표정, 시선, 자세(고개를 숙이거나 올려다봄), 귀가 선 것은 찍힌 순간의 상태라 보지 마세요.
-눈이 순해 보여도 얼굴 자체가 날렵하면 늠름입니다.
-겁먹음·졸림 같은 순간 표정보다 생김새를 기준으로 보세요.
+[얼굴 요소] 각 칸에서 하나씩 고르세요. 얼굴 인상(귀염/늠름)은 고르지 않습니다.
+- puppy (어린 강아지인가): 예 = 생후 몇 달 된 강아지(몸에 비해 머리·발이 크고 아기 같은 비율) / 아니오 = 다 자란 개 / 모름
+- ears (귀 모양): 늘어짐 = 귀가 아래로 늘어짐 / 반쯤 섬 = 귀가 서다가 끝이 접힘 / 섬 = 귀가 곧게 섬 / 안 보임
+- expression (이 사진의 표정): 순함 = 눈빛이 순하고 부드럽거나 입을 벌리고 웃는 듯함 / 보통 / 당당함 = 눈빛이 또렷하고 곧게 바라봄 / 안 보임
+- muzzle (주둥이 길이, 머리 전체와 비교): 짧음 = 짧고 뭉툭함 / 애매함 / 김 = 길고 곧게 뻗음 / 안 보임
+- eyes (눈매, 눈의 생김새): 둥글함 = 크고 동그란 눈 / 애매함 / 날카로움 = 가늘고 눈꼬리가 길거나 올라감 / 안 보임
+얼굴 요소는 머리(얼굴)만 보세요. 몸 크기, 체형, 다리, 나이는 보지 마세요.
+다 큰 개라는 것만으로 주둥이가 길거나 눈매가 날카로운 것이 아닙니다. 각 칸은 실제로 보이는 모양만 고르세요.
+고개를 숙이거나 위에서 찍히면 주둥이가 실제보다 길어 보입니다. 주둥이 길이는 머리 전체와 비교해서 보세요.
+눈매 칸은 눈의 모양만 보고, 눈빛(순한지 또렷한지)은 expression 칸에서만 고르세요.
+각 칸은 따로 판단하세요. 다른 칸의 답에 맞추려고 고르지 마세요. 확실하지 않으면 '애매함'이나 '보통'을 고르세요.
 
 털 인상은 확실할 때만 복슬복슬이나 매끈을 고르고, 조금이라도 애매하면 '애매함'을 고르세요.
 
-항목마다 evidence 에 사진에서 실제로 본 것을 한국어 한 문장으로 먼저 쓰고, value 에 보기 하나를 그대로 고르세요.
-얼굴 인상의 evidence 에는 얼굴 부위(주둥이, 얼굴선, 눈)만 쓰고, 나이나 몸 이야기는 쓰지 마세요."""
+털 인상은 evidence 에 사진에서 실제로 본 것을 한국어 한 문장으로 먼저 쓰고, value 에 보기 하나를 그대로 고르세요."""
 
 
 def response_schema() -> dict:
     """구조화 출력용 JSON 스키마. 근거를 먼저 쓰게 evidence 를 value 앞에 둔다."""
     props = {}
     for ax in AXES:
+        if ax == "face":
+            props[ax] = {
+                "type": "object",
+                "properties": {k: {"type": "string", "enum": list(v), "description": FEATURE_NAMES[k]}
+                               for k, v in FACE_FEATURES.items()},
+                "required": list(FACE_FEATURES),
+                "propertyOrdering": list(FACE_FEATURES),
+            }
+            continue
         props[ax] = {
             "type": "object",
             "properties": {
@@ -155,6 +238,7 @@ def response_schema() -> dict:
 class TraitAnswer:
     value: str
     evidence: str
+    features: dict | None = None
 
 
 def parse_answer(text: str) -> dict[str, TraitAnswer]:
@@ -163,6 +247,15 @@ def parse_answer(text: str) -> dict[str, TraitAnswer]:
     out = {}
     for ax in AXES:
         item = data.get(ax) or {}
+        if ax == "face":
+            feats = {}
+            for k, opts in FACE_FEATURES.items():
+                v = (item.get(k) or "").strip()
+                if v not in opts:
+                    raise ValueError(f"face.{k}: 보기에 없는 값 {v!r}")
+                feats[k] = v
+            out[ax] = TraitAnswer(value=face_from_features(feats), evidence=features_text(feats), features=feats)
+            continue
         value = (item.get("value") or "").strip()
         if value not in OPTIONS[ax]:
             raise ValueError(f"{ax}: 보기에 없는 값 {value!r}")

@@ -77,7 +77,8 @@ def tag_one(client, model: str, config, row: dict, run: int, max_retries: int = 
         u = resp.usage_metadata
         return {
             **rec,
-            "tags": {k: {"value": a.value, "evidence": a.evidence} for k, a in answers.items()},
+            "tags": {k: {"value": a.value, "evidence": a.evidence, **({"features": a.features} if a.features else {})}
+                     for k, a in answers.items()},
             "usage": {"prompt": u.prompt_token_count or 0, "output": u.candidates_token_count or 0,
                       "thoughts": u.thoughts_token_count or 0},
             "latency_sec": round(latency, 3),
