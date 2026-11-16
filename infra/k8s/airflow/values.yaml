@@ -132,3 +132,8 @@ config:
 env:
   - name: AIRFLOW_CONN_AWS_DEFAULT
     value: "aws://?region_name=ap-northeast-2"
+  # kubernetes_default 연결: KubernetesPodOperator 의 XCom 사이드카 이미지를 Docker Hub 대신 ECR Public 으로, 다이제스트까지 고정한다.
+  # provider 10.17.1 은 사이드카 이미지를 이 연결의 extra(xcom_sidecar_container_image)로만 받는다(DAG 인자로는 못 바꿈).
+  # rescue_ingest 의 rescue_incremental(do_xcom_push=True)이 쓴다. 파드 연결은 DAG 의 in_cluster=True 를 따른다.
+  - name: AIRFLOW_CONN_KUBERNETES_DEFAULT
+    value: '{"conn_type": "kubernetes", "extra": {"xcom_sidecar_container_image": "public.ecr.aws/docker/library/alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11"}}'
