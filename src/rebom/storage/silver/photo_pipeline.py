@@ -43,6 +43,8 @@ def process_photo_manifest(
     expected_location,
     journal_prefix,
     apply=False,
+    history_table_name=None,
+    expected_history_location=None,
 ):
     if not (
         manifest_key.startswith("bronze/rescue/image_runs/")
@@ -78,6 +80,22 @@ def process_photo_manifest(
     journal_key = f"{journal_prefix.rstrip('/')}/{run_id}.json"
     existing = load_photo_journal_s3(s3, bucket, journal_key)
 
+    if existing is None and history_table_name is not None:
+        return _process_photo_manifest_versioned(
+            s3=s3,
+            catalog=catalog,
+            bucket=bucket,
+            manifest=manifest,
+            manifest_key=manifest_key,
+            table_name=table_name,
+            expected_location=expected_location,
+            history_table_name=history_table_name,
+            expected_history_location=expected_history_location,
+            journal_key=journal_key,
+            decision=decision,
+            apply=apply,
+        )
+
     if existing is not None:
         expected_status = (
             "APPLIED"
@@ -112,6 +130,76 @@ def process_photo_manifest(
         current_rows = _index_rows(
             table.scan().to_arrow().to_pylist()
         )
+
+        if history_table_name is not None:
+            if not expected_history_location:
+                raise ValueError("사진 이력 테이블 위치 누락")
+
+            from rebom.storage.silver.photo_version_history import (
+                select_current_photo_version,
+            )
+
+            history_table = catalog.load_table(history_table_name)
+
+            if (
+                history_table.location().rstrip("/")
+                != expected_history_location.rstrip("/")
+            ):
+                raise RuntimeError("사진 이력 테이블 저장 위치 불일치")
+
+            history_rows = history_table.scan().to_arrow().to_pylist()
+            latest_rows = select_current_photo_version(history_rows)
+
+            for photo in manifest["rows"]:
+                key = (photo["desertion_no"], photo["image_slot"])
+                current = current_rows.get(key)
+                latest = latest_rows.get(key)
+
+                if current is None:
+                    raise RuntimeError(
+                        f"Journal 존재하지만 Iceberg 행 누락: {key}"
+                    )
+
+                if latest is None:
+                    raise RuntimeError(
+                        f"Journal 사진 버전 이력 누락: {key}"
+                    )
+
+                for field in PHOTO_FIELDS:
+                    if current.get(field) != latest.get(field):
+                        raise RuntimeError(
+                            f"현재 사진과 최신 버전 이력 불일치: {key}, {field}"
+                        )
+
+                matched = [
+                    row
+                    for row in history_rows
+                    if (
+                        row.get("desertion_no") == key[0]
+                        and row.get("image_slot") == key[1]
+                        and row.get("status") == "stored"
+                        and all(
+                            row.get(field) == photo.get(field)
+                            for field in PHOTO_FIELDS
+                        )
+                        and (
+                            photo.get("version") is None
+                            or row.get("version") == photo["version"]
+                        )
+                    )
+                ]
+
+                if not matched:
+                    raise RuntimeError(
+                        f"Journal 사진 버전 이력 불일치: {key}"
+                    )
+
+            return {
+                "run_id": run_id,
+                "result": "ALREADY_PROCESSED",
+                "applied_count": existing["applied_count"],
+                "iceberg_verified": True,
+            }
 
         for photo in manifest["rows"]:
             key = (photo["desertion_no"], photo["image_slot"])
@@ -240,5 +328,137 @@ def process_photo_manifest(
 
     result["result"] = "APPLIED_AND_VERIFIED"
     result["journal_result"] = journal_result
+
+    return result
+
+
+def _process_photo_manifest_versioned(
+    s3,
+    catalog,
+    bucket,
+    manifest,
+    manifest_key,
+    table_name,
+    expected_location,
+    history_table_name,
+    expected_history_location,
+    journal_key,
+    decision,
+    apply=False,
+):
+    """버전 이력과 현재 사진을 순서대로 반영한다."""
+    from rebom.storage.silver.photo_version_history import (
+        apply_photo_current_updates,
+        apply_photo_version_history,
+        build_photo_version_history_rows,
+        plan_photo_history_inserts,
+    )
+
+    if not expected_history_location:
+        raise ValueError("사진 이력 테이블 위치 누락")
+
+    history_rows = build_photo_version_history_rows(manifest)
+
+    for photo in manifest["rows"]:
+        key = (photo["desertion_no"], photo["image_slot"])
+
+        head = s3.head_object(
+            Bucket=bucket,
+            Key=photo["original_s3_key"],
+        )
+
+        if (
+            head.get("Metadata", {}).get("sha256", "").lower()
+            != photo["sha256"]
+        ):
+            raise RuntimeError(f"사진 해시 메타데이터 불일치: {key}")
+
+    history_plan = apply_photo_version_history(
+        catalog,
+        history_table_name,
+        history_rows,
+        expected_history_location,
+        apply=False,
+    )
+
+    existing_history = (
+        catalog.load_table(history_table_name)
+        .scan()
+        .to_arrow()
+        .to_pylist()
+    )
+
+    pending = plan_photo_history_inserts(
+        history_rows,
+        existing_history,
+    )["insert_rows"]
+
+    projected_history = existing_history + pending
+
+    current_plan = apply_photo_current_updates(
+        catalog,
+        table_name,
+        projected_history,
+        expected_location,
+        apply=False,
+    )
+
+    result = {
+        "run_id": manifest["run_id"],
+        "status": manifest["status"],
+        "decision": decision["decision"],
+        "manifest_files": len(manifest["rows"]),
+        "failed_count": decision["failed_count"],
+        "history_insert_count": history_plan["insert_count"],
+        "changed_rows": current_plan["changed_count"],
+    }
+
+    if not apply:
+        result["result"] = "DRY_RUN_PASS"
+        return result
+
+    history_write = apply_photo_version_history(
+        catalog,
+        history_table_name,
+        history_rows,
+        expected_history_location,
+        apply=True,
+    )
+
+    stored_history = (
+        catalog.load_table(history_table_name)
+        .scan()
+        .to_arrow()
+        .to_pylist()
+    )
+
+    current_write = apply_photo_current_updates(
+        catalog,
+        table_name,
+        stored_history,
+        expected_location,
+        apply=True,
+    )
+
+    journal = make_photo_journal(
+        run_id=manifest["run_id"],
+        manifest_key=manifest_key,
+        manifest_status=manifest["status"],
+        applied_count=len(manifest["rows"]),
+        needs_review=decision["needs_review"],
+        failed_count=decision["failed_count"],
+    )
+
+    journal_result = save_photo_journal_s3(
+        s3,
+        bucket,
+        journal_key,
+        journal,
+    )
+
+    result["history_inserted"] = history_write["rows_inserted"]
+    result["current_changed"] = current_write["changed_count"]
+    result["journal_result"] = journal_result
+    result["result"] = "APPLIED_AND_VERIFIED"
 
     return result

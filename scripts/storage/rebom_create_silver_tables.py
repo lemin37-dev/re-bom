@@ -77,6 +77,22 @@ image_fields = [
     ("sha256", S),
 ]
 
+image_version_history_fields = [
+    ("desertion_no", S),
+    ("image_slot", I),
+    ("version", I),
+    ("replaces", I),
+    ("first_seen_at", S),
+    ("source_url", S),
+    ("original_s3_key", S),
+    ("serving_s3_key", S),
+    ("thumb_s3_key", S),
+    ("sha256", S),
+    ("status", S),
+    ("failure_reason", S),
+    ("run_id", S),
+]
+
 shelter_fields = [
     ("care_reg_no", S),
     ("care_name", S),
@@ -99,6 +115,7 @@ history_fields = [
 schemas = {
     "silver_animal_notice": notice_fields,
     "silver_animal_image": image_fields,
+    "silver_animal_image_version_history": image_version_history_fields,
     "silver_shelter": shelter_fields,
     "silver_animal_status_history": history_fields,
 }
