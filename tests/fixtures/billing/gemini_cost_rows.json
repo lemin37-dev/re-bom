@@ -1,0 +1,8 @@
+[
+  {"usage_date": "2026-11-15", "project_id": "rebom-sample", "sku": "Gemini 3.1 Flash Lite Input Text Tokens", "usage_amount": 2500000, "pricing_unit": "count", "cost": 350.0, "credits": 0, "currency": "KRW"},
+  {"usage_date": "2026-11-15", "project_id": "rebom-sample", "sku": "Gemini 3.1 Flash Lite Output Text Tokens", "usage_amount": 300000, "pricing_unit": "count", "cost": 160.0, "credits": 0, "currency": "KRW"},
+  {"usage_date": "2026-11-16", "project_id": "rebom-sample", "sku": "Gemini 3.1 Flash Lite Input Image Tokens", "usage_amount": 1800000, "pricing_unit": "count", "cost": 250.0, "credits": -50.0, "currency": "KRW"},
+  {"usage_date": "2026-11-16", "project_id": "rebom-sample", "sku": "Gemini Embedding 2 Input Text Tokens", "usage_amount": 900000, "pricing_unit": "count", "cost": 260.0, "credits": 0, "currency": "KRW"},
+  {"usage_date": "2026-11-16", "project_id": "rebom-sample", "sku": "Gemini 3.5 Flash Cached Input Tokens", "usage_amount": 100000, "pricing_unit": "count", "cost": 12.0, "credits": 0, "currency": "KRW"},
+  {"usage_date": "2026-11-16", "project_id": "rebom-sample", "sku": "Some Unknown SKU", "usage_amount": 1, "pricing_unit": "count", "cost": 0.0, "currency": "KRW"}
+]
