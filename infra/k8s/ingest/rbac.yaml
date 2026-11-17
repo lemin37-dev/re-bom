@@ -1,4 +1,4 @@
-# Airflow 스케줄러(LocalExecutor 라 태스크도 여기서 돈다)가 rebom-ingest 에 수집 파드를 만들고, 로그를 읽고, 지운다.
+# Airflow 스케줄러(LocalExecutor 라 태스크도 여기서 돈다)가 rebom-ingest 에 수집 파드를 만들고, 로그를 읽고, XCom 을 꺼내고, 지운다.
 # 다른 네임스페이스와 Secret 내용에는 권한을 주지 않는다.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -11,6 +11,11 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get", "list"]
+  # XCom: 수집 task(do_xcom_push=True)가 끝나면 사이드카에 exec 로 /airflow/xcom/return.json 을 읽고 사이드카를 끈다.
+  # exec 는 websocket 연결이라 create, 예전 방식 호환으로 get 도 둔다.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list", "watch"]
