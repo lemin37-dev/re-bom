@@ -471,3 +471,102 @@ def test_photo_current_recovery_rejects_unknown_hash():
 
     with pytest.raises(RuntimeError, match="현재 사진과 저장 이력 불일치"):
         plan_photo_current_updates(current, history)
+
+
+def test_photo_current_empty_slot_fills_v1_stored():
+    from rebom.storage.silver.photo_version_history import plan_photo_current_updates
+
+    current = [{
+        "desertion_no": "TEST-EMPTY-001",
+        "image_slot": 1,
+        "original_s3_key": None,
+        "serving_s3_key": None,
+        "thumb_s3_key": None,
+        "sha256": None,
+    }]
+
+    history = [{
+        "desertion_no": "TEST-EMPTY-001",
+        "image_slot": 1,
+        "version": 1,
+        "status": "stored",
+        "original_s3_key": "bronze/v1.jpg",
+        "serving_s3_key": "images/v1.webp",
+        "thumb_s3_key": "images/v1_thumb.webp",
+        "sha256": "a" * 64,
+    }]
+
+    result = plan_photo_current_updates(current, history)
+
+    assert result["changed_count"] == 1
+    assert result["updates"][0]["sha256"] == "a" * 64
+    assert result["updates"][0]["serving_s3_key"] == "images/v1.webp"
+
+
+def test_photo_current_empty_slot_skips_failed_and_fills_v2():
+    from rebom.storage.silver.photo_version_history import plan_photo_current_updates
+
+    current = [{
+        "desertion_no": "TEST-EMPTY-002",
+        "image_slot": 1,
+        "original_s3_key": None,
+        "serving_s3_key": None,
+        "thumb_s3_key": None,
+        "sha256": None,
+    }]
+
+    history = [
+        {
+            "desertion_no": "TEST-EMPTY-002",
+            "image_slot": 1,
+            "version": 1,
+            "status": "failed",
+            "original_s3_key": None,
+            "serving_s3_key": None,
+            "thumb_s3_key": None,
+            "sha256": None,
+        },
+        {
+            "desertion_no": "TEST-EMPTY-002",
+            "image_slot": 1,
+            "version": 2,
+            "status": "stored",
+            "original_s3_key": "bronze/v2.jpg",
+            "serving_s3_key": "images/v2.webp",
+            "thumb_s3_key": "images/v2_thumb.webp",
+            "sha256": "b" * 64,
+        },
+    ]
+
+    result = plan_photo_current_updates(current, history)
+
+    assert result["changed_count"] == 1
+    assert result["updates"][0]["sha256"] == "b" * 64
+    assert result["updates"][0]["serving_s3_key"] == "images/v2.webp"
+
+
+def test_photo_current_partial_none_still_rejected():
+    from rebom.storage.silver.photo_version_history import plan_photo_current_updates
+
+    current = [{
+        "desertion_no": "TEST-PARTIAL-001",
+        "image_slot": 1,
+        "original_s3_key": None,
+        "serving_s3_key": "images/unknown.webp",
+        "thumb_s3_key": None,
+        "sha256": None,
+    }]
+
+    history = [{
+        "desertion_no": "TEST-PARTIAL-001",
+        "image_slot": 1,
+        "version": 1,
+        "status": "stored",
+        "original_s3_key": "bronze/v1.jpg",
+        "serving_s3_key": "images/v1.webp",
+        "thumb_s3_key": "images/v1_thumb.webp",
+        "sha256": "a" * 64,
+    }]
+
+    with pytest.raises(RuntimeError, match="현재 사진과 저장 이력 불일치"):
+        plan_photo_current_updates(current, history)

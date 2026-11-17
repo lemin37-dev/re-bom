@@ -323,7 +323,9 @@ def plan_photo_current_updates(current_rows, history_rows):
             )
         ]
 
-        if not known_versions:
+        is_empty_slot = all(before.get(field) is None for field in fields)
+
+        if not is_empty_slot and not known_versions:
             raise RuntimeError(f"현재 사진과 저장 이력 불일치: {key}")
 
         merged = before.copy()
