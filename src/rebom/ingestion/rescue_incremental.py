@@ -12,6 +12,8 @@
 결과 (bronze/rescue/raw/dt=<실행일>/run_id=<id>/):
   updated / list_notice / list_protect .jsonl.gz, manifest.json (partitions: 구간별 총건수·받은 건수·완전 여부)
 상태 (state/rescue_state.json): 마지막 성공 enupd, 마지막 run_id. (11/3 까지 이 파일에 있던 보호중·종료 목록은 Silver 단계가 따로 보관한다.)
+XCom (/airflow/xcom/return.json): 상태까지 갱신한 뒤 {"run_id", "dt", "manifest"} 를 쓴다. Airflow(KubernetesPodOperator
+  do_xcom_push=True)가 사이드카로 읽어 다음 task(이벤트·사진·Silver)에 같은 run_id 를 넘긴다. 폴더가 없으면(로컬 실행) 쓰지 않는다.
 저장 위치: 환경변수 REBOM_S3_BUCKET 이 있으면 S3, 없으면 로컬 data/ (rebom.ingestion.storage).
 올리는 순서: 종류별 파일 -> manifest.json(마지막, 있으면 그 실행이 끝까지 올라간 것) -> 상태 파일.
   업로드가 하나라도 실패하면 상태를 갱신하지 않고 끝낸다. 그래야 다음 실행이 그 구간을 건너뛰지 않는다.
@@ -48,6 +50,7 @@ ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT / "data"  # 로컬 저장일 때 키가 이 아래에 그대로 놓인다
 RAW_PREFIX = "bronze/rescue/raw"
 STATE_KEY = "state/rescue_state.json"
+XCOM_FILE = Path("/airflow/xcom/return.json")  # KubernetesPodOperator 의 XCom 사이드카가 읽는 자리
 KST = timezone(timedelta(hours=9))
 
 HAPPEN_START = date(2008, 1, 1)  # API 에 있는 가장 오래된 공고
@@ -248,6 +251,15 @@ def load_state(store) -> dict:
     return json.loads(data.decode("utf-8")) if data else {}
 
 
+def write_xcom(result: dict, path: Path | None = None) -> bool:
+    """Airflow 파드 안이면(XCom 폴더가 있으면) 결과를 return.json 으로 남긴다. 로컬 실행에서는 아무것도 하지 않는다."""
+    path = path or XCOM_FILE
+    if not path.parent.is_dir():
+        return False
+    path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+    return True
+
+
 def save_state(store, state: dict) -> None:
     store.put_bytes(STATE_KEY, json.dumps(state, ensure_ascii=False).encode("utf-8"), overwrite=True)
 
@@ -323,6 +335,9 @@ def main() -> None:
     # 업로드가 모두 끝난 뒤에만 상태를 갱신한다. 다른 키(Silver 단계가 이어받기 전의 보호중·종료 목록)는 그대로 둔다.
     save_state(store, {**state, "last_enupd": ymd(today), "last_run_id": run_id})
     log(f"상태 갱신: last_enupd={ymd(today)}")
+    # 상태까지 끝난 실행만 다음 task 에 넘긴다. 업로드 실패·중단(aborted)이면 여기까지 오지 않아 XCom 이 없고 task 가 실패한다.
+    if write_xcom({"run_id": run_id, "dt": f"{today:%Y-%m-%d}", "manifest": f"{run_prefix}/manifest.json"}):
+        log(f"XCom: run_id={run_id}")
 
 
 if __name__ == "__main__":
