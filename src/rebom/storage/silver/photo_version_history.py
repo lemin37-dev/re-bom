@@ -307,7 +307,13 @@ def plan_photo_current_updates(current_rows, history_rows):
 
         before = current[key]
 
-        if all(before.get(field) == selected.get(field) for field in fields):
+        if (
+            all(before.get(field) == selected.get(field) for field in fields)
+            and (
+                "source_url" not in before
+                or before.get("source_url") == selected.get("source_url")
+            )
+        ):
             continue
 
         known_versions = [
@@ -332,6 +338,9 @@ def plan_photo_current_updates(current_rows, history_rows):
 
         for field in fields:
             merged[field] = selected.get(field)
+
+        if "source_url" in before:
+            merged["source_url"] = selected.get("source_url")
 
         updates.append(merged)
 

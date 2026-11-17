@@ -19,8 +19,7 @@ def test_photo_url_change_current_behavior():
         }
     ]
 
-    with pytest.raises(ValueError, match="IMAGE_URL_CONFLICT"):
-        prepare_safe_image_inserts(incoming, existing)
+    assert prepare_safe_image_inserts(incoming, existing) == []
 
 
 
@@ -570,3 +569,53 @@ def test_photo_current_partial_none_still_rejected():
 
     with pytest.raises(RuntimeError, match="현재 사진과 저장 이력 불일치"):
         plan_photo_current_updates(current, history)
+
+
+def test_photo_version_replacement_updates_url_and_is_idempotent():
+    from rebom.storage.silver.photo_version_history import (
+        plan_photo_current_updates,
+    )
+
+    current = {
+        "desertion_no": "TEST-001",
+        "image_slot": 1,
+        "source_url": "https://example.com/v1.jpg",
+        "original_s3_key": "bronze/v1.jpg",
+        "serving_s3_key": "images/v1.webp",
+        "thumb_s3_key": "images/v1_thumb.webp",
+        "sha256": "a" * 64,
+    }
+
+    v1 = {
+        **current,
+        "version": 1,
+        "status": "stored",
+    }
+
+    v2 = {
+        **current,
+        "version": 2,
+        "status": "stored",
+        "source_url": "https://example.com/v2.jpg",
+        "original_s3_key": "bronze/v2.jpg",
+        "serving_s3_key": "images/v2.webp",
+        "thumb_s3_key": "images/v2_thumb.webp",
+        "sha256": "b" * 64,
+    }
+
+    first = plan_photo_current_updates([current], [v1, v2])
+
+    assert first["changed_count"] == 1
+
+    updated = first["updates"][0]
+
+    assert updated["source_url"] == v2["source_url"]
+    assert updated["original_s3_key"] == v2["original_s3_key"]
+    assert updated["serving_s3_key"] == v2["serving_s3_key"]
+    assert updated["thumb_s3_key"] == v2["thumb_s3_key"]
+    assert updated["sha256"] == v2["sha256"]
+
+    second = plan_photo_current_updates([updated], [v1, v2])
+
+    assert second["changed_count"] == 0
+    assert second["updates"] == []

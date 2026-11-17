@@ -1,4 +1,4 @@
-﻿"""A팀 사진 Manifest의 in_progress 정체 여부를 판단한다."""
+"""A팀 사진 Manifest의 in_progress 정체 여부를 판단한다."""
 
 import json
 import os
@@ -31,7 +31,7 @@ def evaluate_photo_staleness(
 ):
     if threshold_seconds is None:
         threshold_seconds = int(
-            os.getenv("REBOM_PHOTO_STALE_SECONDS", "600")
+            os.getenv("REBOM_PHOTO_STALE_SECONDS", "3600")
         )
 
     if threshold_seconds <= 0:

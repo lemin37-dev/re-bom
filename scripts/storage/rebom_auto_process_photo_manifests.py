@@ -52,7 +52,7 @@ def get_config():
     ).rstrip("/")
 
     stale_seconds = int(
-        os.getenv("REBOM_PHOTO_STALE_SECONDS", "600")
+        os.getenv("REBOM_PHOTO_STALE_SECONDS", "3600")
     )
 
     return {
