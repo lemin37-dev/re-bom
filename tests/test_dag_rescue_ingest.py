@@ -113,3 +113,43 @@ def test_dag_imports_with_airflow():
     assert dag is not None
     assert dag.max_active_runs == 1
     assert dag.catchup is False
+
+
+def _silver_task_kwargs():
+    for node in ast.walk(_tree()):
+        if not isinstance(node, ast.Call):
+            continue
+        if getattr(node.func, "id", None) != "KubernetesPodOperator":
+            continue
+        kw = {k.arg: k.value for k in node.keywords}
+        if "task_id" in kw and isinstance(kw["task_id"], ast.Constant) and ast.literal_eval(kw["task_id"]) == "silver_dry_run":
+            return kw
+    raise AssertionError("silver_dry_run 태스크를 찾지 못했습니다")
+
+
+def test_silver_receives_bronze_run_id():
+    kw = _silver_task_kwargs()
+    args = _arguments(kw)
+    assert args[args.index("--run-id") + 1] == _constants()["BRONZE_RUN_ID"]
+
+
+def test_silver_uses_storage_image_and_dry_run():
+    kw = _silver_task_kwargs()
+    image = ast.literal_eval(kw["image"])
+    args = _arguments(kw)
+
+    assert image.endswith("/rebom/storage:develop")
+    assert ast.literal_eval(kw["namespace"]) == "rebom-storage"
+    assert ast.literal_eval(kw["service_account_name"]) == "rebom-storage"
+    assert ast.literal_eval(kw["cmds"]) == [
+        "python", "-m", "rebom.storage.silver.run_silver_once"
+    ]
+    assert args[args.index("--environment") + 1] == "test"
+    assert "--apply" not in args
+    assert "--apply-image" not in args
+
+
+def test_silver_runs_after_events():
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert "generate_ingest_events >> silver_dry_run" in src
+    assert "rescue_incremental >> [generate_ingest_events, rescue_photos]" in src
