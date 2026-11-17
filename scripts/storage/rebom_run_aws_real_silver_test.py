@@ -189,7 +189,7 @@ def execute(args):
     record = read_run(run_id, args.journal_dir)
 
     state_s3 = None
-    if args.apply and args.s3_state_bucket:
+    if args.s3_state_bucket:
         state_s3 = boto3.client("s3", region_name="ap-northeast-2")
         if not run_dir.exists():
             restored = restore_snapshot(
