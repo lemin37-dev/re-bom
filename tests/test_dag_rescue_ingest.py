@@ -37,13 +37,43 @@ def _pod_tasks() -> dict[str, dict[str, ast.expr]]:
     return tasks
 
 
+def _constants() -> dict[str, str]:
+    """DAG 파일 맨 위의 문자열 상수 (예: BRONZE_RUN_ID)."""
+    out = {}
+    for node in _tree().body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            out.update({t.id: node.value.value for t in node.targets if isinstance(t, ast.Name)})
+    return out
+
+
+def _arguments(kw: dict[str, ast.expr]) -> list[str]:
+    """arguments 리스트를 값으로 바꾼다. 상수 이름은 그 값으로 바꾼다."""
+    consts = _constants()
+    return [consts[e.id] if isinstance(e, ast.Name) else ast.literal_eval(e) for e in kw["arguments"].elts]
+
+
 def test_photo_task_runs_photos_module_with_limit():
     """사진 task 는 사진 모듈을 상한(--limit)과 함께 부른다. 상한이 없으면 밀린 날 한 번에 오래 돈다."""
     kw = _pod_tasks()["rescue_photos"]
     assert ast.literal_eval(kw["cmds"]) == ["python", "-m", "rebom.ingestion.rescue_photos"]
-    args = ast.literal_eval(kw["arguments"])
+    args = _arguments(kw)
     assert "--limit" in args
     assert int(args[args.index("--limit") + 1]) > 0
+
+
+def test_incremental_pushes_run_id_to_xcom():
+    """수집 task 는 XCom 을 켠다. 수집 모듈이 /airflow/xcom/return.json 에 run_id 를 쓴다."""
+    kw = _pod_tasks()["rescue_incremental"]
+    assert ast.literal_eval(kw["do_xcom_push"]) is True
+
+
+def test_events_and_photos_receive_run_id_from_xcom():
+    """이벤트·사진은 상태 파일의 last_run_id 가 아니라 이 DAG 실행의 수집 run_id(XCom)를 받는다."""
+    template = _constants()["BRONZE_RUN_ID"]
+    assert "xcom_pull(task_ids='rescue_incremental')" in template and "['run_id']" in template
+    for task_id in ("generate_ingest_events", "rescue_photos"):
+        args = _arguments(_pod_tasks()[task_id])
+        assert args[args.index("--run-id") + 1] == template, task_id
 
 
 def test_photo_task_runs_after_incremental():
