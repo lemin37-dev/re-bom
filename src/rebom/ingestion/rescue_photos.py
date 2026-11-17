@@ -6,18 +6,23 @@
   서비스용  images/<desertionNo>/<N>.webp, <N>_thumb.webp            풀 해상도 WebP와 가로 400px 썸네일 (서비스 이미지 서빙 설계, 11/3)
   서비스용은 원본에서 만든 파생물이라 bronze/ 아래에 두지 않는다. 경로는 상수로 모아 두었고, 이민혁·이광훈 님과 맞춘 뒤 바뀔 수 있다.
 
-기록 (state/rescue_photos_state.json): 공고별·칸별로 상태(success, failed, gave_up), 시도 횟수, 실패 사유를 남긴다.
+기록 (state/rescue_photos_state.json): 공고별·칸별로 상태(success, failed, gave_up, pending), 시도 횟수, 실패 사유를 남긴다.
   - 새 사진 = 주소가 있는데 기록이 없는 칸. 첫 실행은 지금 보호중인 공고 전체를 받는다(--limit 으로 나눠 받을 수 있다).
   - 주소가 없는 칸은 기록하지 않는다(8칸이면 기록이 불어나기 때문). 사진이 한 장도 없는 공고만 공고 단위로 no_photos 를 표시한다.
   - failed 는 다음 실행에서 다시 시도하고, MAX_ATTEMPTS 번째 실패면 gave_up 으로 두고 다시 시도하지 않는다.
-  - 이미 받은 공고의 사진이 바뀌거나, 나중에 다른 칸에 사진이 생기는 경우는 다루지 않는다(기록이 없는 칸이 생기면 새 사진으로 받기는 한다).
+  - 사진 교체 (docs/data_contract.md 6절, 11/16 합의): 같은 칸의 주소가 기록과 다르면 새 버전으로 보고 덮어쓰지 않고 새 키로 받는다.
+    version 은 칸 안에서 주소가 처음 나온 순서(1, 2, 3 ...)이고, 같은 주소는 재실행해도 같은 번호다. 새 버전은 발견한 실행에서
+    pending 으로 먼저 기록해 두므로 --limit 으로 이번에 못 받아도 번호와 first_seen_at(최초 발견 시각)이 바뀌지 않는다.
+    새 주소가 404 면 옛 버전은 그대로 두고 새 버전만 실패(사유 replaced_not_found)로 남긴다. 3번 실패하면 그 버전만 gave_up.
+  - 칸 기록은 맨 위에 최신 버전을 두고, 이전 버전은 previous 목록에 둔다. 11/16 이전 기록(previous·version 없음)은 버전 1로 읽는다.
   - 업로드는 일정 개수마다 기록을 저장(checkpoint)한다. 기록에는 올라간 것만 반영되므로 중간에 끊겨도 이어서 받을 수 있다.
 
 인계 (bronze/rescue/image_runs/dt=<실행일>/run_id=<사진 실행 id>/manifest.json): 실행마다 이번에 새로 저장한 사진의 목록(공고 번호, 칸,
-  원본 경로, 확장자, 크기, sha256, 서비스용 경로)과 실패 목록을 남긴다. Silver 가 이것을 읽어 사진 레코드의 위치 칸을 채운다.
+  원본 경로, 확장자, 크기, sha256, 서비스용 경로, source_url, version, replaces, first_seen_at)과 실패 목록을 남긴다. Silver 가 이것을 읽어 사진 레코드의 위치 칸을 채운다.
   증분 수집 manifest 와 달리 "맨 마지막에 한 번"이 아니라 checkpoint 마다 덮어쓴다(status: in_progress -> ok 또는 aborted).
   기록(state)을 저장하기 직전에 항상 manifest 를 먼저 쓰므로, 기록에 success 로 남은 사진은 반드시 어느 manifest 에든 들어 있다.
-  중간에 프로세스가 죽으면 in_progress 인 채로 남는데, 거기 적힌 사진은 실제로 저장된 것이다. 한 칸이 성공하면 한 번만 목록에 오르므로, 정상 흐름에서는 같은 (번호, 칸)이 여러 manifest 에 나오지 않는다.
+  중간에 프로세스가 죽으면 in_progress 인 채로 남는데, 거기 적힌 사진은 실제로 저장된 것이다. 한 버전이 성공하면 한 번만 목록에 오르므로, 정상 흐름에서는 같은 (번호, 칸, 버전)이 여러 manifest 에 나오지 않는다.
+  사진이 교체되면 같은 (번호, 칸)이 다른 버전으로 다시 나온다. Silver 는 칸마다 가장 높은 정상 저장 버전을 현재 사진으로 쓴다.
 
 입력은 증분 수집(rescue_incremental)이 저장한 Bronze 실행의 list_notice, list_protect 이다(공고중 + 보호중 = 지금 보호 중인 공고).
 사진 주소는 http:// 이고 인증키가 필요 없다. 로그에는 건수만 남기고 주소와 키는 남기지 않는다.
@@ -57,7 +62,7 @@ STATE_KEY = "state/rescue_photos_state.json"
 ORIGINAL_PREFIX = "bronze/rescue/images"  # 받은 그대로
 SERVING_PREFIX = "images"  # 서비스용 파생물(WebP, 썸네일). CloudFront /images/* 가 가리키는 곳
 MANIFEST_PREFIX = "bronze/rescue/image_runs"  # 실행별 인계 목록. 사진 폴더(images/<번호>)와 섞이지 않게 이름을 다르게 둔다
-CODE_VERSION = "2026-11-04"
+CODE_VERSION = "2026-11-16"  # 사진 교체(버전) 추가
 LIST_KINDS = ("list_notice", "list_protect")
 SLOTS = tuple(range(1, 9))  # popfile1~8 중 주소가 있는 칸을 모두 받는다 (11/4 결정, 이광훈 님 Silver 도 슬롯 1~8 을 전제)
 MAX_ATTEMPTS = 3  # 같은 칸을 이 횟수까지 시도하고 넘으면 gave_up
@@ -69,7 +74,8 @@ CHECKPOINT_EVERY = 100
 KST = timezone(timedelta(hours=9))
 SAFE_ID = re.compile(r"^[0-9A-Za-z_-]{1,40}$")  # 공고 번호가 경로에 들어가므로 이상한 문자는 걸러낸다
 
-# 실패 사유
+# 실패 사유. REPLACED_NOT_FOUND 는 교체된 새 주소(버전 2 이상)가 404 인 경우다(계약 6절).
+REPLACED_NOT_FOUND = "replaced_not_found"
 NOT_FOUND, TIMEOUT, NETWORK, SERVER_ERROR, HTTP_ERROR, BROKEN, CONVERT, UNSUPPORTED = (
     "not_found", "timeout", "network_error", "server_error", "http_error", "broken_file", "convert_error", "unsupported_format",
 )
@@ -81,12 +87,34 @@ def log(msg: str) -> None:
     print(msg, flush=True)
 
 
-def original_key(no: str, slot: int, ext: str) -> str:
-    return f"{ORIGINAL_PREFIX}/{no}/popfile{slot}.{ext}"
+def version_suffix(version: int) -> str:
+    """버전 1은 붙이지 않는다(백필한 키를 그대로 쓴다). 2부터 _v002 처럼 세 자리로 붙여 이름순이 곧 버전순이 되게 한다."""
+    return "" if version == 1 else f"_v{version:03d}"
 
 
-def serving_key(no: str, slot: int, thumb: bool = False) -> str:
-    return f"{SERVING_PREFIX}/{no}/{slot}{'_thumb' if thumb else ''}.webp"
+def original_key(no: str, slot: int, ext: str, version: int = 1) -> str:
+    return f"{ORIGINAL_PREFIX}/{no}/popfile{slot}{version_suffix(version)}.{ext}"
+
+
+def serving_key(no: str, slot: int, thumb: bool = False, version: int = 1) -> str:
+    return f"{SERVING_PREFIX}/{no}/{slot}{version_suffix(version)}{'_thumb' if thumb else ''}.webp"
+
+
+def slot_versions(rec: dict | None) -> list[dict]:
+    """칸 기록을 버전 목록(오래된 것부터)으로 읽는다. 11/16 이전 기록은 version 이 없으므로 버전 1로 본다."""
+    if not rec:
+        return []
+    latest = {k: v for k, v in rec.items() if k != "previous"}
+    latest.setdefault("version", 1)
+    latest.setdefault("replaces", None)
+    latest.setdefault("first_seen_at", rec.get("stored_at") or rec.get("last_attempt_at"))
+    return [*rec.get("previous", []), latest]
+
+
+def slot_record(versions: list[dict]) -> dict:
+    """버전 목록을 칸 기록으로 쓴다. 맨 위에 최신 버전, 이전 버전은 previous 에 둔다(없으면 previous 를 쓰지 않는다)."""
+    *previous, latest = versions
+    return {**latest, "previous": previous} if previous else dict(latest)
 
 
 # ---------- 내려받기 ----------
@@ -205,10 +233,19 @@ def load_bronze_rows(store, run_id: str) -> dict[str, dict]:
     return rows
 
 
+def work_item(no: str, slot: int, url: str, ver: dict) -> dict:
+    return {
+        "no": no, "slot": slot, "url": url, "attempts": ver.get("attempts", 0),
+        "version": ver["version"], "replaces": ver.get("replaces"), "first_seen_at": ver.get("first_seen_at"),
+    }
+
+
 def plan_work(rows: dict[str, dict], state: dict, now: datetime) -> tuple[list[dict], dict]:
-    """받을 칸 목록과 요약. 사진이 한 장도 없는 공고만 state 에 no_photos 로 표시한다(state 를 고친다). 주소가 없는 칸은 기록하지 않는다."""
+    """받을 칸 목록과 요약. state 를 두 가지만 고친다: 사진이 한 장도 없는 공고의 no_photos 표시, 주소가 바뀐 칸의 새 버전(pending).
+    주소가 없는 칸은 기록하지 않는다."""
     work: list[dict] = []
     summary = Counter()
+    seen_at = now.isoformat(timespec="seconds")
     order = sorted(rows, key=lambda n: (str(rows[n].get("happenDt") or ""), n), reverse=True)  # 최근 접수일 먼저
     for no in order:
         if not SAFE_ID.match(no):
@@ -218,16 +255,31 @@ def plan_work(rows: dict[str, dict], state: dict, now: datetime) -> tuple[list[d
         slots = notice.get("slots", {})
         any_url = False
         for slot in SLOTS:
-            rec = slots.get(str(slot))
+            versions = slot_versions(slots.get(str(slot)))
             url = rows[no].get(f"popfile{slot}")
             url = url.strip() if isinstance(url, str) else ""
             any_url = any_url or bool(url)
-            if rec is None:
+            if not versions:
                 if url:  # 주소가 없는 칸은 기록하지 않는다
-                    work.append({"no": no, "slot": slot, "url": url, "attempts": 0})
+                    work.append(work_item(no, slot, url, {"version": 1, "replaces": None, "first_seen_at": seen_at}))
                     summary["new"] += 1
-            elif rec["status"] == "failed":
-                work.append({"no": no, "slot": slot, "url": url or rec.get("source_url", ""), "attempts": rec["attempts"]})
+                continue
+            latest = versions[-1]
+            if not url:  # 주소가 빠진 칸: 받던 중인 최신 버전만 기록된 주소로 이어서 시도한다
+                if latest["status"] in ("failed", "pending"):
+                    work.append(work_item(no, slot, latest.get("source_url", ""), latest))
+                    summary["retry"] += 1
+                continue
+            match = next((v for v in versions if v.get("source_url") == url), None)
+            if match is None:
+                # 주소가 바뀌었다(사진 교체). 직전 버전을 가리키는 새 버전을 pending 으로 먼저 기록해 번호와 최초 발견 시각을 고정한다.
+                ver = {"version": latest["version"] + 1, "replaces": latest["version"], "first_seen_at": seen_at,
+                       "status": "pending", "attempts": 0, "reason": None, "source_url": url}
+                state["notices"].setdefault(no, {"slots": {}})["slots"][str(slot)] = slot_record([*versions, ver])
+                work.append(work_item(no, slot, url, ver))
+                summary["replaced"] += 1
+            elif match["status"] in ("failed", "pending"):
+                work.append(work_item(no, slot, url, match))
                 summary["retry"] += 1
         if not any_url and not slots and not notice.get("no_photos"):
             state["notices"].setdefault(no, {"slots": {}})["no_photos"] = True  # 사진이 한 장도 없는 공고는 공고 단위로 한 번만 표시
@@ -235,16 +287,30 @@ def plan_work(rows: dict[str, dict], state: dict, now: datetime) -> tuple[list[d
     return work, dict(summary)
 
 
+def record_version(state: dict, no: str, slot: int, rec: dict) -> None:
+    """칸의 버전 목록에서 같은 번호를 바꾸거나(재시도·pending) 새로 붙인다."""
+    slots = state["notices"].setdefault(no, {"slots": {}})["slots"]
+    versions = [v for v in slot_versions(slots.get(str(slot))) if v["version"] != rec["version"]]
+    versions.append(rec)
+    versions.sort(key=lambda v: v["version"])
+    slots[str(slot)] = slot_record(versions)
+
+
 # ---------- 한 칸 처리 ----------
 
 def process_slot(store, fetch, item: dict, now: datetime) -> dict:
     """기록할 내용을 돌려준다. 업로드 실패(UploadError)는 그대로 올려 보낸다."""
     no, slot, url, before = item["no"], item["slot"], item["url"], item["attempts"]
+    version = item.get("version", 1)
     attempts = before + 1
+    # 버전 정보는 처음 정한 값을 그대로 둔다. first_seen_at 은 재시도해도 바꾸지 않는다(계약 6절).
+    ver = {"version": version, "replaces": item.get("replaces"), "first_seen_at": item.get("first_seen_at") or now.isoformat(timespec="seconds")}
 
     def failure(reason: str) -> dict:
         status = "gave_up" if attempts >= MAX_ATTEMPTS else "failed"
-        return {"status": status, "attempts": attempts, "reason": reason, "source_url": url, "last_attempt_at": now.isoformat(timespec="seconds")}
+        if reason == NOT_FOUND and version > 1:
+            reason = REPLACED_NOT_FOUND  # 교체된 새 주소에 파일이 없다. 옛 버전은 그대로 둔다
+        return {"status": status, "attempts": attempts, "reason": reason, "source_url": url, "last_attempt_at": now.isoformat(timespec="seconds"), **ver}
 
     data, reason = fetch(url)
     if reason:
@@ -260,21 +326,31 @@ def process_slot(store, fetch, item: dict, now: datetime) -> dict:
     except Exception:
         return failure(CONVERT)
     # 기록이 이 저장의 기준이므로 같은 키가 이미 있어도(이전 실행이 기록 직전에 끊긴 경우) 덮어써서 다시 맞춘다.
-    store.put_bytes(original_key(no, slot, ext), data, overwrite=True)
-    store.put_bytes(serving_key(no, slot), full, overwrite=True)
-    store.put_bytes(serving_key(no, slot, thumb=True), thumb, overwrite=True)
+    # 버전마다 키가 달라서(_v002 ...) 다른 버전의 사진을 덮어쓰지는 않는다. 같은 키는 같은 주소의 같은 버전이다.
+    store.put_bytes(original_key(no, slot, ext, version), data, overwrite=True)
+    store.put_bytes(serving_key(no, slot, version=version), full, overwrite=True)
+    store.put_bytes(serving_key(no, slot, thumb=True, version=version), thumb, overwrite=True)
     return {
         "status": "success", "attempts": attempts, "reason": None, "ext": ext, "bytes": len(data),
-        "sha256": hashlib.sha256(data).hexdigest(), "source_url": url, "stored_at": now.isoformat(timespec="seconds"),
+        "sha256": hashlib.sha256(data).hexdigest(), "source_url": url, "stored_at": now.isoformat(timespec="seconds"), **ver,
     }
 
 
 def manifest_entry(item: dict, rec: dict) -> dict:
-    no, slot = item["no"], item["slot"]
+    no, slot, version = item["no"], item["slot"], rec["version"]
     return {
-        "desertionNo": no, "slot": slot, "original": original_key(no, slot, rec["ext"]), "ext": rec["ext"],
+        "desertionNo": no, "slot": slot, "original": original_key(no, slot, rec["ext"], version), "ext": rec["ext"],
         "bytes": rec["bytes"], "sha256": rec["sha256"],
-        "serving": {"image": serving_key(no, slot), "thumb": serving_key(no, slot, thumb=True)},
+        "serving": {"image": serving_key(no, slot, version=version), "thumb": serving_key(no, slot, thumb=True, version=version)},
+        "source_url": rec["source_url"], "version": version, "replaces": rec["replaces"], "first_seen_at": rec["first_seen_at"],
+    }
+
+
+def failed_entry(item: dict, rec: dict) -> dict:
+    # 실패한 주소(source_url)도 남긴다. Silver 이력 테이블이 실패 버전도 같은 칸으로 기록하고, 그 주소를 받을 공식 경로가 manifest 뿐이다(계약 6절, 11/16).
+    return {
+        "desertionNo": item["no"], "slot": item["slot"], "status": rec["status"], "reason": rec["reason"], "attempts": rec["attempts"],
+        "source_url": rec.get("source_url"), "version": rec["version"], "replaces": rec["replaces"], "first_seen_at": rec["first_seen_at"],
     }
 
 
@@ -323,13 +399,13 @@ def run_photos(store, fetch, run_id: str, limit: int | None = None, delay: float
     try:
         for item in work:
             rec = process_slot(store, fetch, item, now)
-            state["notices"].setdefault(item["no"], {"slots": {}})["slots"][str(item["slot"])] = rec
+            record_version(state, item["no"], item["slot"], rec)
             results[rec["status"]] += 1
             if rec["status"] == "success":
                 stored.append(manifest_entry(item, rec))
             else:
                 reasons[rec["reason"]] += 1
-                failed.append({"desertionNo": item["no"], "slot": item["slot"], "status": rec["status"], "reason": rec["reason"], "attempts": rec["attempts"]})
+                failed.append(failed_entry(item, rec))
             done += 1
             if done % CHECKPOINT_EVERY == 0:
                 checkpoint("in_progress")
