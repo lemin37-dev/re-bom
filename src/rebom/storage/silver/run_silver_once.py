@@ -80,13 +80,14 @@ def main():
         ]
 
         if args.apply:
-            command.extend([
-                "--apply",
-                "--s3-state-bucket",
-                args.bucket,
-                "--s3-state-prefix",
-                args.s3_state_prefix,
-            ])
+            command.append("--apply")
+
+        command.extend([
+            "--s3-state-bucket",
+            args.bucket,
+            "--s3-state-prefix",
+            args.s3_state_prefix,
+        ])
 
         subprocess.run(command, check=True, cwd=root)
 

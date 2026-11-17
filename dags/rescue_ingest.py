@@ -100,4 +100,29 @@ with DAG(
         arguments=["--run-id", BRONZE_RUN_ID, "--limit", "2000"],  # 상한. 시험할 때는 "--dry-run" 추가
     )
 
+    silver_dry_run = KubernetesPodOperator(
+        task_id="silver_dry_run",
+        name="silver-dry-run",
+        namespace="rebom-storage",
+        service_account_name="rebom-storage",
+        image="559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/storage:develop",
+        image_pull_policy="Always",
+        cmds=["python", "-m", "rebom.storage.silver.run_silver_once"],
+        arguments=[
+            "--run-id", BRONZE_RUN_ID,
+            "--bucket", DATA_BUCKET,
+            "--environment", "test",
+        ],
+        env_vars={"REBOM_S3_BUCKET": DATA_BUCKET},
+        node_selector={"rebom/pool": "main"},
+        container_resources=k8s.V1ResourceRequirements(
+            requests={"cpu": "100m", "memory": "256Mi"},
+            limits={"memory": "1Gi"},
+        ),
+        get_logs=True,
+        on_finish_action="delete_pod",
+        in_cluster=True,
+    )
+
     rescue_incremental >> [generate_ingest_events, rescue_photos]
+    generate_ingest_events >> silver_dry_run
