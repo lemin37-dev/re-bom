@@ -9,6 +9,10 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get", "list"]
+  # XCom: 스케줄러가 사이드카(airflow-xcom-sidecar)에 exec 해서 /airflow/xcom/return.json 을 읽는다 (do_xcom_push=True 일 때)
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list", "watch"]
