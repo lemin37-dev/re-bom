@@ -619,3 +619,77 @@ def test_photo_version_replacement_updates_url_and_is_idempotent():
 
     assert second["changed_count"] == 0
     assert second["updates"] == []
+
+def test_legacy_manifest_preserves_current_source_url():
+    from rebom.storage.silver.photo_version_history import (
+        plan_photo_current_updates,
+    )
+
+    current = {
+        "desertion_no": "TEST-LEGACY",
+        "image_slot": 1,
+        "source_url": "https://example.com/existing.jpg",
+        "original_s3_key": None,
+        "serving_s3_key": None,
+        "thumb_s3_key": None,
+        "sha256": None,
+    }
+
+    legacy_v1 = {
+        **current,
+        "version": 1,
+        "status": "stored",
+        "source_url": None,
+        "original_s3_key": "bronze/v1.jpg",
+        "serving_s3_key": "images/v1.webp",
+        "thumb_s3_key": "images/v1_thumb.webp",
+        "sha256": "a" * 64,
+    }
+
+    first = plan_photo_current_updates([current], [legacy_v1])
+
+    assert first["changed_count"] == 1
+    updated = first["updates"][0]
+    assert updated["source_url"] == current["source_url"]
+    assert updated["sha256"] == legacy_v1["sha256"]
+
+    second = plan_photo_current_updates([updated], [legacy_v1])
+
+    assert second["changed_count"] == 0
+    assert second["updates"] == []
+
+
+def test_failed_v2_with_legacy_v1_keeps_current_url():
+    from rebom.storage.silver.photo_version_history import (
+        plan_photo_current_updates,
+    )
+
+    current = {
+        "desertion_no": "TEST-FAILED-V2",
+        "image_slot": 1,
+        "source_url": "https://example.com/v1.jpg",
+        "original_s3_key": "bronze/v1.jpg",
+        "serving_s3_key": "images/v1.webp",
+        "thumb_s3_key": "images/v1_thumb.webp",
+        "sha256": "a" * 64,
+    }
+
+    v1 = {
+        **current,
+        "version": 1,
+        "status": "stored",
+        "source_url": None,
+    }
+
+    v2 = {
+        **current,
+        "version": 2,
+        "status": "failed",
+        "source_url": "https://example.com/v2.jpg",
+        "failure_reason": "replaced_not_found",
+    }
+
+    result = plan_photo_current_updates([current], [v1, v2])
+
+    assert result["changed_count"] == 0
+    assert result["updates"] == []

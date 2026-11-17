@@ -311,6 +311,7 @@ def plan_photo_current_updates(current_rows, history_rows):
             all(before.get(field) == selected.get(field) for field in fields)
             and (
                 "source_url" not in before
+                or selected.get("source_url") is None
                 or before.get("source_url") == selected.get("source_url")
             )
         ):
@@ -339,8 +340,8 @@ def plan_photo_current_updates(current_rows, history_rows):
         for field in fields:
             merged[field] = selected.get(field)
 
-        if "source_url" in before:
-            merged["source_url"] = selected.get("source_url")
+        if "source_url" in before and selected.get("source_url") is not None:
+            merged["source_url"] = selected["source_url"]
 
         updates.append(merged)
 
