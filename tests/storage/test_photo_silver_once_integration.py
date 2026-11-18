@@ -79,3 +79,74 @@ def test_photo_manifest_check_rejects_apply():
             run_silver_once.main()
 
     assert error.value.code == 2
+
+def test_photo_manifest_failure_propagates_after_silver():
+    import subprocess
+
+    args = [
+        "run_silver_once",
+        "--run-id", RUN_ID,
+        "--bucket", BUCKET,
+        "--environment", "test",
+        "--check-photo-manifests",
+    ]
+
+    with (
+        patch.object(sys, "argv", args),
+        patch.object(run_silver_once.boto3, "client"),
+        patch.object(
+            run_silver_once,
+            "fetch_run_inputs",
+            return_value={
+                "run_id": RUN_ID,
+                "bronze_manifest": "mock-bronze.json",
+                "event_manifest": "mock-events.json",
+            },
+        ),
+        patch.object(
+            run_silver_once.subprocess,
+            "run",
+            side_effect=[
+                None,
+                subprocess.CalledProcessError(1, "photo-manifest"),
+            ],
+        ) as mocked_run,
+    ):
+        with pytest.raises(subprocess.CalledProcessError):
+            run_silver_once.main()
+
+    assert mocked_run.call_count == 2
+
+def test_silver_failure_prevents_photo_processing():
+    import subprocess
+
+    args = [
+        "run_silver_once",
+        "--run-id", RUN_ID,
+        "--bucket", BUCKET,
+        "--environment", "test",
+        "--check-photo-manifests",
+    ]
+
+    with (
+        patch.object(sys, "argv", args),
+        patch.object(run_silver_once.boto3, "client"),
+        patch.object(
+            run_silver_once,
+            "fetch_run_inputs",
+            return_value={
+                "run_id": RUN_ID,
+                "bronze_manifest": "mock-bronze.json",
+                "event_manifest": "mock-events.json",
+            },
+        ),
+        patch.object(
+            run_silver_once.subprocess,
+            "run",
+            side_effect=subprocess.CalledProcessError(1, "silver"),
+        ) as mocked_run,
+    ):
+        with pytest.raises(subprocess.CalledProcessError):
+            run_silver_once.main()
+
+    assert mocked_run.call_count == 1
