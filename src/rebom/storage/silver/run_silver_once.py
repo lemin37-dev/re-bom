@@ -25,7 +25,6 @@ def main():
     parser.add_argument("--apply-image", action="store_true")
     parser.add_argument("--check-image", action="store_true")
     parser.add_argument("--check-photo-manifests", action="store_true")
-    parser.add_argument("--apply-photo-manifests", action="store_true")
     parser.add_argument(
         "--s3-state-prefix",
         default=None,
@@ -46,16 +45,6 @@ def main():
 
     if args.check_image and args.apply_image:
         parser.error("--check-image cannot be combined with --apply-image")
-
-    if args.apply_photo_manifests and not args.apply:
-        parser.error("--apply-photo-manifests requires --apply")
-
-    if args.apply_photo_manifests and (
-        args.check_photo_manifests
-        or args.check_image
-        or args.apply_image
-    ):
-        parser.error("--apply-photo-manifests option conflict")
 
     if args.check_photo_manifests and args.apply:
         parser.error("--check-photo-manifests requires DRY_RUN")
@@ -161,7 +150,7 @@ def main():
 
             print("IMAGE_INCREMENTAL_RESULT:", result)
 
-    if args.check_photo_manifests or args.apply_photo_manifests:
+    if args.check_photo_manifests:
         if args.environment != "test":
             raise RuntimeError("PHOTO_MANIFEST_CHECK_TEST_ONLY")
 
@@ -198,11 +187,7 @@ def main():
                 str(photo_script),
                 "--bronze-run-id",
                 args.run_id,
-                *(
-                    ["--apply", "--record-missing-manifest"]
-                    if args.apply_photo_manifests
-                    else ["--defer-missing-manifest"]
-                ),
+                "--defer-missing-manifest",
             ],
             check=True,
             cwd=root,
