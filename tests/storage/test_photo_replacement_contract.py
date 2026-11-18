@@ -769,3 +769,98 @@ def test_failed_v2_with_legacy_v1_keeps_current_url():
 
     assert result["changed_count"] == 0
     assert result["updates"] == []
+
+def test_new_photo_v1_insert_and_rerun():
+    from rebom.storage.silver.photo_version_history import (
+        plan_photo_current_updates,
+    )
+
+    v1 = {
+        "desertion_no": "TEST-NEW-001",
+        "image_slot": 1,
+        "version": 1,
+        "replaces": None,
+        "status": "stored",
+        "source_url": "https://example.com/v1.jpg",
+        "original_s3_key": "bronze/rescue/images/TEST-NEW-001/popfile1.jpg",
+        "serving_s3_key": "images/TEST-NEW-001/1.webp",
+        "thumb_s3_key": "images/TEST-NEW-001/1_thumb.webp",
+        "sha256": "a" * 64,
+    }
+
+    first = plan_photo_current_updates([], [v1])
+
+    assert first["changed_count"] == 1
+    assert len(first["inserts"]) == 1
+    assert first["updates"] == []
+
+    second = plan_photo_current_updates(first["inserts"], [v1])
+
+    assert second["changed_count"] == 0
+    assert second["inserts"] == []
+    assert second["updates"] == []
+
+
+def test_new_photo_v2_without_previous_version_blocked():
+    from rebom.storage.silver.photo_version_history import (
+        plan_photo_current_updates,
+    )
+
+    v2 = {
+        "desertion_no": "TEST-NEW-002",
+        "image_slot": 1,
+        "version": 2,
+        "replaces": 1,
+        "status": "stored",
+        "source_url": "https://example.com/v2.jpg",
+        "original_s3_key": "bronze/v2.jpg",
+        "serving_s3_key": "images/v2.webp",
+        "thumb_s3_key": "images/v2_thumb.webp",
+        "sha256": "b" * 64,
+    }
+
+    with pytest.raises(RuntimeError, match="MISSING_PREVIOUS_VERSION"):
+        plan_photo_current_updates([], [v2])
+
+
+def test_new_photo_insert_and_existing_photo_update_together():
+    from rebom.storage.silver.photo_version_history import (
+        plan_photo_current_updates,
+    )
+
+    existing = {
+        "desertion_no": "TEST-EXISTING",
+        "image_slot": 1,
+        "source_url": "https://example.com/old.jpg",
+        "original_s3_key": None,
+        "serving_s3_key": None,
+        "thumb_s3_key": None,
+        "sha256": None,
+    }
+
+    stored = {
+        **existing,
+        "version": 1,
+        "status": "stored",
+        "original_s3_key": "bronze/old.jpg",
+        "serving_s3_key": "images/old.webp",
+        "thumb_s3_key": "images/old_thumb.webp",
+        "sha256": "a" * 64,
+    }
+
+    new = {
+        **stored,
+        "desertion_no": "TEST-NEW-003",
+        "source_url": "https://example.com/new.jpg",
+    }
+
+    plan = plan_photo_current_updates([existing], [stored, new])
+
+    assert plan["changed_count"] == 2
+    assert len(plan["inserts"]) == 1
+    assert len(plan["updates"]) == 1
+
+    after = plan["updates"] + plan["inserts"]
+    replay = plan_photo_current_updates(after, [stored, new])
+
+    assert replay["changed_count"] == 0

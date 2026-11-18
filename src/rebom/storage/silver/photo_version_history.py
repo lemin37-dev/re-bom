@@ -325,10 +325,23 @@ def plan_photo_current_updates(current_rows, history_rows):
 
     latest = select_current_photo_version(history_rows)
     updates = []
+    inserts = []
 
     for key, selected in latest.items():
         if key not in current:
-            raise RuntimeError(f"현재 사진 원본 누락: {key}")
+            if selected["version"] != 1:
+                raise RuntimeError(f"MISSING_PREVIOUS_VERSION: {key}")
+
+            inserts.append({
+                "desertion_no": selected["desertion_no"],
+                "image_slot": selected["image_slot"],
+                "source_url": selected.get("source_url"),
+                "original_s3_key": selected["original_s3_key"],
+                "serving_s3_key": selected["serving_s3_key"],
+                "thumb_s3_key": selected["thumb_s3_key"],
+                "sha256": selected["sha256"],
+            })
+            continue
 
         before = current[key]
 
@@ -372,7 +385,8 @@ def plan_photo_current_updates(current_rows, history_rows):
 
     return {
         "updates": updates,
-        "changed_count": len(updates),
+        "inserts": inserts,
+        "changed_count": len(updates) + len(inserts),
     }
 
 
@@ -398,9 +412,12 @@ def apply_photo_current_updates(
 
     plan = plan_photo_current_updates(before_rows, history_rows)
     updates = plan["updates"]
+    inserts = plan["inserts"]
 
     result = {
-        "changed_count": len(updates),
+        "changed_count": len(updates) + len(inserts),
+        "insert_count": len(inserts),
+        "update_count": len(updates),
         "mode": "APPLY" if apply else "DRY_RUN",
     }
 
@@ -417,17 +434,27 @@ def apply_photo_current_updates(
             for row in updates
         ]
 
-        table.overwrite(
-            pa.Table.from_pylist(updates, schema=schema),
-            overwrite_filter=reduce(Or, filters),
-        )
+        batch_size = 100
+
+        for start in range(0, len(updates), batch_size):
+            batch_rows = updates[start:start + batch_size]
+            batch_filters = filters[start:start + batch_size]
+
+            table.overwrite(
+                pa.Table.from_pylist(batch_rows, schema=schema),
+                overwrite_filter=reduce(Or, batch_filters),
+            )
+
+    if inserts:
+        table = catalog.load_table(table_name)
+        table.append(pa.Table.from_pylist(inserts, schema=schema))
 
     expected = {
         (row["desertion_no"], row["image_slot"]): row
         for row in before_rows
     }
 
-    for row in updates:
+    for row in updates + inserts:
         expected[(row["desertion_no"], row["image_slot"])] = row
 
     after_rows = (
