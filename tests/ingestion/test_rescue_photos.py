@@ -207,14 +207,70 @@ def test_download_failure_reason_is_recorded(store, reason):
 
 
 def test_failed_slot_is_retried_next_run_and_gives_up_after_max_attempts(store):
+    """404 가 아닌 실패(서버 오류 등)는 다음 실행에서 바로 다시 시도하고 MAX_ATTEMPTS 번째에 포기한다."""
     seed_bronze(store, [row("111", "http://x/a")])
-    fetch = FakeFetch({"http://x/a": (None, "not_found")})
+    fetch = FakeFetch({"http://x/a": (None, "server_error")})
     for expected in ("failed", "failed", "gave_up"):
         rp.run_photos(store, fetch, RUN_ID, now=NOW)
         assert state_of(store)["notices"]["111"]["slots"]["1"]["status"] == expected
     assert len(fetch.calls) == rp.MAX_ATTEMPTS
     rp.run_photos(store, fetch, RUN_ID, now=NOW)  # gave_up 은 다시 시도하지 않는다
     assert len(fetch.calls) == rp.MAX_ATTEMPTS
+
+
+# ---------- 404 는 5일 뒤 한 번만 재확인 (11/18 결정) ----------
+
+def test_404_waits_five_days_then_rechecks_once_and_gives_up(store):
+    seed_bronze(store, [row("111", "http://x/a")])
+    fetch = FakeFetch({"http://x/a": (None, "not_found")})
+    rp.run_photos(store, fetch, RUN_ID, now=NOW)
+    assert state_of(store)["notices"]["111"]["slots"]["1"]["status"] == "failed"
+    # 1일 뒤 · 4일 뒤 실행: 아직 다시 보지 않는다
+    for day in (1, 4):
+        out = rp.run_photos(store, fetch, RUN_ID, now=NOW + timedelta(days=day))
+        assert out["waiting_recheck"] == 1 and out["to_process"] == 0
+    assert len(fetch.calls) == 1
+    # 5일 뒤 실행: 한 번 다시 보고, 그래도 404 면 포기
+    rp.run_photos(store, fetch, RUN_ID, now=NOW + timedelta(days=5))
+    rec = state_of(store)["notices"]["111"]["slots"]["1"]
+    assert (rec["status"], rec["attempts"], rec["reason"]) == ("gave_up", 2, "not_found")
+    rp.run_photos(store, fetch, RUN_ID, now=NOW + timedelta(days=20))
+    assert len(fetch.calls) == 2
+
+
+def test_404_recheck_can_succeed(store):
+    seed_bronze(store, [row("111", "http://x/a")])
+    rp.run_photos(store, FakeFetch({"http://x/a": (None, "not_found")}), RUN_ID, now=NOW)
+    rp.run_photos(store, FakeFetch({"http://x/a": (image_bytes(), None)}), RUN_ID, now=NOW + timedelta(days=5))
+    rec = state_of(store)["notices"]["111"]["slots"]["1"]
+    assert (rec["status"], rec["attempts"], rec["reason"]) == ("success", 2, None)
+
+
+def test_first_404_after_other_failure_waits_instead_of_giving_up(store):
+    """시간 초과 뒤 처음 404 가 나면 아직 포기하지 않는다. 404 가 두 번 연속일 때만 포기한다."""
+    seed_bronze(store, [row("111", "http://x/a")])
+    rp.run_photos(store, FakeFetch({"http://x/a": (None, "timeout")}), RUN_ID, now=NOW)
+    fetch = FakeFetch({"http://x/a": (None, "not_found")})
+    rp.run_photos(store, fetch, RUN_ID, now=NOW + timedelta(days=1))
+    rec = state_of(store)["notices"]["111"]["slots"]["1"]
+    assert (rec["status"], rec["attempts"], rec["reason"]) == ("failed", 2, "not_found")
+    out = rp.run_photos(store, fetch, RUN_ID, now=NOW + timedelta(days=2))
+    assert out["waiting_recheck"] == 1 and len(fetch.calls) == 1
+
+
+def test_404_slot_left_by_old_rule_is_rechecked_once_after_five_days(store):
+    """11/18 이전 규칙으로 404 를 두 번 겪은 칸(attempts 2)도 5일 뒤 한 번 더 보고 포기한다."""
+    seed_bronze(store, [row("111", "http://x/a")])
+    rp.run_photos(store, FakeFetch({"http://x/a": (None, "not_found")}), RUN_ID, now=NOW)
+    state = state_of(store)
+    state["notices"]["111"]["slots"]["1"]["attempts"] = 2  # 옛 규칙으로 한 번 더 시도했던 칸
+    store.put_bytes(rp.STATE_KEY, json.dumps(state).encode("utf-8"), overwrite=True)
+    fetch = FakeFetch({"http://x/a": (None, "not_found")})
+    rp.run_photos(store, fetch, RUN_ID, now=NOW + timedelta(days=4))
+    assert fetch.calls == []
+    rp.run_photos(store, fetch, RUN_ID, now=NOW + timedelta(days=5))
+    rec = state_of(store)["notices"]["111"]["slots"]["1"]
+    assert (rec["status"], rec["attempts"]) == ("gave_up", 3) and len(fetch.calls) == 1
 
 
 def test_retry_succeeds_and_keeps_attempt_count(store):
@@ -509,17 +565,21 @@ def test_replaced_url_404_keeps_old_photo_and_gives_up_only_that_version(store):
     old = image_bytes()
     fetch = FakeFetch({"http://x/a": (old, None), "http://x/b": (None, "not_found")})
     run_with(store, RUN_ID, "http://x/a", fetch, 0)
-    for day, expected in ((1, "failed"), (2, "failed"), (3, "gave_up")):
+    # 1일: 새 주소 404 → failed. 3일: 아직 5일 전이라 다시 보지 않는다. 6일: 재확인에서도 404 → gave_up
+    for day, expected in ((1, "failed"), (3, None), (6, "gave_up")):
         run_with(store, RUN2, "http://x/b", fetch, day)
-        m = read_manifest(store, f"p{day}", dt=f"2026-11-0{4 + day}")
+        m = read_manifest(store, f"p{day}", dt=(NOW + timedelta(days=day)).date().isoformat())
         assert m["files"] == []
+        if expected is None:
+            assert m["failed"] == [] and m["counts"]["waiting_recheck"] == 1
+            continue
         assert [(f["version"], f["replaces"], f["reason"], f["status"], f["source_url"]) for f in m["failed"]] == [(2, 1, "replaced_not_found", expected, "http://x/b")]
         # 최초 발견 시각은 재시도해도 바뀌지 않는다
         assert m["failed"][0]["first_seen_at"] == (NOW + timedelta(days=1)).isoformat(timespec="seconds")
     assert [(v["version"], v["status"]) for v in slot1(store)] == [(1, "success"), (2, "gave_up")]
     assert store.get_bytes("bronze/rescue/images/111/popfile1.jpg") == old  # 옛 사진은 그대로
-    out = run_with(store, RUN3, "http://x/b", fetch, 4)  # 포기한 버전은 다시 시도하지 않는다
-    assert out["to_process"] == 0 and fetch.calls.count("http://x/b") == rp.MAX_ATTEMPTS
+    out = run_with(store, RUN3, "http://x/b", fetch, 20)  # 포기한 버전은 다시 시도하지 않는다
+    assert out["to_process"] == 0 and fetch.calls.count("http://x/b") == 2
 
 
 def test_after_a_404_version_the_next_url_replaces_the_404_version(store):
