@@ -149,6 +149,14 @@ def test_silver_uses_storage_image_and_dry_run():
     assert "--apply-image" not in args
 
 
+def test_silver_checks_photo_manifests():
+    """Silver DRY_RUN 은 같은 run_id 의 사진 manifest 도 검사한다(PR #36). --apply 와는 같이 쓸 수 없다."""
+    args = _arguments(_silver_task_kwargs())
+    assert "--check-photo-manifests" in args
+    assert "--apply" not in args
+    assert "--check-image" not in args
+
+
 def test_silver_runs_after_events_and_photos():
     """Silver 는 이벤트(필수)와 사진(실패 허용)이 끝난 뒤에 돈다. all_done 은 photos_done 에만 건다."""
     src = DAG_FILE.read_text(encoding="utf-8")
