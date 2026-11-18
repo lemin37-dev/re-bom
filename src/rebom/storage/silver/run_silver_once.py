@@ -1,6 +1,7 @@
 """Run one explicitly selected Bronze-to-Silver processing job."""
 
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,7 @@ def main():
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--apply-image", action="store_true")
     parser.add_argument("--check-image", action="store_true")
+    parser.add_argument("--check-photo-manifests", action="store_true")
     parser.add_argument(
         "--s3-state-prefix",
         default=None,
@@ -43,6 +45,12 @@ def main():
 
     if args.check_image and args.apply_image:
         parser.error("--check-image cannot be combined with --apply-image")
+
+    if args.check_photo_manifests and args.apply:
+        parser.error("--check-photo-manifests requires DRY_RUN")
+
+    if args.check_photo_manifests and args.check_image:
+        parser.error("--check-photo-manifests cannot be combined with --check-image")
 
 
 
@@ -141,6 +149,49 @@ def main():
             )
 
             print("IMAGE_INCREMENTAL_RESULT:", result)
+
+    if args.check_photo_manifests:
+        if args.environment != "test":
+            raise RuntimeError("PHOTO_MANIFEST_CHECK_TEST_ONLY")
+
+        photo_script = root / "scripts/storage/rebom_auto_process_photo_manifests.py"
+
+        if not photo_script.is_file():
+            raise FileNotFoundError(photo_script)
+
+        photo_env = os.environ.copy()
+        photo_env.update({
+            "REBOM_S3_BUCKET": args.bucket,
+            "REBOM_PHOTO_ICEBERG_TABLE": (
+                "rebom_silver.silver_animal_image_auto_b_test"
+            ),
+            "REBOM_PHOTO_ICEBERG_LOCATION": (
+                f"s3://{args.bucket}/bench_tmp/b-storage-test/"
+                "iceberg/silver_animal_image_auto_b_test"
+            ),
+            "REBOM_PHOTO_HISTORY_TABLE": (
+                "rebom_silver.silver_animal_image_version_history_auto_b_test"
+            ),
+            "REBOM_PHOTO_HISTORY_LOCATION": (
+                f"s3://{args.bucket}/bench_tmp/b-storage-test/"
+                "iceberg/silver_animal_image_version_history_auto_b_test"
+            ),
+            "REBOM_PHOTO_JOURNAL_PREFIX": (
+                "bench_tmp/b-storage-test/journals/photo_auto_runs"
+            ),
+        })
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(photo_script),
+                "--bronze-run-id",
+                args.run_id,
+            ],
+            check=True,
+            cwd=root,
+            env=photo_env,
+        )
 
     print("SILVER_ONCE: PASS")
 
