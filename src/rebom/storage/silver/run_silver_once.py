@@ -187,6 +187,7 @@ def main():
                 str(photo_script),
                 "--bronze-run-id",
                 args.run_id,
+                "--defer-missing-manifest",
             ],
             check=True,
             cwd=root,

@@ -56,6 +56,7 @@ def test_photo_manifest_integration_is_opt_in(enabled):
         assert "--bronze-run-id" in command
         assert RUN_ID in command
         assert "--apply" not in command
+        assert "--defer-missing-manifest" in command
         assert env["REBOM_PHOTO_ICEBERG_TABLE"] == (
             "rebom_silver.silver_animal_image_auto_b_test"
         )

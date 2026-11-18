@@ -55,3 +55,20 @@ def test_filter_rejects_missing_bronze_run():
         filter_manifests_by_bronze_run(
             s3, "test-bucket", ["a"], "run-C"
         )
+
+def test_bronze_filter_allows_missing_when_deferred():
+    from unittest.mock import MagicMock
+
+    from scripts.storage.rebom_auto_process_photo_manifests import (
+        filter_manifests_by_bronze_run,
+    )
+
+    result = filter_manifests_by_bronze_run(
+        s3=MagicMock(),
+        bucket="rebom-data-559987919299",
+        keys=[],
+        bronze_run_id="20261118T030011-6f2d1f",
+        allow_missing=True,
+    )
+
+    assert result == []

@@ -158,7 +158,7 @@ def find_manifests(s3, bucket, prefix):
 
 
 def filter_manifests_by_bronze_run(
-    s3, bucket, keys, bronze_run_id
+    s3, bucket, keys, bronze_run_id, allow_missing=False
 ):
     matched = []
 
@@ -173,7 +173,7 @@ def filter_manifests_by_bronze_run(
         if manifest.get("bronze_run_id") == bronze_run_id:
             matched.append(key)
 
-    if not matched:
+    if not matched and not allow_missing:
         raise RuntimeError(
             f"PHOTO_MANIFEST_NOT_FOUND: {bronze_run_id}"
         )
@@ -184,6 +184,7 @@ def filter_manifests_by_bronze_run(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--defer-missing-manifest", action="store_true")
     parser.add_argument("--check-config", action="store_true")
     parser.add_argument("--bronze-run-id")
     args = parser.parse_args()
@@ -196,6 +197,13 @@ def main():
 
     config = get_config()
     validate_config(config)
+
+    if args.defer_missing_manifest and args.apply:
+        raise RuntimeError("DEFER_MISSING_MANIFEST_DRY_RUN_ONLY")
+
+    if args.defer_missing_manifest and not args.bronze_run_id:
+        raise RuntimeError("DEFER_MISSING_MANIFEST_REQUIRES_BRONZE_RUN_ID")
+
 
     print("CONFIG_VALIDATION: PASS")
     print("REGION:", config["region"])
@@ -241,7 +249,13 @@ def main():
             config["bucket"],
             keys,
             args.bronze_run_id,
+            allow_missing=args.defer_missing_manifest,
         )
+
+    if args.defer_missing_manifest and not keys:
+        print("PHOTO_MANIFEST_MISSING:", args.bronze_run_id)
+        print("PHOTO_MANIFEST_RESULT: DEFERRED")
+        return
 
     counts = {
         "already_processed": 0,
