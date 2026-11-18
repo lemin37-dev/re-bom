@@ -105,12 +105,24 @@ def validate_config(config):
         raise RuntimeError("사진 이력 테이블 설정이 불완전합니다")
 
     if history_name:
-        expected_history_name = (
-            "rebom_silver.silver_animal_image_version_history_b_test"
+        photo_table = config["table_name"].split(".", 1)[1]
+
+        if not photo_table.startswith("silver_animal_image_"):
+            raise RuntimeError("Invalid photo test table name")
+
+        expected_history_table = photo_table.replace(
+            "silver_animal_image_",
+            "silver_animal_image_version_history_",
+            1,
         )
+
+        expected_history_name = (
+            f"rebom_silver.{expected_history_table}"
+        )
+
         expected_history_path = (
-            f"s3://{EXPECTED_BUCKET}/{TEST_PREFIX}iceberg/"
-            "silver_animal_image_version_history_b_test"
+            f"s3://{EXPECTED_BUCKET}/{TEST_PREFIX}"
+            f"iceberg/{expected_history_table}"
         )
 
         if history_name != expected_history_name:

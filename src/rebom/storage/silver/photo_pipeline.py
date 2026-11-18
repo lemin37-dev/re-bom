@@ -405,10 +405,19 @@ def _process_photo_manifest_versioned(
     projected_history.extend(history_changes["insert_rows"])
     projected_history.extend(history_changes["update_rows"])
 
+    target_keys = {
+        (row["desertion_no"], row["image_slot"])
+        for row in manifest["rows"]
+    }
+    target_history = [
+        row for row in projected_history
+        if (row["desertion_no"], row["image_slot"]) in target_keys
+    ]
+
     current_plan = apply_photo_current_updates(
         catalog,
         table_name,
-        projected_history,
+        target_history,
         expected_location,
         apply=False,
     )
@@ -443,10 +452,15 @@ def _process_photo_manifest_versioned(
         .to_pylist()
     )
 
+    stored_target_history = [
+        row for row in stored_history
+        if (row["desertion_no"], row["image_slot"]) in target_keys
+    ]
+
     current_write = apply_photo_current_updates(
         catalog,
         table_name,
-        stored_history,
+        stored_target_history,
         expected_location,
         apply=True,
     )

@@ -19,6 +19,15 @@ HISTORY_LOCATION = (
 
 
 def clear_history_env(monkeypatch):
+    monkeypatch.setenv(
+        "REBOM_PHOTO_ICEBERG_TABLE",
+        "rebom_silver.silver_animal_image_b_test",
+    )
+    monkeypatch.setenv(
+        "REBOM_PHOTO_ICEBERG_LOCATION",
+        "s3://rebom-data-559987919299/"
+        "bench_tmp/b-storage-test/iceberg/silver_animal_image_b_test",
+    )
     monkeypatch.delenv("REBOM_PHOTO_HISTORY_TABLE", raising=False)
     monkeypatch.delenv("REBOM_PHOTO_HISTORY_LOCATION", raising=False)
 
