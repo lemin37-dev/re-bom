@@ -8,6 +8,11 @@ import re
 import boto3
 
 from rebom.storage.silver.aws_catalog import get_aws_catalog
+from rebom.storage.silver.photo_pending_journal import (
+    list_pending_manifests,
+    mark_pending_resolved,
+    save_pending_manifest,
+)
 from rebom.storage.silver.photo_pipeline import process_photo_manifest
 from rebom.storage.silver.photo_staleness import evaluate_photo_staleness
 
@@ -181,12 +186,45 @@ def filter_manifests_by_bronze_run(
     return matched
 
 
+
+def group_pending_manifests(
+    s3, bucket, keys, bronze_run_id, journal_prefix
+):
+    pending_ids = set(
+        list_pending_manifests(s3, bucket, journal_prefix)
+    )
+    pending_ids.add(bronze_run_id)
+
+    grouped = {
+        run_id: []
+        for run_id in sorted(pending_ids)
+    }
+
+    for key in keys:
+        raw = s3.get_object(
+            Bucket=bucket,
+            Key=key,
+        )["Body"].read()
+
+        manifest = json.loads(raw)
+        source_bronze_id = manifest.get("bronze_run_id")
+
+        if source_bronze_id in grouped:
+            grouped[source_bronze_id].append(key)
+
+    return grouped
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--defer-missing-manifest", action="store_true")
     parser.add_argument("--check-config", action="store_true")
     parser.add_argument("--bronze-run-id")
+    parser.add_argument(
+        "--record-missing-manifest",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     if args.bronze_run_id and not re.fullmatch(
@@ -197,6 +235,16 @@ def main():
 
     config = get_config()
     validate_config(config)
+
+    if args.record_missing_manifest and (
+        not args.apply or not args.bronze_run_id
+    ):
+        raise RuntimeError(
+            "PHOTO_PENDING_APPLY_REQUIRES_BRONZE_RUN_ID"
+        )
+
+    if args.record_missing_manifest and args.defer_missing_manifest:
+        raise RuntimeError("PHOTO_PENDING_OPTION_CONFLICT")
 
     if args.defer_missing_manifest and args.apply:
         raise RuntimeError("DEFER_MISSING_MANIFEST_DRY_RUN_ONLY")
@@ -243,7 +291,38 @@ def main():
         config["manifest_prefix"],
     )
 
-    if args.bronze_run_id:
+    pending_groups = {}
+
+    if args.record_missing_manifest:
+        pending_groups = group_pending_manifests(
+            s3,
+            config["bucket"],
+            keys,
+            args.bronze_run_id,
+            config["journal_prefix"],
+        )
+
+        for bronze_id, matched in pending_groups.items():
+            if not matched:
+                pending_result = save_pending_manifest(
+                    s3,
+                    config["bucket"],
+                    config["journal_prefix"],
+                    bronze_id,
+                )
+                print(
+                    "PHOTO_MANIFEST_PENDING:",
+                    bronze_id,
+                    pending_result,
+                )
+
+        keys = sorted({
+            key
+            for matched in pending_groups.values()
+            for key in matched
+        })
+
+    elif args.bronze_run_id:
         keys = filter_manifests_by_bronze_run(
             s3,
             config["bucket"],
@@ -268,6 +347,8 @@ def main():
 
     print("MANIFEST_TOTAL:", len(keys))
     print("MODE:", "APPLY" if args.apply else "DRY_RUN")
+
+    verified_keys = {}
 
     for key in keys:
         stale = evaluate_photo_staleness(
@@ -329,7 +410,33 @@ def main():
 
         counts[mapping[state]] += 1
 
+        if state in {"ALREADY_PROCESSED", "APPLIED_AND_VERIFIED"}:
+            verified_keys[key] = run_id
+
         print("RUN:", run_id, json.dumps(result, ensure_ascii=False))
+
+    if args.record_missing_manifest:
+        for bronze_id, matched in pending_groups.items():
+            if not matched:
+                continue
+
+            if not all(key in verified_keys for key in matched):
+                continue
+
+            resolution = mark_pending_resolved(
+                s3,
+                config["bucket"],
+                config["journal_prefix"],
+                bronze_id,
+                [verified_keys[key] for key in matched],
+            )
+
+            if resolution != "NOT_PENDING":
+                print(
+                    "PHOTO_MANIFEST_PENDING_RESOLVED:",
+                    bronze_id,
+                    resolution,
+                )
 
     print("SUMMARY:", json.dumps(counts, ensure_ascii=False))
     print("AUTO_PHOTO_PIPELINE: PASS")
