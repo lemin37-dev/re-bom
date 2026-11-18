@@ -1,0 +1,31 @@
+{
+ "source": "rescue_photos",
+ "run_id": "p1",
+ "bronze_run_id": "20261105T100101-bbbbbb",
+ "generated_at": "2026-11-05T10:00:00+09:00",
+ "updated_at": "2026-11-16T15:00:38+09:00",
+ "code_version": "2026-11-16",
+ "status": "ok",
+ "counts": {
+  "stored": 0,
+  "failed": 1,
+  "replaced": 1,
+  "bronze_notices": 1,
+  "to_process": 1,
+  "this_run": 1
+ },
+ "files": [],
+ "failed": [
+  {
+   "desertionNo": "111",
+   "slot": 1,
+   "status": "failed",
+   "reason": "replaced_not_found",
+   "attempts": 1,
+   "source_url": "http://x/b",
+   "version": 2,
+   "replaces": 1,
+   "first_seen_at": "2026-11-05T10:00:00+09:00"
+  }
+ ]
+}

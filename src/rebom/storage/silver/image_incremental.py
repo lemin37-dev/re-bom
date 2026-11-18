@@ -14,8 +14,6 @@ def prepare_new_image_slots(raw_notices, existing_rows):
             key = (image["desertion_no"], image["image_slot"])
 
             if key in existing:
-                if existing[key]["source_url"] != image["source_url"]:
-                    conflicts.append(key)
                 continue
 
             if key in new_rows:

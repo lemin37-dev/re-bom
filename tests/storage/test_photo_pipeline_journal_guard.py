@@ -140,3 +140,53 @@ def test_existing_journal_but_sha256_mismatch(photo_with_journal):
         match="Journal과 Iceberg 데이터 불일치",
     ):
         execute([wrong])
+
+def test_old_journal_after_successful_replacement(monkeypatch, photo_with_journal):
+    original = photo_with_journal.copy()
+    latest = original.copy()
+    latest["sha256"] = "b" * 64
+
+    history_rows = [
+        {
+            "desertion_no": "TEST-001",
+            "image_slot": 1,
+            "version": 1,
+            "status": "stored",
+            "sha256": "a" * 64,
+            **{field: original[field] for field in ("original_s3_key", "serving_s3_key", "thumb_s3_key")},
+        },
+        {
+            "desertion_no": "TEST-001",
+            "image_slot": 1,
+            "version": 2,
+            "status": "stored",
+            "sha256": "b" * 64,
+            **{field: latest[field] for field in ("original_s3_key", "serving_s3_key", "thumb_s3_key")},
+        },
+    ]
+
+    class HistoryTable(FakeTable):
+        def location(self):
+            return "s3://test/photo-history"
+
+    class CatalogWithHistory(FakeCatalog):
+        def load_table(self, name):
+            if name == "rebom_test.photo_history":
+                return HistoryTable(history_rows)
+            return super().load_table(name)
+
+    result = photo_pipeline.process_photo_manifest(
+        s3=FakeS3(),
+        catalog=CatalogWithHistory([latest]),
+        bucket="rebom-data-559987919299",
+        manifest_key=MANIFEST_KEY,
+        table_name=TABLE_NAME,
+        expected_location=LOCATION,
+        journal_prefix="bench_tmp/b-storage-test/journals/photo_runs",
+        history_table_name="rebom_test.photo_history",
+        expected_history_location="s3://test/photo-history",
+        apply=False,
+    )
+
+    assert result["result"] == "ALREADY_PROCESSED"
+    assert result["iceberg_verified"] is True
