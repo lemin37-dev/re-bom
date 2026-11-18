@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 
 import boto3
 
@@ -20,7 +21,7 @@ TEST_PREFIX = "bench_tmp/b-storage-test/"
 def get_config():
     bucket = os.getenv("REBOM_S3_BUCKET", EXPECTED_BUCKET)
     region = os.getenv("AWS_DEFAULT_REGION", EXPECTED_REGION)
-    profile = os.getenv("AWS_PROFILE", "rebom-seoul")
+    profile = os.getenv("AWS_PROFILE") or None
 
     table_name = os.getenv(
         "REBOM_PHOTO_ICEBERG_TABLE",
@@ -156,11 +157,42 @@ def find_manifests(s3, bucket, prefix):
     return sorted(keys)
 
 
+def filter_manifests_by_bronze_run(
+    s3, bucket, keys, bronze_run_id
+):
+    matched = []
+
+    for key in keys:
+        raw = s3.get_object(
+            Bucket=bucket,
+            Key=key,
+        )["Body"].read()
+
+        manifest = json.loads(raw)
+
+        if manifest.get("bronze_run_id") == bronze_run_id:
+            matched.append(key)
+
+    if not matched:
+        raise RuntimeError(
+            f"PHOTO_MANIFEST_NOT_FOUND: {bronze_run_id}"
+        )
+
+    return matched
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--check-config", action="store_true")
+    parser.add_argument("--bronze-run-id")
     args = parser.parse_args()
+
+    if args.bronze_run_id and not re.fullmatch(
+        r"\d{8}T\d{6}-[0-9a-f]+",
+        args.bronze_run_id,
+    ):
+        parser.error("Invalid Bronze run ID")
 
     config = get_config()
     validate_config(config)
@@ -202,6 +234,14 @@ def main():
         config["bucket"],
         config["manifest_prefix"],
     )
+
+    if args.bronze_run_id:
+        keys = filter_manifests_by_bronze_run(
+            s3,
+            config["bucket"],
+            keys,
+            args.bronze_run_id,
+        )
 
     counts = {
         "already_processed": 0,
