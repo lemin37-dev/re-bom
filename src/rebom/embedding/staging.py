@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+from array import array
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Sequence
 
@@ -47,9 +48,21 @@ def to_parquet(rows: Sequence[dict[str, Any]], dim: int) -> bytes:
 
 
 def read_parquet(data: bytes) -> list[dict[str, Any]]:
+    """행 목록. embedding 은 float32 array 로 둔다: 파이썬 float 리스트(값당 약 32바이트)보다 8배 작아
+    매일 Pod 가 전체 결과(4만+ 행 × 768)를 읽어도 메모리가 수백 MB 안에 든다. 값은 parquet 의 float32 그대로."""
     import pyarrow.parquet as pq
 
-    return pq.read_table(io.BytesIO(data)).to_pylist()
+    table = pq.read_table(io.BytesIO(data))
+    col = table.column("embedding").combine_chunks()
+    dim = col.type.list_size
+    flat = col.flatten()  # 오프셋 반영된 float32 값
+    values = array("f")
+    raw = flat.buffers()[1]
+    values.frombytes(raw.to_pybytes()[flat.offset * 4:(flat.offset + len(flat)) * 4])
+    rows = table.drop_columns(["embedding"]).to_pylist()
+    for i, r in enumerate(rows):
+        r["embedding"] = values[i * dim:(i + 1) * dim]
+    return rows
 
 
 def photo_row(p: Photo, vec: Sequence[float], source: str, run_id: str, prep_version: str, at: str) -> dict:

@@ -334,6 +334,34 @@ def test_load_dry_run_writes_nothing(monkeypatch):
     assert run_load(monkeypatch, s3, {}, ["load", "--dry-run"]).written == []
 
 
+def test_load_max_write_guard_stops_before_writing(monkeypatch):
+    s3 = make_world()
+    run_cli(monkeypatch, s3, ["embed", "--limit", "10"])
+    conn = FakeConn()
+    monkeypatch.setattr(store, "connect", lambda: conn)
+    monkeypatch.setattr(store, "table_exists", lambda c: True)
+    monkeypatch.setattr(store, "existing_hashes", lambda c, model: {})
+    monkeypatch.setattr(store, "upsert", lambda c, model, rows: conn.written.extend(rows) or len(rows))
+    assert cli.main(["load", "--max-write", "3"]) == 2 and conn.written == []  # 4행 > 상한 3
+    assert cli.main(["load", "--max-write", "4"]) == 0 and len(conn.written) == 4
+
+
+def test_check_writes_rejects_bad_vectors():
+    p = mf.Photo("1", 1, 1, "k1", "a" * 64, "jpg", None, "r")
+    assert cli.check_writes([(p, [1.0] + [0.0] * 767)], 768, 0) is None
+    assert "차원" in cli.check_writes([(p, [1.0] * 10)], 768, 0)
+    assert "노름" in cli.check_writes([(p, [0.5] + [0.0] * 767)], 768, 0)
+
+
+def test_staged_embeddings_are_compact_float32(monkeypatch):
+    from array import array
+
+    s3 = make_world()
+    run_cli(monkeypatch, s3, ["embed", "--limit", "10"])
+    rows = staged_rows(s3)
+    assert all(isinstance(r["embedding"], array) and r["embedding"].typecode == "f" for r in rows)
+
+
 def test_prep_blank_and_resize():
     assert prep.is_blank(jpeg(None, (64, 48)))
     assert not prep.is_blank(jpeg(1, (64, 48)))

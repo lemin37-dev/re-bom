@@ -291,6 +291,18 @@ def staged_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def check_writes(write, dim: int, max_write: int) -> str | None:
+    """RDS 에 쓰기 전 점검: 건수 상한, 차원, 정규화. 문제가 있으면 사유, 없으면 None."""
+    if max_write and len(write) > max_write:
+        return f"쓸 행 {len(write)} > 상한 {max_write} (평소 하루 수백 행. 사람이 staged 로 확인한 뒤 --max-write 0 으로 실행)"
+    for p, vec in write:
+        if len(vec) != dim:
+            return f"{p.s3_key}: 차원 {len(vec)} != {dim}"
+        if abs(_norm(vec) - 1.0) > 1e-3:
+            return f"{p.s3_key}: 노름 {_norm(vec):.4f} (정규화 안 됨)"
+    return None
+
+
 def load(args: argparse.Namespace) -> int:
     """S3 parquet → RDS image_embedding, 변경분만. manifest 의 현재 사진 sha256 과 RDS 의 sha256 을 비교해
     새 칸과 사진이 바뀐 칸만 쓴다. staged 로 확인하고 승인받은 뒤 실행한다."""
@@ -306,6 +318,10 @@ def load(args: argparse.Namespace) -> int:
         _print(f"load plan (runs {len(st.runs)}, staged rows {len(st.rows)})", lp.stats)
         if args.dry_run or not lp.write:
             return 0
+        problem = check_writes(lp.write, args.dim, args.max_write)
+        if problem:  # 매일 자동 적재(DAG)의 안전장치. 쓰지 않고 실패로 끝낸다
+            print("load 중단:", problem, file=sys.stderr)
+            return 2
         t0 = time.time()
         written = sum(store.upsert(conn, gemini.MODEL, chunk) for chunk in _chunks(lp.write, 500))
     print("loaded", written, f"{time.time() - t0:.0f}s")
@@ -420,6 +436,8 @@ def main(argv: list[str] | None = None) -> int:
     ld.add_argument("--run-id", action="append", help="이 실행만 (여러 번 줄 수 있음). 없으면 전체")
     ld.add_argument("--dry-run", action="store_true", help="변경분 수만 출력 (RDS 읽기만)")
     ld.add_argument("--full", action="store_true", help="sha256 이 같아도 다시 쓴다 (전처리·벡터를 고쳤을 때만)")
+    ld.add_argument("--max-write", type=int, default=0, metavar="N",
+                    help="쓸 행이 N 을 넘으면 쓰지 않고 실패 (매일 DAG 의 안전장치, 0 이면 상한 없음)")
     ld.add_argument("--dim", type=int, default=768)
     ld.set_defaults(func=load)
 

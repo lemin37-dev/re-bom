@@ -7,7 +7,7 @@
 - 차원: 기본 3072 이지만 pgvector HNSW 인덱스가 2,000 차원까지라 768 을 기본으로 쓴다(잘린 차원도 API 가 정규화).
 - 접두어: task_type 파라미터가 없어서 문장 앞에 붙인다. 질의는 "task: search result | query: …",
   문서(요약 카드)는 "title: … | text: …". 사진은 접두어 없이 넣는다.
-- EmbeddingGemma 2 와 벡터 공간이 달라 섞어 쓸 수 없다.
+- 11-18 결정: 사진과 글 모두 이 모델 하나로 만든다 (EG2 는 쓰지 않음).
 
 설치: pip install -U google-genai python-dotenv
 """
@@ -30,8 +30,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def query_text(text: str) -> str:
-    """검색 질의·제로샷 보기 문장용 접두어."""
-    return f"task: search result | query: {text}"
+    """검색 질의·제로샷 보기 문장용 접두어. 앞뒤 공백은 지운다 (text_card_reference2 와 같음)."""
+    return f"task: search result | query: {text.strip()}"
 
 
 def document_text(text: str, title: str | None = None) -> str:

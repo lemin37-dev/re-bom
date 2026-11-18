@@ -16,9 +16,9 @@ variable "profile" {
 }
 
 variable "repositories" {
-  description = "만들 ECR 저장소 이름. 접두사 rebom/ 아래만 노드 역할이 받을 수 있다(compute iam.tf) rebom/api 는 검색 API(FastAPI, src/rebom/serving), rebom/web 은 웹 화면(Next.js, frontend/), rebom/storage 는 정제·Silver 적재(src/rebom/storage)"
+  description = "만들 ECR 저장소 이름. 접두사 rebom/ 아래만 노드 역할이 받을 수 있다(compute iam.tf) rebom/api 는 검색 API(FastAPI, src/rebom/serving), rebom/web 은 웹 화면(Next.js, frontend/), rebom/storage 는 정제·Silver 적재(src/rebom/storage), rebom/embed 는 사진 임베딩(src/rebom/embedding)"
   type        = list(string)
-  default     = ["rebom/ingest", "rebom/api", "rebom/web", "rebom/storage"]
+  default     = ["rebom/ingest", "rebom/api", "rebom/web", "rebom/storage", "rebom/embed"]
 }
 
 variable "github_repo" {

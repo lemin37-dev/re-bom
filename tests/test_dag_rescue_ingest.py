@@ -113,3 +113,89 @@ def test_dag_imports_with_airflow():
     assert dag is not None
     assert dag.max_active_runs == 1
     assert dag.catchup is False
+
+
+def _silver_task_kwargs():
+    for node in ast.walk(_tree()):
+        if not isinstance(node, ast.Call):
+            continue
+        if getattr(node.func, "id", None) != "KubernetesPodOperator":
+            continue
+        kw = {k.arg: k.value for k in node.keywords}
+        if "task_id" in kw and isinstance(kw["task_id"], ast.Constant) and ast.literal_eval(kw["task_id"]) == "silver_dry_run":
+            return kw
+    raise AssertionError("silver_dry_run 태스크를 찾지 못했습니다")
+
+
+def test_silver_receives_bronze_run_id():
+    kw = _silver_task_kwargs()
+    args = _arguments(kw)
+    assert args[args.index("--run-id") + 1] == _constants()["BRONZE_RUN_ID"]
+
+
+def test_silver_uses_storage_image_and_dry_run():
+    kw = _silver_task_kwargs()
+    image = ast.literal_eval(kw["image"])
+    args = _arguments(kw)
+
+    assert image.endswith("/rebom/storage:develop")
+    assert ast.literal_eval(kw["namespace"]) == "rebom-storage"
+    assert ast.literal_eval(kw["service_account_name"]) == "rebom-storage"
+    assert ast.literal_eval(kw["cmds"]) == [
+        "python", "-m", "rebom.storage.silver.run_silver_once"
+    ]
+    assert args[args.index("--environment") + 1] == "test"
+    assert "--apply" not in args
+    assert "--apply-image" not in args
+
+
+def test_silver_checks_photo_manifests():
+    """Silver DRY_RUN 은 같은 run_id 의 사진 manifest 도 검사한다(PR #36). --apply 와는 같이 쓸 수 없다."""
+    args = _arguments(_silver_task_kwargs())
+    assert "--check-photo-manifests" in args
+    assert "--apply" not in args
+    assert "--check-image" not in args
+
+
+def test_silver_runs_after_events_and_photos():
+    """Silver 는 이벤트(필수)와 사진(실패 허용)이 끝난 뒤에 돈다. all_done 은 photos_done 에만 건다."""
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert "rescue_photos >> photos_done" in src
+    assert "[generate_ingest_events, photos_done] >> silver_dry_run" in src
+    rules = {}
+    for node in ast.walk(_tree()):
+        if isinstance(node, ast.Call):
+            kw = {k.arg: k.value for k in node.keywords}
+            if "task_id" in kw and isinstance(kw["task_id"], ast.Constant):
+                rules[kw["task_id"].value] = ast.literal_eval(kw["trigger_rule"]) if "trigger_rule" in kw else None
+    assert rules["photos_done"] == "all_done"
+    assert rules["silver_dry_run"] is None  # 기본(all_success): 이벤트가 실패하면 Silver 는 돌지 않는다
+    assert "rescue_incremental >> [generate_ingest_events, rescue_photos]" in src
+
+
+def _embed_tasks() -> dict[str, dict[str, ast.expr]]:
+    tasks = {}
+    for node in ast.walk(_tree()):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "embed_task":
+            kw = {k.arg: k.value for k in node.keywords}
+            tasks[ast.literal_eval(kw["task_id"])] = kw
+    return tasks
+
+
+def test_photo_embedding_runs_after_photos_not_blocking_silver():
+    """사진 임베딩은 사진 task 가 끝나면 바로 돌고, Silver 와는 따로 간다(서로 막지 않음)."""
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert "photos_done >> embed_photos >> load_photo_embeddings" in src
+    assert "embed_photos >> silver_dry_run" not in src and "load_photo_embeddings >> silver_dry_run" not in src
+    assert _constants()["EMBED_IMAGE"].endswith("/rebom/embed:develop")
+
+
+def test_photo_embedding_has_caps():
+    """embed 는 상한(--limit), load 는 쓰기 상한(--max-write)을 둔다. 0 이면 상한이 없어 막아야 한다."""
+    tasks = _embed_tasks()
+    embed = ast.literal_eval(tasks["embed_photos"]["arguments"])
+    load = ast.literal_eval(tasks["load_photo_embeddings"]["arguments"])
+    assert embed[0] == "embed" and int(embed[embed.index("--limit") + 1]) > 0 and "--dry-run" not in embed
+    assert load[0] == "load" and int(load[load.index("--max-write") + 1]) > 0
+    assert "--full" not in load
+
