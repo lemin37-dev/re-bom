@@ -388,12 +388,22 @@ def _process_photo_manifest_versioned(
         .to_pylist()
     )
 
-    pending = plan_photo_history_inserts(
+    history_changes = plan_photo_history_inserts(
         history_rows,
         existing_history,
-    )["insert_rows"]
+    )
 
-    projected_history = existing_history + pending
+    updated_keys = {
+        (row["desertion_no"], row["image_slot"], row["version"])
+        for row in history_changes["update_rows"]
+    }
+    projected_history = [
+        row for row in existing_history
+        if (row["desertion_no"], row["image_slot"], row["version"])
+        not in updated_keys
+    ]
+    projected_history.extend(history_changes["insert_rows"])
+    projected_history.extend(history_changes["update_rows"])
 
     current_plan = apply_photo_current_updates(
         catalog,
@@ -410,6 +420,7 @@ def _process_photo_manifest_versioned(
         "manifest_files": len(manifest["rows"]),
         "failed_count": decision["failed_count"],
         "history_insert_count": history_plan["insert_count"],
+        "history_update_count": history_plan["update_count"],
         "changed_rows": current_plan["changed_count"],
     }
 
@@ -457,6 +468,7 @@ def _process_photo_manifest_versioned(
     )
 
     result["history_inserted"] = history_write["rows_inserted"]
+    result["history_updated"] = history_write["rows_updated"]
     result["current_changed"] = current_write["changed_count"]
     result["journal_result"] = journal_result
     result["result"] = "APPLIED_AND_VERIFIED"

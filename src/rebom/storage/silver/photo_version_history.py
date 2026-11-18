@@ -165,6 +165,7 @@ def plan_photo_history_inserts(incoming_rows, existing_rows):
     existing = make_index(existing_rows, "기존")
 
     insert_rows = []
+    update_rows = []
     skip_count = 0
 
     for key, row in incoming.items():
@@ -185,14 +186,33 @@ def plan_photo_history_inserts(incoming_rows, existing_rows):
             if field != "run_id"
         }
 
+        if incoming_data == existing_data:
+            skip_count += 1
+            continue
+
+        if previous.get("status") == "failed" and row.get("status") == "stored":
+            identity_fields = (
+                "desertion_no", "image_slot", "version", "replaces",
+                "first_seen_at", "source_url",
+            )
+            if (
+                previous.get("failure_reason") == "replaced_not_found"
+                and all(previous.get(field) == row.get(field) for field in identity_fields)
+                and row.get("failure_reason") is None
+                and row.get("original_s3_key")
+                and row.get("sha256")
+            ):
+                update_rows.append(row.copy())
+                continue
+
         if incoming_data != existing_data:
             raise ValueError(f"사진 이력 데이터 충돌: {key}")
-
-        skip_count += 1
 
     return {
         "insert_rows": insert_rows,
         "insert_count": len(insert_rows),
+        "update_rows": update_rows,
+        "update_count": len(update_rows),
         "skip_count": skip_count,
     }
 
@@ -217,8 +237,9 @@ def apply_photo_version_history(
 
     plan = plan_photo_history_inserts(incoming_rows, existing_rows)
     insert_rows = plan["insert_rows"]
+    update_rows = plan["update_rows"]
 
-    for row in insert_rows:
+    for row in insert_rows + update_rows:
         extra = set(row) - set(schema.names)
 
         if extra:
@@ -235,6 +256,7 @@ def apply_photo_version_history(
 
     result = {
         "insert_count": plan["insert_count"],
+        "update_count": plan["update_count"],
         "skip_count": plan["skip_count"],
         "mode": "APPLY" if apply else "DRY_RUN",
     }
@@ -243,8 +265,8 @@ def apply_photo_version_history(
         result["result"] = "DRY_RUN_PASS"
         return result
 
-    if insert_rows:
-        arrow = pa.Table.from_pylist(insert_rows, schema=schema)
+    if insert_rows or update_rows:
+        arrow = pa.Table.from_pylist(insert_rows + update_rows, schema=schema)
 
         write = table.upsert(
             arrow,
@@ -256,8 +278,11 @@ def apply_photo_version_history(
         result["rows_inserted"] = write.rows_inserted
         result["rows_updated"] = write.rows_updated
 
-        if write.rows_updated != 0:
-            raise RuntimeError("사진 이력 기존 버전 변경 감지")
+        if (
+            write.rows_inserted != len(insert_rows)
+            or write.rows_updated != len(update_rows)
+        ):
+            raise RuntimeError("사진 이력 INSERT/UPDATE 수량 불일치")
     else:
         result["rows_inserted"] = 0
         result["rows_updated"] = 0
@@ -271,7 +296,7 @@ def apply_photo_version_history(
         stored_rows,
     )
 
-    if verification["insert_count"] != 0:
+    if verification["insert_count"] != 0 or verification["update_count"] != 0:
         raise RuntimeError("사진 이력 Iceberg 적재 검증 실패")
 
     result["verified_rows"] = len(stored_rows)

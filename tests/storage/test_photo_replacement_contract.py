@@ -400,6 +400,82 @@ def test_photo_history_same_version_hash_conflict():
     with pytest.raises(ValueError, match="사진 이력 데이터 충돌"):
         plan_photo_history_inserts([incoming], [existing])
 
+
+def test_photo_history_failed_to_stored_updates_once():
+    from rebom.storage.silver.photo_version_history import plan_photo_history_inserts
+
+    failed = {
+        "desertion_no": "TEST-001", "image_slot": 1, "version": 2,
+        "replaces": 1, "first_seen_at": "2026-11-17T00:00:00Z",
+        "source_url": "https://example.com/v2.jpg", "status": "failed",
+        "failure_reason": "replaced_not_found", "original_s3_key": None,
+        "sha256": None, "run_id": "RUN-001",
+    }
+    recovered = dict(failed, status="stored", failure_reason=None,
+                     original_s3_key="bronze/v2.jpg", sha256="b" * 64,
+                     run_id="RUN-002")
+
+    plan = plan_photo_history_inserts([recovered], [failed])
+    assert plan["insert_count"] == 0
+    assert plan["update_count"] == 1
+    assert plan["update_rows"] == [recovered]
+
+    rerun = plan_photo_history_inserts([recovered], [recovered])
+    assert rerun["insert_count"] == 0
+    assert rerun["update_count"] == 0
+    assert rerun["skip_count"] == 1
+
+
+def test_photo_history_stored_to_failed_rejected():
+    from rebom.storage.silver.photo_version_history import plan_photo_history_inserts
+
+    stored = {
+        "desertion_no": "TEST-001", "image_slot": 1, "version": 2,
+        "status": "stored", "failure_reason": None,
+        "original_s3_key": "bronze/v2.jpg", "sha256": "b" * 64,
+    }
+    failed = dict(stored, status="failed", failure_reason="replaced_not_found",
+                  original_s3_key=None, sha256=None)
+    with pytest.raises(ValueError, match="사진 이력 데이터 충돌"):
+        plan_photo_history_inserts([failed], [stored])
+
+
+def test_photo_history_recovery_metadata_conflict_rejected():
+    from rebom.storage.silver.photo_version_history import plan_photo_history_inserts
+
+    failed = {
+        "desertion_no": "TEST-001", "image_slot": 1, "version": 2,
+        "source_url": "https://example.com/v2.jpg", "status": "failed",
+        "failure_reason": "replaced_not_found",
+    }
+    recovered = dict(failed, status="stored", failure_reason=None,
+                     source_url="https://example.com/other.jpg",
+                     original_s3_key="bronze/v2.jpg", sha256="b" * 64)
+    with pytest.raises(ValueError, match="사진 이력 데이터 충돌"):
+        plan_photo_history_inserts([recovered], [failed])
+
+
+def test_photo_history_recovery_selects_recovered_version():
+    from rebom.storage.silver.photo_version_history import (
+        plan_photo_history_inserts, select_current_photo_version,
+    )
+
+    v1 = {
+        "desertion_no": "TEST-001", "image_slot": 1, "version": 1,
+        "status": "stored", "sha256": "a" * 64,
+    }
+    failed_v2 = {
+        "desertion_no": "TEST-001", "image_slot": 1, "version": 2,
+        "status": "failed", "failure_reason": "replaced_not_found",
+    }
+    stored_v2 = dict(failed_v2, status="stored", failure_reason=None,
+                     original_s3_key="bronze/v2.jpg", sha256="b" * 64)
+
+    assert select_current_photo_version([v1, failed_v2])[("TEST-001", 1)]["version"] == 1
+    changes = plan_photo_history_inserts([stored_v2], [v1, failed_v2])
+    assert changes["update_count"] == 1
+    assert select_current_photo_version([v1, stored_v2])[("TEST-001", 1)]["version"] == 2
+
 def test_photo_current_recovery_after_history_saved():
     from rebom.storage.silver.photo_version_history import (
         plan_photo_current_updates,
