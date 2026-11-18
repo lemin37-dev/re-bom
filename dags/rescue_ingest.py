@@ -15,6 +15,11 @@
 - 이미지의 ENTRYPOINT 는 수집 모듈로 고정이라, 이벤트·사진 task 는 cmds 로 실행할 모듈을 바꾼다.
 - 사진은 수집 뒤에 이벤트와 나란히 돈다. 같은 run_id 를 받고, 상태 파일이 서로 다르다
   (state/rescue_events_state.json, state/rescue_photos_state.json).
+- Silver(silver_dry_run)는 이벤트와 사진이 모두 끝난 뒤에 돈다(11/17 이광훈 님과 합의). Silver 가 사진 manifest 를 읽을 때
+  그날 사진이 아직 받는 중이면 안 되기 때문이다. 이벤트는 반드시 성공해야 하고, 사진은 실패해도 Silver 공고 처리를 막지 않는다
+  (photos_done, trigger_rule all_done). 그래서 사진 task 가 실패해도 DAG 실행 결과에는 잘 드러나지 않으니 로그로 따로 확인한다.
+- Silver 는 --check-photo-manifests 로 같은 run_id 의 사진 manifest 도 DRY_RUN 검사한다(PR #36). 이 옵션은 #36 이 들어간
+  storage 이미지에만 있으므로, 이 DAG 는 #36 머지와 이미지 빌드가 끝난 뒤에 배포한다. 옛 이미지면 silver_dry_run 이 인자 오류로 실패한다.
 - 사진의 첫 전체 수집(백필)은 11/11~11/12 에 수동 파드로 끝냈다(docs/data_contract.md 6절). 이 task 는 그 뒤에 생긴
   새 칸과 실패(failed) 칸 재시도만 받는다. 이미 받은 칸은 사진 주소가 바뀌어도 다시 받지 않는다(같은 문서, 별도 작업).
 - --limit 2000 은 하루 처리량이 아니라 상한이다. 하루 새 칸은 약 120~550칸(11/3~11/12 측정)이라 평소에는 그만큼만 하고 끝나고,
@@ -30,6 +35,7 @@ from datetime import timedelta
 
 import pendulum
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.sdk import DAG
 from kubernetes.client import models as k8s
 
@@ -112,6 +118,7 @@ with DAG(
             "--run-id", BRONZE_RUN_ID,
             "--bucket", DATA_BUCKET,
             "--environment", "test",
+            "--check-photo-manifests",
         ],
         env_vars={"REBOM_S3_BUCKET": DATA_BUCKET},
         node_selector={"rebom/pool": "main"},
@@ -124,5 +131,10 @@ with DAG(
         in_cluster=True,
     )
 
+    # 사진이 끝난 표시. 사진 task 가 실패해도 끝나기만 하면 성공으로 넘어간다(all_done).
+    # Silver 는 기본 규칙(모두 성공)을 그대로 둬서, 이벤트가 실패하면 돌지 않고 사진 실패로는 막히지 않는다.
+    photos_done = EmptyOperator(task_id="photos_done", trigger_rule="all_done")
+
     rescue_incremental >> [generate_ingest_events, rescue_photos]
-    generate_ingest_events >> silver_dry_run
+    rescue_photos >> photos_done
+    [generate_ingest_events, photos_done] >> silver_dry_run

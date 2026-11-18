@@ -149,7 +149,25 @@ def test_silver_uses_storage_image_and_dry_run():
     assert "--apply-image" not in args
 
 
-def test_silver_runs_after_events():
+def test_silver_checks_photo_manifests():
+    """Silver DRY_RUN 은 같은 run_id 의 사진 manifest 도 검사한다(PR #36). --apply 와는 같이 쓸 수 없다."""
+    args = _arguments(_silver_task_kwargs())
+    assert "--check-photo-manifests" in args
+    assert "--apply" not in args
+    assert "--check-image" not in args
+
+
+def test_silver_runs_after_events_and_photos():
+    """Silver 는 이벤트(필수)와 사진(실패 허용)이 끝난 뒤에 돈다. all_done 은 photos_done 에만 건다."""
     src = DAG_FILE.read_text(encoding="utf-8")
-    assert "generate_ingest_events >> silver_dry_run" in src
+    assert "rescue_photos >> photos_done" in src
+    assert "[generate_ingest_events, photos_done] >> silver_dry_run" in src
+    rules = {}
+    for node in ast.walk(_tree()):
+        if isinstance(node, ast.Call):
+            kw = {k.arg: k.value for k in node.keywords}
+            if "task_id" in kw and isinstance(kw["task_id"], ast.Constant):
+                rules[kw["task_id"].value] = ast.literal_eval(kw["trigger_rule"]) if "trigger_rule" in kw else None
+    assert rules["photos_done"] == "all_done"
+    assert rules["silver_dry_run"] is None  # 기본(all_success): 이벤트가 실패하면 Silver 는 돌지 않는다
     assert "rescue_incremental >> [generate_ingest_events, rescue_photos]" in src
