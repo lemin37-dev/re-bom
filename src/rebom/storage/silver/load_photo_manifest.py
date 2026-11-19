@@ -108,19 +108,30 @@ def load_photo_manifest(path):
         source_url = item.get("source_url")
         reason = item.get("reason")
 
-        if reason != "replaced_not_found":
+        initial_not_found = (
+            reason == "not_found"
+            and item.get("status") == "gave_up"
+            and type(version) is int
+            and version == 1
+        )
+        if reason != "replaced_not_found" and not initial_not_found:
             continue
 
         if not no or type(slot) is not int or not 1 <= slot <= 8:
             raise ValueError("교체 실패 사진 공고번호 또는 슬롯 오류")
 
-        if type(version) is not int or version < 2:
-            raise ValueError("교체 실패 사진 버전 오류")
+        if initial_not_found:
+            if replaces is not None:
+                raise ValueError("실패 사진 v1 replaces 오류")
+        else:
+            if type(version) is not int or version < 2:
+                raise ValueError("교체 실패 사진 버전 오류")
+            if type(replaces) is not int or replaces != version - 1:
+                raise ValueError("교체 실패 사진 이전 버전 오류")
 
-        if type(replaces) is not int or replaces != version - 1:
-            raise ValueError("교체 실패 사진 이전 버전 오류")
-
-        if not isinstance(first_seen_at, str) or not first_seen_at.strip():
+        if (not initial_not_found or first_seen_at is not None) and (
+            not isinstance(first_seen_at, str) or not first_seen_at.strip()
+        ):
             raise ValueError("교체 실패 사진 최초 발견 시각 누락")
 
         if not isinstance(source_url, str) or not source_url.strip():
