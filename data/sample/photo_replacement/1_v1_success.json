@@ -1,0 +1,36 @@
+{
+ "source": "rescue_photos",
+ "run_id": "p0",
+ "bronze_run_id": "20261104T100101-0a89a3",
+ "generated_at": "2026-11-04T10:00:00+09:00",
+ "updated_at": "2026-11-16T15:00:38+09:00",
+ "code_version": "2026-11-16",
+ "status": "ok",
+ "counts": {
+  "stored": 1,
+  "failed": 0,
+  "new": 1,
+  "bronze_notices": 1,
+  "to_process": 1,
+  "this_run": 1
+ },
+ "files": [
+  {
+   "desertionNo": "111",
+   "slot": 1,
+   "original": "bronze/rescue/images/111/popfile1.jpg",
+   "ext": "jpg",
+   "bytes": 8229,
+   "sha256": "6f80c7030b7e93fab08fc19b947721428618f31e5f8b3f5af1e6fe93ae335c97",
+   "serving": {
+    "image": "images/111/1.webp",
+    "thumb": "images/111/1_thumb.webp"
+   },
+   "source_url": "http://x/a",
+   "version": 1,
+   "replaces": null,
+   "first_seen_at": "2026-11-04T10:00:00+09:00"
+  }
+ ],
+ "failed": []
+}

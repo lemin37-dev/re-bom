@@ -10,10 +10,12 @@
   - 새 사진 = 주소가 있는데 기록이 없는 칸. 첫 실행은 지금 보호중인 공고 전체를 받는다(--limit 으로 나눠 받을 수 있다).
   - 주소가 없는 칸은 기록하지 않는다(8칸이면 기록이 불어나기 때문). 사진이 한 장도 없는 공고만 공고 단위로 no_photos 를 표시한다.
   - failed 는 다음 실행에서 다시 시도하고, MAX_ATTEMPTS 번째 실패면 gave_up 으로 두고 다시 시도하지 않는다.
+  - 404(not_found, replaced_not_found)는 예외다(11/18 결정). 다음 실행에서 바로 다시 보지 않고 마지막 시도로부터
+    NOT_FOUND_RECHECK_AFTER(5일)가 지난 실행에서 한 번만 다시 본다. 그때도 404 면 gave_up. 서버 오류·시간 초과 등은 위 규칙 그대로.
   - 사진 교체 (docs/data_contract.md 6절, 11/16 합의): 같은 칸의 주소가 기록과 다르면 새 버전으로 보고 덮어쓰지 않고 새 키로 받는다.
     version 은 칸 안에서 주소가 처음 나온 순서(1, 2, 3 ...)이고, 같은 주소는 재실행해도 같은 번호다. 새 버전은 발견한 실행에서
     pending 으로 먼저 기록해 두므로 --limit 으로 이번에 못 받아도 번호와 first_seen_at(최초 발견 시각)이 바뀌지 않는다.
-    새 주소가 404 면 옛 버전은 그대로 두고 새 버전만 실패(사유 replaced_not_found)로 남긴다. 3번 실패하면 그 버전만 gave_up.
+    새 주소가 404 면 옛 버전은 그대로 두고 새 버전만 실패(사유 replaced_not_found)로 남긴다. 5일 뒤 재확인에서도 404 면 그 버전만 gave_up.
   - 칸 기록은 맨 위에 최신 버전을 두고, 이전 버전은 previous 목록에 둔다. 11/16 이전 기록(previous·version 없음)은 버전 1로 읽는다.
   - 업로드는 일정 개수마다 기록을 저장(checkpoint)한다. 기록에는 올라간 것만 반영되므로 중간에 끊겨도 이어서 받을 수 있다.
 
@@ -62,10 +64,13 @@ STATE_KEY = "state/rescue_photos_state.json"
 ORIGINAL_PREFIX = "bronze/rescue/images"  # 받은 그대로
 SERVING_PREFIX = "images"  # 서비스용 파생물(WebP, 썸네일). CloudFront /images/* 가 가리키는 곳
 MANIFEST_PREFIX = "bronze/rescue/image_runs"  # 실행별 인계 목록. 사진 폴더(images/<번호>)와 섞이지 않게 이름을 다르게 둔다
-CODE_VERSION = "2026-11-16"  # 사진 교체(버전) 추가
+CODE_VERSION = "2026-11-18"  # 404 는 5일 뒤 한 번만 재확인
 LIST_KINDS = ("list_notice", "list_protect")
 SLOTS = tuple(range(1, 9))  # popfile1~8 중 주소가 있는 칸을 모두 받는다 (11/4 결정, 이광훈 님 Silver 도 슬롯 1~8 을 전제)
 MAX_ATTEMPTS = 3  # 같은 칸을 이 횟수까지 시도하고 넘으면 gave_up
+# 404 재확인 (11/18 결정). 11/18까지 재시도로 회복된 칸이 0이었다(1,757칸은 첫 시도 후 6~7일 뒤 재시도에서도 404).
+# 다만 보호소가 사진을 늦게 올릴 수 있어(11/17 멘토링) 바로 포기하지 않고, 시간을 두고 한 번만 다시 본다.
+NOT_FOUND_RECHECK_AFTER = timedelta(days=5)
 THUMB_WIDTH = 400
 WEBP_QUALITY = 85
 MAX_BYTES = 30 * 1024 * 1024  # 이보다 큰 응답은 사진으로 보지 않는다
@@ -79,6 +84,7 @@ REPLACED_NOT_FOUND = "replaced_not_found"
 NOT_FOUND, TIMEOUT, NETWORK, SERVER_ERROR, HTTP_ERROR, BROKEN, CONVERT, UNSUPPORTED = (
     "not_found", "timeout", "network_error", "server_error", "http_error", "broken_file", "convert_error", "unsupported_format",
 )
+NOT_FOUND_REASONS = (NOT_FOUND, REPLACED_NOT_FOUND)  # 5일 뒤 한 번만 재확인하는 사유
 # MPO 는 휴대폰이 여러 장(깊이 정보 등)을 한 파일에 담은 JPEG 이다. 파일은 .jpg 로 열리지만 Pillow 는 format 을 "MPO" 로 알려 준다.
 FORMAT_EXT = {"JPEG": "jpg", "MPO": "jpg", "PNG": "png", "GIF": "gif", "WEBP": "webp", "BMP": "bmp", "TIFF": "tif"}
 
@@ -235,9 +241,16 @@ def load_bronze_rows(store, run_id: str) -> dict[str, dict]:
 
 def work_item(no: str, slot: int, url: str, ver: dict) -> dict:
     return {
-        "no": no, "slot": slot, "url": url, "attempts": ver.get("attempts", 0),
+        "no": no, "slot": slot, "url": url, "attempts": ver.get("attempts", 0), "reason": ver.get("reason"),
         "version": ver["version"], "replaces": ver.get("replaces"), "first_seen_at": ver.get("first_seen_at"),
     }
+
+
+def waiting_for_recheck(ver: dict, now: datetime) -> bool:
+    """404 로 실패한 칸이 아직 재확인 시점(마지막 시도 + 5일) 전이면 True. 시각 기록이 없으면 기다리지 않는다."""
+    if ver.get("status") != "failed" or ver.get("reason") not in NOT_FOUND_REASONS or not ver.get("last_attempt_at"):
+        return False
+    return now < datetime.fromisoformat(ver["last_attempt_at"]) + NOT_FOUND_RECHECK_AFTER
 
 
 def plan_work(rows: dict[str, dict], state: dict, now: datetime) -> tuple[list[dict], dict]:
@@ -266,7 +279,9 @@ def plan_work(rows: dict[str, dict], state: dict, now: datetime) -> tuple[list[d
                 continue
             latest = versions[-1]
             if not url:  # 주소가 빠진 칸: 받던 중인 최신 버전만 기록된 주소로 이어서 시도한다
-                if latest["status"] in ("failed", "pending"):
+                if waiting_for_recheck(latest, now):
+                    summary["waiting_recheck"] += 1
+                elif latest["status"] in ("failed", "pending"):
                     work.append(work_item(no, slot, latest.get("source_url", ""), latest))
                     summary["retry"] += 1
                 continue
@@ -278,6 +293,8 @@ def plan_work(rows: dict[str, dict], state: dict, now: datetime) -> tuple[list[d
                 state["notices"].setdefault(no, {"slots": {}})["slots"][str(slot)] = slot_record([*versions, ver])
                 work.append(work_item(no, slot, url, ver))
                 summary["replaced"] += 1
+            elif waiting_for_recheck(match, now):
+                summary["waiting_recheck"] += 1  # 404 칸은 5일이 지나야 다시 본다
             elif match["status"] in ("failed", "pending"):
                 work.append(work_item(no, slot, url, match))
                 summary["retry"] += 1
@@ -307,9 +324,11 @@ def process_slot(store, fetch, item: dict, now: datetime) -> dict:
     ver = {"version": version, "replaces": item.get("replaces"), "first_seen_at": item.get("first_seen_at") or now.isoformat(timespec="seconds")}
 
     def failure(reason: str) -> dict:
-        status = "gave_up" if attempts >= MAX_ATTEMPTS else "failed"
         if reason == NOT_FOUND and version > 1:
             reason = REPLACED_NOT_FOUND  # 교체된 새 주소에 파일이 없다. 옛 버전은 그대로 둔다
+        # 404 가 두 번 연속이면(= 5일 뒤 재확인에서도 404) 포기한다. 다른 사유는 MAX_ATTEMPTS 번까지.
+        rechecked = reason in NOT_FOUND_REASONS and item.get("reason") in NOT_FOUND_REASONS
+        status = "gave_up" if attempts >= MAX_ATTEMPTS or rechecked else "failed"
         return {"status": status, "attempts": attempts, "reason": reason, "source_url": url, "last_attempt_at": now.isoformat(timespec="seconds"), **ver}
 
     data, reason = fetch(url)
