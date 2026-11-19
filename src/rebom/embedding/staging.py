@@ -78,6 +78,7 @@ class Staged:
     rows: dict[tuple[str, int], dict] = field(default_factory=dict)  # 칸별 최신 행 (run_id 순)
     vectors: dict[str, list[float]] = field(default_factory=dict)  # sha256 → 벡터
     skipped: dict[str, str] = field(default_factory=dict)  # sha256 → 사유 (blank 등, 다시 보내지 않음)
+    read_errors: dict[str, int] = field(default_factory=dict)  # Bronze s3_key → 읽기 실패한 실행 수 (다시 시도함)
     runs: list[str] = field(default_factory=list)
 
 
@@ -96,7 +97,10 @@ def load_staged(s3, bucket: str, model: str, dim: int, prep_version: str,
             continue
         body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
         if key.endswith("/summary.json"):
-            st.skipped.update(json.loads(body).get("skipped_sha256", {}))
+            summary = json.loads(body)
+            st.skipped.update(summary.get("skipped_sha256", {}))
+            for k in summary.get("read_error_keys", {}):
+                st.read_errors[k] = st.read_errors.get(k, 0) + 1
             continue
         if not key.endswith(".parquet"):
             continue

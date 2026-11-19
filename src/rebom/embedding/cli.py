@@ -6,6 +6,7 @@
     python -m rebom.embedding.cli embed --limit N [--dry-run] [--workers 4]
         manifest 의 칸별 최신 사진 중 S3 결과에 없거나 sha256 이 바뀐 것만, 같은 sha256 은 1번만 보낸다.
         sha256 이 manifest 와 다르거나 빈 사진이면 보내지 않는다. 전처리는 prep.py, 결과는 S3 parquet(staging.py).
+        Bronze 파일을 읽지 못하면 그 사진만 건너뛰고 summary 의 read_error_keys 에 남겨 다음 실행에서 다시 읽는다.
         RDS 에는 쓰지 않는다.
     python -m rebom.embedding.cli staged [--run-id ID]
         S3 결과 점검 (과금 없음).
@@ -152,6 +153,18 @@ def _chunks(items: list, n: int):
         yield items[i : i + n]
 
 
+READ_ERROR_WARN_RUNS = 3  # 이만큼 연속으로 못 읽은 Bronze 파일은 사람이 확인하도록 경고
+READ_ERROR_FAIL_MIN = 20  # 이번 실행에서 이 수 이상, 그리고 절반 넘게 못 읽으면 권한·네트워크 문제로 보고 실패 처리
+EXIT_READ_ERRORS = 4
+
+
+def _s3_error_code(exc: Exception) -> str:
+    """boto3 ClientError 면 오류 코드(NoSuchKey, AccessDenied 등), 아니면 예외 이름."""
+    resp = getattr(exc, "response", None)
+    code = resp.get("Error", {}).get("Code") if isinstance(resp, dict) else None
+    return str(code or type(exc).__name__)
+
+
 def _new_run_id() -> str:
     import uuid
 
@@ -167,8 +180,10 @@ def embed(args: argparse.Namespace) -> int:
     staged = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION)
     plan = planmod.build(mf.load_manifests(s3, bucket), staged)
     order = plan.send_order()[: args.limit]
+    retry_keys = [k for p in plan.send.values() for k in [p[0].s3_key] if k in staged.read_errors]
     _print("plan (보내기 전)", {
         **plan.stats,
+        "retry_read_errors": len(retry_keys),  # 지난 실행에서 Bronze 파일을 못 읽어 다시 시도하는 사진
         "this_run_sha256": len(order),
         "this_run_photos": sum(len(plan.send[s]) for s in order) + len(plan.reuse),
         "this_run_requests_max": -(-len(order) // gemini.IMAGE_BATCH),  # 빈 사진은 빠져 실제로는 더 적다
@@ -184,10 +199,11 @@ def embed(args: argparse.Namespace) -> int:
     run_id = _new_run_id()
     prefix = staging.run_prefix(gemini.MODEL, args.dim, run_id)
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    embedder = gemini.GeminiEmbedder(dim=args.dim)
+    embedder = gemini.GeminiEmbedder(dim=args.dim, session_id=f"embed-{run_id}")
     stats: Counter = Counter()
     skipped: dict[str, str] = {}
     sha_mismatch: list[str] = []
+    read_errors: dict[str, str] = {}  # Bronze s3_key → 오류 코드. skipped 에 넣지 않아 다음 실행에서 다시 읽는다
     rows: list[dict] = []
     parts: list[str] = []
 
@@ -203,7 +219,10 @@ def embed(args: argparse.Namespace) -> int:
 
     def prepare(sha: str):
         p = plan.send[sha][0]
-        data = s3.get_object(Bucket=bucket, Key=p.s3_key)["Body"].read()
+        try:
+            data = s3.get_object(Bucket=bucket, Key=p.s3_key)["Body"].read()
+        except Exception as exc:  # noqa: BLE001 - 파일 없음·권한·네트워크. 그 사진만 건너뛴다
+            return sha, None, f"read_error:{_s3_error_code(exc)}"
         if hashlib.sha256(data).hexdigest() != sha:
             return sha, None, "sha_mismatch"
         try:
@@ -241,6 +260,8 @@ def embed(args: argparse.Namespace) -> int:
                         stats[reason.split(":")[0]] += 1
                         if reason == "sha_mismatch":  # 일시 문제일 수 있어 다음 실행에서 다시 본다
                             sha_mismatch.append(plan.send[sha][0].s3_key)
+                        elif reason.startswith("read_error"):  # 사진 받기 실패처럼 다음 실행에서 다시 읽는다
+                            read_errors[plan.send[sha][0].s3_key] = reason.split(":", 1)[1]
                         else:  # 빈 사진·열리지 않는 파일은 다음 실행에서도 보내지 않는다
                             skipped[sha] = reason
                         continue
@@ -267,13 +288,29 @@ def embed(args: argparse.Namespace) -> int:
             "status": status, "started_at": at, "seconds": round(elapsed, 1), "sha256_done": done,
             "sec_per_sha256": round(elapsed / max(done, 1), 4), "workers": args.workers,
             "image_batch": gemini.IMAGE_BATCH, "stats": dict(stats), "plan": plan.stats, "parts": parts,
-            "skipped_sha256": skipped, "sha_mismatch_keys": sha_mismatch,
+            "skipped_sha256": skipped, "sha_mismatch_keys": sha_mismatch, "read_error_keys": read_errors,
             "api_usage": embedder.usage(),  # 경로(openrouter/google)·호출 수·OpenRouter 비용(USD)
         }
         s3.put_object(Bucket=bucket, Key=f"{prefix}summary.json",
                       Body=json.dumps(summary, ensure_ascii=False, indent=2).encode("utf-8"))
         print("done", status, dict(stats), f"{elapsed:.0f}s ({elapsed / max(done, 1):.3f}s/장)",
               f"-> s3://{bucket}/{prefix}")
+    return _report_read_errors(read_errors, staged.read_errors, done)
+
+
+def _report_read_errors(now: dict[str, str], before: dict[str, int], done: int) -> int:
+    """이번 실행의 Bronze 읽기 실패를 알린다. 몇 장이면 건너뛰고 성공(0), 대부분 실패하면 EXIT_READ_ERRORS."""
+    if not now:
+        return 0
+    print(f"Bronze 파일을 읽지 못해 건너뛴 사진 {len(now)}장 (다음 실행에서 다시 읽음):", dict(Counter(now.values())))
+    stuck = sorted(k for k in now if before.get(k, 0) + 1 >= READ_ERROR_WARN_RUNS)
+    if stuck:
+        print(f"!! {READ_ERROR_WARN_RUNS}번 이상 연속으로 읽지 못한 Bronze 파일 {len(stuck)}개. 파일이 지워졌으면 "
+              "사진 수집에서 다시 받아야 합니다:", stuck[:10])
+    if len(now) >= READ_ERROR_FAIL_MIN and len(now) * 2 > done:
+        print(f"!! 이번 실행에서 {len(now)}/{done} 장을 읽지 못했습니다. S3 권한·네트워크를 확인해 주세요.",
+              file=sys.stderr)
+        return EXIT_READ_ERRORS
     return 0
 
 
@@ -377,7 +414,8 @@ def smoke(args: argparse.Namespace) -> int:
         })
 
         sample = store.stored_rows(conn, gemini.MODEL, limit=args.sample)
-        embedder = gemini.GeminiEmbedder(dim=args.dim)
+        smoke_session = "smoke-" + _new_run_id()
+        embedder = gemini.GeminiEmbedder(dim=args.dim, session_id=smoke_session)
         found, sims, latency, bad = 0, [], [], []
         photos: dict[tuple[str, int], bytes] = {}
         for no, slot, sha, key, vec in sample:
@@ -402,7 +440,7 @@ def smoke(args: argparse.Namespace) -> int:
         })
 
         if args.trunc:
-            full = gemini.GeminiEmbedder(dim=gemini.FULL_DIM)
+            full = gemini.GeminiEmbedder(dim=gemini.FULL_DIM, session_id=smoke_session)
             cos, full_dim = [], None
             for (no, slot), data in list(photos.items())[: args.trunc]:
                 v_full = full.embed_image(data)
@@ -434,7 +472,7 @@ def canary_cmd(args: argparse.Namespace) -> int:
         ref = canary.build_reference(s3, bucket, gemini.MODEL, args.dim)
         _print("canary reset", {"archived": archived, "created_at": ref["created_at"],
                                 "photos": [p["sha256"][:12] for p in ref["photos"]]})
-    embedder = gemini.GeminiEmbedder(dim=args.dim)
+    embedder = gemini.GeminiEmbedder(dim=args.dim, session_id="canary-" + _new_run_id())
     res = canary.run(s3, bucket, embedder, gemini.MODEL, args.dim, threshold)
     _print("canary (고정 사진 → 기준 벡터 코사인)", {
         "ok": res.ok, "threshold": threshold, "min_cosine": res.min_cosine,

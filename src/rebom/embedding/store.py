@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 from rebom.embedding.manifest import Photo
 
@@ -67,6 +67,31 @@ def nearest(conn, model: str, vector: Sequence[float], k: int = 1) -> list[tuple
         (lit, model, lit, k),
     )
     return [(no, slot, sha, float(sim)) for no, slot, sha, sim in rows]
+
+
+SEARCH_CANDIDATES = 200  # 공고로 묶기 전에 뽑는 사진 칸 수. 보호중 필터로 빠지는 만큼 넉넉히
+
+
+def best_per_notice(hits: Iterable[tuple[str, int, str, float]], k: int,
+                    keep: Callable[[str], bool] | None = None) -> list[tuple[str, int, float]]:
+    """사진 칸 결과를 공고별로 묶는다 (11/19 확정). 공고 점수 = 그 공고 사진 중 가장 높은 유사도,
+    best_slot = 그 사진 칸. 평균은 흰 대체 사진처럼 관계없는 사진이 점수를 깎아 쓰지 않는다.
+    keep: 공고 번호 → 검색에 포함할지 (기본 보호중 공고만, 공고 상태는 서비스 테이블에서 읽는다)."""
+    best: dict[str, tuple[int, float]] = {}
+    for no, slot, _sha, sim in hits:
+        if keep is not None and not keep(no):
+            continue
+        if no not in best or sim > best[no][1] or (sim == best[no][1] and slot < best[no][0]):
+            best[no] = (slot, sim)  # 동점이면 앞 칸
+    ranked = sorted(best.items(), key=lambda kv: (-kv[1][1], kv[0]))
+    return [(no, slot, sim) for no, (slot, sim) in ranked[:k]]
+
+
+def nearest_notices(conn, model: str, vector: Sequence[float], k: int = 10,
+                    keep: Callable[[str], bool] | None = None,
+                    candidates: int = SEARCH_CANDIDATES) -> list[tuple[str, int, float]]:
+    """사진 질의 → 공고 순위 (desertion_no, best_slot, 유사도). 사진 칸을 넉넉히 뽑아 공고별 최고값으로 묶는다."""
+    return best_per_notice(nearest(conn, model, vector, k=max(candidates, k)), k, keep)
 
 
 def table_exists(conn) -> bool:

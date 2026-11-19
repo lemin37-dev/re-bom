@@ -56,7 +56,10 @@ def build_reference(s3, bucket: str, model: str, dim: int) -> dict[str, Any]:
     _, _, at = _now()
     photos = []
     for r in rows:
-        data = s3.get_object(Bucket=bucket, Key=r["s3_key"])["Body"].read()
+        try:
+            data = s3.get_object(Bucket=bucket, Key=r["s3_key"])["Body"].read()
+        except Exception:  # noqa: BLE001 - 지워졌거나 못 읽는 파일은 기준 후보에서 뺀다
+            continue
         if hashlib.sha256(data).hexdigest() != r["sha256"] or prep.is_blank(data):
             continue
         jpeg_key = f"{base}reference/{r['sha256']}.jpg"

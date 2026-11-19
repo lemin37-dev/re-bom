@@ -56,7 +56,8 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 2. **이미 S3에 있는 칸 제외**: 같은 칸·같은 sha256이 S3 결과에 있으면 건너뜀.
 3. **같은 sha256은 1번만**: 여러 칸·공고가 같은 파일을 쓰면 대표 1장만 보내고 나머지 칸은 벡터를 나눠 씀(`source=dup`). 이전 실행에서 만든 sha256이면 다시 보내지 않고 복사(`source=reuse`).
 4. **빈 사진으로 판정된 sha256 제외**: `summary.json`의 `skipped_sha256`에 남겨 다음 실행에서도 보내지 않음.
-5. **`--limit`은 고유 sha256 수** 기준. 순서는 대표 칸의 (공고, 칸) 순이라 재실행해도 같습니다.
+5. **Bronze 파일을 못 읽은 사진은 다음 실행에서 다시** (11/19): 파일 없음(`NoSuchKey`)·권한·네트워크 오류로 원본을 못 읽으면 그 사진만 건너뛰고 `summary.json`의 `read_error_keys`(키 → 오류 코드)에 남깁니다. `skipped_sha256`에는 넣지 않으므로 다음 실행이 다시 읽습니다(사진 받기 실패를 다음 날 따라잡는 것과 같은 방식). `plan`의 `retry_read_errors`가 이번에 다시 시도하는 수입니다. 같은 파일을 3번 이상 연속으로 못 읽으면 로그에 `!!` 경고와 키를 남깁니다. 파일이 지워진 경우라 사진 수집에서 다시 받아야 합니다. 한 실행에서 20장 이상이면서 절반 넘게 못 읽으면 권한·네트워크 문제로 보고 종료 코드 4로 실패합니다(받은 결과는 S3에 남고 `load`는 돌지 않음). canary 기준 사진을 고를 때도 못 읽는 파일은 후보에서 뺍니다.
+6. **`--limit`은 고유 sha256 수** 기준. 순서는 대표 칸의 (공고, 칸) 순이라 재실행해도 같습니다.
 
 `--dry-run`이 출력하는 `plan` 항목:
 
@@ -99,7 +100,11 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 | `changed_sha256` | 사진이 바뀐 칸 | 덮어씀 |
 | `unchanged_skip` | sha256이 같음 | 건너뜀 (`--full`이면 다시 씀) |
 | `not_staged_yet` | S3에 아직 임베딩이 없거나 그사이 사진이 바뀜 | 건너뜀 |
-| `rds_not_current` | RDS에 있지만 현재 사진이 아님 (교체 전·사라진 칸) | **세기만 함**, 삭제는 결정 뒤 |
+| `rds_not_current` | RDS에 있지만 현재 사진이 아님 (교체 전·사라진 칸) | **세기만 함**, 지우지 않음 (아래) |
+
+**RDS 행은 지우지 않습니다 [확정, 11/19]**: 종료(입양·반환 등)된 공고도 보호중으로 돌아올 수 있어(data_contract 3절, 복귀 4건 관찰) 벡터를 남겨 둡니다. 그래서 **검색이 기본으로 `processState = '보호중'`인 공고 안에서만** 찾도록 공고 상태와 함께 걸러야 합니다(검색 API 요구 사항). 복귀하면 다시 지우거나 만들 필요 없이 바로 검색에 나옵니다. 교체 전 사진은 같은 칸 키(`desertion_no`, `image_slot`, `model`)로 덮어써서 남지 않고, `rds_not_current`에는 새 벡터가 아직 없는 동안만 잡힙니다.
+
+**공고별 사진 점수 [확정, 11/19]**: 한 공고의 모든 사진 칸(1~8)을 각각 질의 사진과 비교하고, **가장 높은 유사도를 그 공고의 점수**로 씁니다. 결과에는 공고마다 한 번만 나오고, 가장 닮은 칸(`best_slot`)을 함께 돌려줍니다(`store.nearest_notices`, `store.best_per_notice`). 첫 사진만 쓰면 1번 사진이 흐리거나 각도가 다를 때 놓치고, 평균은 흰 대체 사진처럼 관계없는 사진이 점수를 깎아 쓰지 않습니다. 같은 공고의 사진끼리는 로컬 시험에서 보통 유사도 0.9 이상이라 최고값과 다른 칸의 차이는 작습니다. 사진 칸을 먼저 200개 뽑은 뒤 보호중이 아닌 공고를 빼고 공고별로 묶습니다. 화면 썸네일을 1번 사진으로 둘지 `best_slot`으로 둘지는 화면 쪽에서 정합니다(점수를 낸 사진과 썸네일이 다를 수 있음).
 
 500행씩 `INSERT … ON CONFLICT (desertion_no, image_slot, model) DO UPDATE`. `--full`은 전처리·벡터를 고쳤을 때만 씁니다.
 
@@ -181,6 +186,22 @@ gold/image_embedding_canary/model=gemini-embedding-2/dim=768/
 4. 확인 전에는 이 task를 Airflow에서 '성공'으로 표시하지 않습니다. 표시하면 바뀐 벡터가 기존 벡터와 섞입니다.
 
 첫 실행 (2026-11-19, 내 PC → OpenRouter): 기준 6장 생성, 6장 모두 코사인 1.0, 제공자 Google AI Studio, 응답 모델 `gemini-embedding-2`, $0.000697, 12초.
+
+### 7.2 OpenRouter 비용 구분 (누가·어디서·어느 실행)
+
+OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 provider 이름(`Google`, `Google AI Studio`)은 실제로 처리한 곳이라 바꿀 수 없습니다. 그래서 요청마다 아래 표시를 붙입니다(키·개인정보는 넣지 않음).
+
+| 표시 | 값 | OpenRouter 기록에서 |
+|---|---|---|
+| `user` | `REBOM_USAGE_TAG` (DAG: `rebom-embed:airflow:<task_id>`, 지정 안 하면 `rebom-embed:local`) | 생성 기록 `external_user` |
+| `session_id` | 실행 단위: `embed-<run_id>`, `canary-<시각>`, `smoke-<시각>` | 생성 기록 `session_id` |
+| 앱 헤더 | `HTTP-Referer`(레포 주소), `X-OpenRouter-Title: rebom-embed`, 공개 순위에서 숨김 | 생성 기록 `app_id` |
+
+확인 (2026-11-19): 임베딩 요청 2건의 `GET /api/v1/generation?id=…`에서 `external_user`·`session_id`가 보낸 값 그대로, `app_id` 같은 값. 기록이 조회되기까지 1분쯤 걸릴 수 있습니다.
+
+- 우리 쪽 기록: `embed`의 `summary.json`, `canary`의 `checks/` 파일에 `api_usage`(비용 USD·제공자·응답 모델·`usage_tag`·`session_id`)가 남습니다.
+- OpenRouter Activity 화면·CSV는 **모델·API 키·계정 구성원**으로만 묶을 수 있습니다(`user`·`session_id`로는 못 묶음). 화면에서 바로 나눠 보려면 **용도·사람마다 API 키를 따로 만들고**(이름·지출 상한 지정) Secrets Manager에 각각 넣는 방법이 가장 확실합니다. 코드는 `REBOM_GEMINI_SECRET_ID`로 시크릿 이름만 바꾸면 됩니다.
+- `user`·`session_id`로 집계하려면 관리 키(management key)로 Analytics API를 쓰거나 생성 기록을 조회해야 합니다 [미구현].
 
 ## 8. 설계 원칙: S3가 원본, RDS는 서비스용 사본
 
@@ -272,7 +293,7 @@ gold/image_embedding_canary/model=gemini-embedding-2/dim=768/
   - 모델이나 차원을 바꿈 → 사진과 함께 전부 다시 만듭니다 (글은 약 $1, 사진은 약 $4).
 - **보내기 전**: 같은 `text_sha256` + `template_version` + `model_key`가 S3에 있으면 보내지 않습니다.
 - `updTm`은 쓰지 않습니다. 사진처럼 내용으로 판정합니다 (data_contract 3절).
-- 입양·반환으로 끝난 공고는 벡터를 지우지 않고, 검색할 때 공고 상태로 거릅니다 [제안].
+- 입양·반환으로 끝난 공고는 벡터를 지우지 않고, 검색할 때 공고 상태(기본 `보호중`)로 거릅니다 [확정, 11/19, 사진과 같음].
 
 ### 10.3 저장 위치
 
@@ -311,7 +332,7 @@ gold/image_embedding_canary/model=gemini-embedding-2/dim=768/
 ### 10.5 검색에서 합치는 방법 (모델선정 문서 8장 "검색 순위 규칙")
 
 - 글 질의 → Gemini(질의 접두어) → `text_embedding`. 사진 질의 → Gemini(사진 전처리) → `image_embedding`.
-- 두 목록은 **순위**로 합칩니다: `w글/(60 + 글 순위) + w사진/(60 + 사진 순위)`.
+- 두 목록은 **순위**로 합칩니다: `w글/(60 + 글 순위) + w사진/(60 + 사진 순위)`. 사진 순위는 공고별 최고 유사도 순위입니다(4절, 11/19 확정).
 - 가중치: 첫 화면 0.6 : 0.4, 더보기 옆 토글로 "특징 중심" 0.7 : 0.3 · "생김새 중심" 0.4 : 0.6. C1 기준으로 잰 값이라 B로 다시 재서 바꿀 수 있습니다 (I3d). 이미 보여 준 공고는 뺍니다.
 - 바깥 기준은 필터 단계입니다: 값이 맞음 → 미상 1개 → 미상 2개. 값이 다른 공고는 뺍니다.
 - **글 질의로 사진 표도 찾기**: 같은 질의 벡터로 `image_embedding`도 검색해 세 번째 순위 목록으로 합칠 수 있습니다(추가 API 호출 없음). 외모 질의에서 도움이 되는지 I4로 잰 뒤 정합니다 [결정 필요].
@@ -326,7 +347,8 @@ gold/image_embedding_canary/model=gemini-embedding-2/dim=768/
 
 ## 11. 남은 일·결정 필요
 
-- **[결정 필요]** RDS의 현재가 아닌 벡터(종료 공고·교체 전 사진)를 지울지, 검색에서만 거를지. 지금은 `load`가 `rds_not_current`로 세기만 합니다. (`docs/data_contract.md` 6절)
+- **[확정, 11/19]** 종료 공고 벡터는 지우지 않고 검색에서 공고 상태로 거릅니다. 검색 API는 기본으로 `보호중` 공고 안에서만 찾습니다(4절). 공고 상태를 읽을 RDS 서비스 테이블(B)과 조인 방법은 검색 API를 만들 때 정합니다.
+- **[남음]** 보호중 공고에서 사진 칸만 빠진 경우(API에서 popfile이 사라짐): Bronze manifest에 "칸 삭제" 기록이 없어 옛 벡터가 남고 `rds_not_current`로만 셉니다. Silver 사진 현재 표가 운영되면 그 기준으로 정리합니다.
 - **[결정 필요]** 빈 사진 기준(표준편차 4.0)이 이 데이터에 맞는지. 시범 1,100장에서는 0장이었습니다.
 - 인프라 문서의 pgvector 확장 설치 주체 정정 (`infra/terraform/database/README.md`).
 - 서버 실행: `infra/docker/embed.Dockerfile`, ECR `rebom/embed`, k8s 네임스페이스·권한, DAG 태스크 (배포는 사람).

@@ -152,10 +152,18 @@ class FakeS3:
         return P()
 
     def get_object(self, Bucket, Key):
+        if Key not in self.objects:
+            raise NoSuchKey(Key)
         return {"Body": io.BytesIO(self.objects[Key])}
 
     def put_object(self, Bucket, Key, Body):
         self.objects[Key] = Body
+
+
+class NoSuchKey(Exception):
+    """boto3 ClientError 처럼 response["Error"]["Code"] 를 가진다."""
+
+    response = {"Error": {"Code": "NoSuchKey"}}
 
 
 class FakeConn:
@@ -217,7 +225,7 @@ def make_world():
 class FakeEmbedder:
     calls: list = []
 
-    def __init__(self, dim):
+    def __init__(self, dim, session_id=None):
         self.dim = dim
 
     def usage(self):
@@ -301,6 +309,47 @@ def test_embed_skips_sha_mismatch(monkeypatch):
     summary = json.loads(next(v for k, v in s3.objects.items() if k.endswith("summary.json")))
     assert summary["sha_mismatch_keys"] == ["bronze/rescue/images/411300202500002/popfile1.jpg"]
     assert summary["skipped_sha256"] == {} or "blank" in summary["skipped_sha256"].values()
+
+
+def summaries(s3):
+    return [json.loads(v) for k, v in sorted(s3.objects.items()) if k.endswith("summary.json")]
+
+
+def test_missing_bronze_file_is_skipped_recorded_and_retried(monkeypatch, capsys):
+    """Bronze 파일을 못 읽어도 실행 전체가 실패하지 않는다. 그 사진만 건너뛰고 다음 실행에서 다시 읽는다."""
+    s3 = make_world()
+    key = "bronze/rescue/images/411300202500002/popfile1.jpg"
+    data = s3.objects.pop(key)
+    run_cli(monkeypatch, s3, ["embed", "--limit", "10"])
+    assert ("411300202500002", 1) not in {(r["desertion_no"], r["image_slot"]) for r in staged_rows(s3)}
+    first = summaries(s3)[0]
+    assert first["status"] == "ok" and first["read_error_keys"] == {key: "NoSuchKey"}
+    assert first["stats"]["read_error"] == 1 and key not in str(first["skipped_sha256"])  # 영구 제외가 아님
+    assert "Bronze 파일을 읽지 못해 건너뛴 사진 1장" in capsys.readouterr().out
+
+    s3.objects[key] = data  # 다음 날 파일이 다시 읽힘
+    run_cli(monkeypatch, s3, ["embed", "--limit", "10"])
+    assert '"retry_read_errors": 1' in capsys.readouterr().out
+    assert ("411300202500002", 1) in {(r["desertion_no"], r["image_slot"]) for r in staged_rows(s3)}
+    assert FakeEmbedder.calls == [1]  # 그 사진 1장만 보냄
+
+
+def test_read_errors_warn_after_repeated_runs_and_fail_when_most_fail(capsys):
+    key = "bronze/rescue/images/1/popfile1.jpg"
+    assert cli._report_read_errors({}, {}, 10) == 0
+    assert cli._report_read_errors({key: "NoSuchKey"}, {key: cli.READ_ERROR_WARN_RUNS - 1}, 10) == 0
+    assert "연속으로 읽지 못한 Bronze 파일 1개" in capsys.readouterr().out
+    many = {f"k{i}": "AccessDenied" for i in range(cli.READ_ERROR_FAIL_MIN)}
+    assert cli._report_read_errors(many, {}, cli.READ_ERROR_FAIL_MIN + 5) == cli.EXIT_READ_ERRORS
+    assert cli._report_read_errors(many, {}, cli.READ_ERROR_FAIL_MIN * 3) == 0  # 절반 이하면 건너뛰고 성공
+
+
+def test_staged_counts_past_read_errors():
+    s3 = make_world()
+    prefix = staging.run_prefix(gemini.MODEL, 768)
+    for i in range(2):
+        s3.objects[f"{prefix}run_id=r{i}/summary.json"] = json.dumps({"read_error_keys": {"k": "NoSuchKey"}}).encode()
+    assert staging.load_staged(s3, "b", gemini.MODEL, 768, prep.PREP_VERSION).read_errors == {"k": 2}
 
 
 def test_dry_run_writes_nothing(monkeypatch):
@@ -417,7 +466,7 @@ def test_smoke_reports_found_and_same(monkeypatch, capsys):
     calls = {"n": 0}
 
     class FakeEmbedder:
-        def __init__(self, dim):
+        def __init__(self, dim, session_id=None):
             self.dim = dim
 
         def embed_image(self, data):
@@ -433,3 +482,25 @@ def test_smoke_reports_found_and_same(monkeypatch, capsys):
     assert '"manifest_mismatch": 0' in out
     assert '"ok(>=0.99)": true' in out and '"same(>=0.99)": true' in out
     assert '"full_dim": 3072' in out
+
+
+def test_best_per_notice_uses_highest_photo_and_one_row_per_notice():
+    hits = [("A", 2, "s1", 0.91), ("B", 1, "s2", 0.90), ("A", 1, "s3", 0.88),  # A 는 2번 칸이 가장 닮음
+            ("C", 1, "s4", 0.95), ("C", 3, "s5", 0.10),  # C 의 흰 대체 사진(0.10)은 점수에 영향 없음
+            ("D", 1, "s6", 0.99)]
+    assert store.best_per_notice(hits, k=10) == [("D", 1, 0.99), ("C", 1, 0.95), ("A", 2, 0.91), ("B", 1, 0.90)]
+    assert store.best_per_notice(hits, k=2) == [("D", 1, 0.99), ("C", 1, 0.95)]
+    active = {"A", "B", "C"}  # D 는 종료 공고
+    assert [n for n, _, _ in store.best_per_notice(hits, k=10, keep=active.__contains__)] == ["C", "A", "B"]
+
+
+def test_nearest_notices_fetches_enough_photo_candidates(monkeypatch):
+    seen = {}
+
+    def fake_nearest(conn, model, vec, k=1):
+        seen["k"] = k
+        return [("A", 1, "s", 0.8), ("A", 2, "s", 0.9)]
+
+    monkeypatch.setattr(store, "nearest", fake_nearest)
+    assert store.nearest_notices(None, "m", [1.0], k=5) == [("A", 2, 0.9)]
+    assert seen["k"] == store.SEARCH_CANDIDATES

@@ -136,6 +136,22 @@ def test_threshold_boundary():
     assert 0.99 <= res.min_cosine < 1.0 and res.ok
 
 
+def test_reference_skips_unreadable_bronze_files():
+    s3, table = seeded_s3()
+
+    class Missing(FakeS3):
+        def get_object(self, Bucket, Key):
+            if Key == "bronze/rescue/images/0.png":
+                raise KeyError(Key)
+            return super().get_object(Bucket, Key)
+
+    s3.__class__ = Missing
+    res = canary.run(s3, "b", FakeEmbedder(table), MODEL, DIM)
+    ref = canary.load_reference(s3, "b", MODEL, DIM)
+    assert res.ok and len(ref["photos"]) == canary.CANARY_SIZE
+    assert "bronze/rescue/images/0.png" not in [p["s3_key"] for p in ref["photos"]]
+
+
 def test_reference_needs_enough_photos():
     s3, table = seeded_s3(n=3)
     with pytest.raises(RuntimeError):
@@ -146,13 +162,13 @@ def test_cli_exit_codes_and_reset(monkeypatch, capsys):
     s3, table = seeded_s3()
     monkeypatch.setenv("REBOM_S3_BUCKET", "b")
     monkeypatch.setattr(cli, "_s3", lambda: s3)
-    monkeypatch.setattr(gemini, "GeminiEmbedder", lambda dim: FakeEmbedder(table))
+    monkeypatch.setattr(gemini, "GeminiEmbedder", lambda dim, **kw: FakeEmbedder(table))
     assert cli.main(["canary", "--dim", str(DIM)]) == 0
 
-    monkeypatch.setattr(gemini, "GeminiEmbedder", lambda dim: FakeEmbedder(table, drift=True))
+    monkeypatch.setattr(gemini, "GeminiEmbedder", lambda dim, **kw: FakeEmbedder(table, drift=True))
     assert cli.main(["canary", "--dim", str(DIM)]) == canary.EXIT_DRIFT
     assert "모델 버전 확인이 필요합니다" in capsys.readouterr().out
 
-    monkeypatch.setattr(gemini, "GeminiEmbedder", lambda dim: FakeEmbedder(table))
+    monkeypatch.setattr(gemini, "GeminiEmbedder", lambda dim, **kw: FakeEmbedder(table))
     assert cli.main(["canary", "--reset", "--dim", str(DIM)]) == 0
     assert any("/reference_archive/" in k for k in s3.objects)  # 이전 기준은 지우지 않고 보관

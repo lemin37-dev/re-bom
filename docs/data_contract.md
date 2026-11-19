@@ -125,14 +125,15 @@
   - **적재 순서 [제안, 11/17]**: 임베딩 결과는 먼저 S3 `gold/image_embedding/model=<모델>/dim=<차원>/run_id=<id>/`에 parquet(사진 칸 1개 = 1행, `source` = api·dup·reuse)와 `summary.json`(건수·시간·건너뛴 sha256)으로 씁니다. 확인(`cli staged`)과 승인 뒤 `cli load`로 RDS에 넣습니다.
   - **S3가 원본, RDS는 서비스용 사본 [제안, 11/17]**: S3에는 모델·차원·전처리별로 모든 벡터를 남기고(모델을 바꿔도 지우지 않음, 되돌리기·재적재에 Gemini 재호출 불필요), RDS에는 서비스 중인 모델의 현재 사진 벡터만 둡니다.
     - **매일 변경분만**: `embed`는 manifest의 현재 sha256 중 S3에 없는 것만 보내고, `load`는 manifest의 현재 sha256과 RDS의 sha256을 비교해 새 칸과 사진이 바뀐 칸만 씁니다. 같은 칸은 건너뜁니다(전처리를 바꿨을 때만 `--full`).
-    - **RDS에 남는 옛 벡터**: 교체 전 사진·manifest에서 사라진 칸은 `load`가 개수(`rds_not_current`)만 보여 주고 지우지 않습니다. 지울지는 아래 [결정 필요]에서 정합니다.
+    - **RDS에 남는 옛 벡터**: 교체 전 사진·manifest에서 사라진 칸은 `load`가 개수(`rds_not_current`)만 보여 주고 지우지 않습니다.
+    - **Bronze 원본을 못 읽을 때 [11/19]**: 그 사진만 건너뛰고 `summary.json`의 `read_error_keys`에 남겨 다음 실행에서 다시 읽습니다(영구 제외 아님).
     - **모델 교체**: 새 모델 벡터를 S3에 만들고 → RDS에 나란히 넣어 비교하고(기본키에 `model` 포함, 차원이 다르면 새 마이그레이션) → 전환 뒤 옛 모델 행을 RDS에서 지웁니다. RDS에는 많아야 2개 모델만 잠깐 둡니다.
     - **비용 근거 (11/17 실측)**: 768차원 1,461행에 테이블 10.4MB·HNSW 4.6MB, 전체 42,219행이면 약 300MB·130MB(추정). gp3 20GB는 이미 할당돼 있어 디스크 비용은 늘지 않고, 제약은 `db.t4g.micro` 메모리 1GB입니다(HNSW는 메모리에 올라가야 빠름). S3 parquet는 모델 1개에 약 140MB입니다. 3072차원은 4배이고 pgvector HNSW 한도(2,000차원)를 넘어 인덱스를 그대로 만들 수 없습니다.
     - 글(텍스트) 임베딩도 같은 구조(`gold/text_embedding/…`, 카드 해시 기준)로 합니다. 글도 사진과 같은 모델(`gemini-embedding-2`, 768)을 쓰고, 검색에서는 순위로 합칩니다. RDS 테이블 초안은 `db/migrations/002_text_embedding.sql`(`text_embedding`, 기본키 공고·`text_kind`·`model_key`, 아직 적용 안 함). 자세한 계획은 `docs/image_embedding_pipeline.md` 10절.
   - **키**: (`desertion_no`, `image_slot`, `model`). 같은 칸의 sha256이 바뀌면 그 행을 덮어씁니다(과거 버전 벡터는 남기지 않음).
   - **칼럼**: `photo_version`, `sha256`, `s3_key`(원본 키), `photo_run_id`, `embedding vector(768)`, `embedded_at`.
   - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스. 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
-  - **[결정 필요]** 종료 공고 사진의 벡터를 지울지, 검색에서만 거를지 (B 서비스 테이블 규칙과 함께)
+  - **[확정, 11/19]** 종료 공고 사진의 벡터는 지우지 않고 검색에서 거릅니다. 종료 뒤 보호중으로 복귀하는 공고가 있기 때문입니다(3절). 검색은 기본으로 `processState`가 `보호중`인 공고 안에서만 찾습니다. 공고 상태는 B 서비스 테이블에서 읽습니다.
 
 ## 7. 컬럼 (A→B 인계 스키마 v0)
 

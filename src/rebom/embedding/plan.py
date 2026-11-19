@@ -96,7 +96,7 @@ def build_load(staged: Staged, current: dict[tuple[str, int], mf.Photo], in_rds:
         changed += old is not None and old != p.sha256
         lp.write.append((p, row["embedding"]))
     # RDS 에 있지만 manifest 의 현재 사진이 아닌 칸 (교체 전 sha256 이면서 새 벡터가 아직 없거나, 칸이 사라짐).
-    # 지울지는 data_contract "종료 공고 사진의 벡터" 결정 뒤에 정한다. 지금은 세기만 한다.
+    # 지우지 않는다(11/19 확정): 종료 공고는 보호중으로 복귀할 수 있어 검색이 공고 상태(기본 보호중)로 거른다.
     written = {p.key for p, _ in lp.write}
     stale = sum(1 for k, sha in in_rds.items()
                 if k not in current or (current[k].sha256 != sha and k not in written))
