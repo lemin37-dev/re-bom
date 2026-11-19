@@ -79,7 +79,10 @@ def _key_from_secrets_manager() -> str | None:
     if isinstance(data, str):
         return data.strip()
     if isinstance(data, dict):
-        return next((str(data[f]).strip() for f in SECRET_FIELDS if data.get(f)), None)
+        found = next((str(data[f]).strip() for f in SECRET_FIELDS if data.get(f)), None)
+        if found is None and len(data) == 1:  # 필드가 하나뿐이면 이름과 상관없이 그 값 (예: {"rebom-embed-prod": ...})
+            found = str(next(iter(data.values())) or "").strip() or None
+        return found
     return None
 
 

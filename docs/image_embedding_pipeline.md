@@ -40,7 +40,7 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 | 자원 | 값 |
 |---|---|
 | 모델 | `gemini-embedding-2`, `output_dimensionality=768` (지정하지 않으면 3072) |
-| Gemini 키 | Secrets Manager `rebom/embed/prod/gemini_api_key` (서버 운영 전용 키, 11-19 비용 실측용으로 분리. JSON이면 `GEMINI_API_KEY`·`gemini_api_key`·`api_key`·`key` 중 처음 있는 필드). 순서: 환경 변수 `GEMINI_API_KEY` → `.env` → Secrets Manager |
+| Gemini 키 | Secrets Manager `rebom/embed/prod/gemini_api_key` (서버 운영 전용 키, 11-19 비용 실측용으로 분리. JSON이면 `GEMINI_API_KEY`·`gemini_api_key`·`api_key`·`key` 중 처음 있는 필드, 필드가 하나뿐이면 이름과 상관없이 그 값). 순서: 환경 변수 `GEMINI_API_KEY` → `.env` → Secrets Manager |
 | 버킷 | `rebom-data-559987919299` (ap-northeast-2) |
 | RDS | `rebom-dev-pg` PostgreSQL 18.3, DB·사용자 `rebom`, 접속 정보 `rebom/dev/rebom-db`, SSL 필수, k3s 노드에서만 접속 |
 | pgvector | 0.8.1. 확장 설치는 관리자(`rds!db-...` 시크릿)만 가능 (아래 5절) |

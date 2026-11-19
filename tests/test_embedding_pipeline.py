@@ -116,7 +116,8 @@ def test_load_api_key_falls_back_to_secrets_manager(monkeypatch):
     (json.dumps({"api_key": " k2 "}), "k2"),
     (json.dumps({"other": "x", "key": "k3"}), "k3"),
     ("  plain-key ", "plain-key"),
-    (json.dumps({"other": "x"}), None),
+    (json.dumps({"rebom-embed-prod": "k4"}), "k4"),  # 필드 하나면 이름 무관
+    (json.dumps({"other": "x", "another": "y"}), None),  # 여럿인데 아는 이름 없음
 ])
 def test_secret_field_names(monkeypatch, secret, want):
     monkeypatch.delenv("REBOM_GEMINI_SECRET_ID", raising=False)
