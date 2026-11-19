@@ -214,3 +214,9 @@ def test_drift_check_runs_canary_before_embed():
     kw = tasks["check_embedding_drift"]
     assert ast.literal_eval(kw["arguments"]) == ["canary"]
     assert "trigger_rule" not in tasks["embed_photos"] and "trigger_rule" not in kw
+
+
+def test_embedding_tasks_label_openrouter_usage():
+    """OpenRouter 비용 구분: 임베딩 파드는 task 이름이 든 REBOM_USAGE_TAG 를 받는다(키 값은 아님)."""
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert '"REBOM_USAGE_TAG": f"rebom-embed:airflow:{task_id}"' in src

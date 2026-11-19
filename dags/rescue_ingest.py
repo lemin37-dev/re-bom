@@ -165,6 +165,8 @@ with DAG(
                 "REBOM_S3_BUCKET": DATA_BUCKET,
                 "AWS_DEFAULT_REGION": "ap-northeast-2",
                 "REBOM_GEMINI_SECRET_ID": GEMINI_SECRET_ID,  # 시크릿 이름만. 키 값은 Pod 안에서 읽는다
+                # OpenRouter 비용 구분: 생성 기록의 external_user 로 남는다 (누가·어디서·무엇을)
+                "REBOM_USAGE_TAG": f"rebom-embed:airflow:{task_id}",
             },
             node_selector={"rebom/pool": "main"},
             # 전체 S3 결과(4만+ 행 × 768, float32)와 manifest 를 메모리에 읽는다. 실측 뒤 조정

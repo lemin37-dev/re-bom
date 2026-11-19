@@ -163,3 +163,52 @@ def test_openrouter_error_in_200_body():
     with pytest.raises(g.OpenRouterError) as e:
         emb.embed_texts(["a"])
     assert e.value.code == 400
+
+
+def test_openrouter_usage_labels_in_body(monkeypatch):
+    """비용 구분: 요청마다 user(누가·어디서)와 session_id(어느 실행)를 붙인다."""
+    monkeypatch.setenv("REBOM_USAGE_TAG", "rebom-embed:airflow:embed_photos")
+    monkeypatch.setenv("GEMINI_API_KEY", "sk-or-v1-test")
+    post = FakeOpenRouter()
+    emb = g.GeminiEmbedder(session_id="embed-20261119T030500-abc123", sleep=lambda s: None)
+    emb.client.models._post = post
+    emb.embed_texts(["a"])
+    assert post.bodies[0]["user"] == "rebom-embed:airflow:embed_photos"
+    assert post.bodies[0]["session_id"] == "embed-20261119T030500-abc123"
+    u = emb.usage()
+    assert u["usage_tag"] == "rebom-embed:airflow:embed_photos" and u["session_id"].startswith("embed-")
+
+
+def test_usage_tag_default_and_cleanup(monkeypatch):
+    monkeypatch.delenv("REBOM_USAGE_TAG", raising=False)
+    assert g.usage_tag() == "rebom-embed:local"
+    monkeypatch.setenv("REBOM_USAGE_TAG", " rebom-embed:local:my pc ")
+    assert g.usage_tag() == "rebom-embed:local:my_pc"
+
+
+def test_openrouter_http_headers(monkeypatch):
+    """앱 이름 헤더는 붙이고(공개 순위에는 숨김), 키는 Authorization 에만 있다."""
+    seen = {}
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"data": [{"index": 0, "embedding": [1.0, 0.0]}], "provider": "Google"}'
+
+    def fake_urlopen(req, timeout):
+        seen["headers"] = {k.lower(): v for k, v in req.header_items()}
+        seen["timeout"] = timeout
+        return Resp()
+
+    monkeypatch.setattr(g.urllib.request, "urlopen", fake_urlopen)
+    emb = g.GeminiEmbedder(client=g.OpenRouterClient("sk-or-v1-test", timeout=5), sleep=lambda s: None)
+    emb.embed_texts(["a"])
+    h = seen["headers"]
+    assert h["x-openrouter-title"] == "rebom-embed" and h["x-openrouter-app-visibility"] == "hidden"
+    assert h["http-referer"].startswith("https://github.com/")
+    assert h["authorization"] == "Bearer sk-or-v1-test" and seen["timeout"] == 5

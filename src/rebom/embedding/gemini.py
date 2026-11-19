@@ -36,6 +36,24 @@ RETRY_CODES = {408, 429, 500, 502, 503, 504}
 OPENROUTER_URL = "https://openrouter.ai/api/v1/embeddings"
 OPENROUTER_MODEL = f"google/{MODEL}"
 OPENROUTER_KEY_PREFIX = "sk-or-"
+# 비용 구분용 표시 (11-19). OpenRouter 의 provider 이름(Google AI Studio 등)은 실제 처리한 곳이라 바꿀 수 없어서,
+# 요청마다 누가·어디서(user → 생성 기록 external_user)와 어느 실행(session_id)을 붙인다.
+# 앱 이름 헤더는 공개 순위에 나오지 않게 hidden. 키·개인정보는 넣지 않는다.
+APP_NAME = "rebom-embed"
+APP_HEADERS = {
+    "HTTP-Referer": "https://github.com/lemin37-dev/re-bom",
+    "X-OpenRouter-Title": APP_NAME,
+    "X-Title": APP_NAME,
+    "X-OpenRouter-App-Visibility": "hidden",
+}
+USAGE_TAG_ENV = "REBOM_USAGE_TAG"  # 예: rebom-embed:airflow:embed_photos (DAG task 마다 지정)
+DEFAULT_USAGE_TAG = f"{APP_NAME}:local"  # 내 PC 등 지정하지 않은 실행
+
+
+def usage_tag() -> str:
+    """요청에 붙일 '누가·어디서' 표시. 256자 이내, 공백 없이."""
+    tag = (os.environ.get(USAGE_TAG_ENV) or DEFAULT_USAGE_TAG).strip().replace(" ", "_")
+    return tag[:256]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -143,10 +161,13 @@ class _OpenRouterModels:
     contents 는 문자열(글) 또는 {"content": [{"type": "image_url", ...}]}(사진) 목록. 입력 하나 → 벡터 하나.
     """
 
-    def __init__(self, api_key: str, timeout: float, post: Callable[[dict], dict] | None = None):
+    def __init__(self, api_key: str, timeout: float, post: Callable[[dict], dict] | None = None,
+                 user: str | None = None, session_id: str | None = None):
         self._key = api_key
         self.timeout = timeout
         self._post = post or self._http_post
+        self.user = user  # 누가·어디서 (OpenRouter 생성 기록의 external_user)
+        self.session_id = session_id  # 어느 실행 (생성 기록의 session_id)
         self.cost = 0.0  # OpenRouter usage.cost 합 (크레딧 = USD)
         self.providers: dict[str, int] = {}
         self.served_models: dict[str, int] = {}
@@ -154,7 +175,7 @@ class _OpenRouterModels:
     def _http_post(self, body: dict) -> dict:
         req = urllib.request.Request(
             OPENROUTER_URL, data=json.dumps(body).encode("utf-8"), method="POST",
-            headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json", **APP_HEADERS},
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
@@ -167,8 +188,13 @@ class _OpenRouterModels:
 
     def embed_content(self, model: str, contents: Sequence[Any], config: Any) -> _Result:
         dim = config["output_dimensionality"] if isinstance(config, dict) else config.output_dimensionality
-        out = self._post({"model": OPENROUTER_MODEL if model == MODEL else model, "input": list(contents),
-                          "dimensions": dim, "encoding_format": "float"})
+        body = {"model": OPENROUTER_MODEL if model == MODEL else model, "input": list(contents),
+                "dimensions": dim, "encoding_format": "float"}
+        if self.user:
+            body["user"] = self.user
+        if self.session_id:
+            body["session_id"] = self.session_id
+        out = self._post(body)
         if out.get("error"):  # 200 인데 본문에 오류가 오는 경우
             err = out["error"] if isinstance(out["error"], dict) else {"message": out["error"]}
             code = err.get("code")
@@ -185,8 +211,9 @@ class _OpenRouterModels:
 class OpenRouterClient:
     """genai.Client 대신 쓰는 얇은 OpenRouter 클라이언트 (models.embed_content 만)."""
 
-    def __init__(self, api_key: str, timeout: float = 60.0, post: Callable[[dict], dict] | None = None):
-        self.models = _OpenRouterModels(api_key, timeout, post)
+    def __init__(self, api_key: str, timeout: float = 60.0, post: Callable[[dict], dict] | None = None,
+                 user: str | None = None, session_id: str | None = None):
+        self.models = _OpenRouterModels(api_key, timeout, post, user, session_id)
 
     def __repr__(self) -> str:  # 키가 로그에 찍히지 않게
         return f"OpenRouterClient(timeout={self.models.timeout})"
@@ -219,13 +246,14 @@ class GeminiEmbedder:
     max_retries: int = 5
     sleep: Callable[[float], None] = time.sleep
     timeout: float = 60.0
+    session_id: str | None = None  # OpenRouter 비용 구분: 어느 실행인지 (예: embed run_id)
     latencies: list[float] = field(default_factory=list)  # 호출별 초
 
     def __post_init__(self) -> None:
         if self.client is None:
             key = load_api_key()
             if is_openrouter_key(key):
-                self.client = OpenRouterClient(key, timeout=self.timeout)
+                self.client = OpenRouterClient(key, timeout=self.timeout, user=usage_tag(), session_id=self.session_id)
             else:
                 from google import genai
 
@@ -240,7 +268,8 @@ class GeminiEmbedder:
         out: dict[str, Any] = {"via": "openrouter" if self.via_openrouter else "google", "calls": len(self.latencies)}
         if self.via_openrouter:
             m = self.client.models
-            out.update(cost_usd=round(m.cost, 6), providers=dict(m.providers), served_models=dict(m.served_models))
+            out.update(cost_usd=round(m.cost, 6), providers=dict(m.providers), served_models=dict(m.served_models),
+                       usage_tag=m.user, session_id=m.session_id)
         return out
 
     def _texts(self, texts: Sequence[str]) -> list[Any]:
