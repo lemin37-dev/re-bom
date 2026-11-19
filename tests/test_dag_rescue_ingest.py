@@ -199,3 +199,9 @@ def test_photo_embedding_has_caps():
     assert load[0] == "load" and int(load[load.index("--max-write") + 1]) > 0
     assert "--full" not in load
 
+
+
+def test_photo_embedding_uses_prod_embed_key_name():
+    """임베딩 파드는 서버 운영 전용 Gemini 키 시크릿 이름만 받는다(값은 Pod 안에서 Secrets Manager 로 읽음)."""
+    assert _constants()["GEMINI_SECRET_ID"] == "rebom/embed/prod/gemini_api_key"
+    assert "GEMINI_API_KEY" not in DAG_FILE.read_text(encoding="utf-8")

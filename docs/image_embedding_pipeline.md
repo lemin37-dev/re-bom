@@ -40,7 +40,7 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 | 자원 | 값 |
 |---|---|
 | 모델 | `gemini-embedding-2`, `output_dimensionality=768` (지정하지 않으면 3072) |
-| Gemini 키 | Secrets Manager `rebom/dev/gemini_api_key` (JSON 필드 `gemini_api_key`). 순서: 환경 변수 `GEMINI_API_KEY` → `.env` → Secrets Manager |
+| Gemini 키 | Secrets Manager `rebom/embed/prod/gemini_api_key` (서버 운영 전용 키, 11-19 비용 실측용으로 분리. JSON이면 `GEMINI_API_KEY`·`gemini_api_key`·`api_key`·`key` 중 처음 있는 필드). 순서: 환경 변수 `GEMINI_API_KEY` → `.env` → Secrets Manager |
 | 버킷 | `rebom-data-559987919299` (ap-northeast-2) |
 | RDS | `rebom-dev-pg` PostgreSQL 18.3, DB·사용자 `rebom`, 접속 정보 `rebom/dev/rebom-db`, SSL 필수, k3s 노드에서만 접속 |
 | pgvector | 0.8.1. 확장 설치는 관리자(`rds!db-...` 시크릿)만 가능 (아래 5절) |
@@ -149,7 +149,7 @@ rescue_incremental → rescue_photos → photos_done ─┬→ silver_dry_run (�
 3. 결과 확인은 Airflow 로그(`plan`, `load plan` 출력)와 S3 `summary.json`으로 합니다. `smoke`는 매일 돌리지 않습니다(과금).
 
 - 이미지: ECR `rebom/embed` (`infra/docker/embed.Dockerfile`, develop 머지 시 CI가 빌드). 파드는 `rebom-ingest` 네임스페이스에서 뜹니다.
-- 키: Gemini(`rebom/dev/gemini_api_key`)·DB(`rebom/dev/rebom-db`)는 노드 역할로 Secrets Manager에서 읽습니다. 이미지·DAG에 키를 넣지 않습니다.
+- 키: Gemini(`rebom/embed/prod/gemini_api_key`, 임베딩 전용)·DB(`rebom/dev/rebom-db`)는 노드 역할로 Secrets Manager에서 읽습니다. 이미지·DAG에 키를 넣지 않습니다.
 - 메모리: S3 결과 전체(4만+ 행 × 768)를 읽습니다. 벡터를 float32 배열로 읽어 수백 MB 안에 들어갑니다(limit 2Gi, 실측 뒤 조정).
 - 처음 배포 순서(사람): ① `infra/terraform/registry`에 `rebom/embed` 저장소 추가 apply ② develop 머지 → CI가 이미지 빌드 ③ Argo CD가 DAG 반영. 이미지가 없으면 `embed_photos`가 이미지 받기 오류로 실패하지만 Silver에는 영향이 없습니다.
 

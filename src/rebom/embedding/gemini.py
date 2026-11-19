@@ -52,12 +52,14 @@ def sniff_mime(data: bytes) -> str:
     raise ValueError("JPEG/PNG/WEBP/GIF 가 아닌 파일")
 
 
-DEFAULT_SECRET_ID = "rebom/dev/gemini_api_key"  # JSON {"gemini_api_key": "..."}. 노드 역할은 rebom/* 만 읽는다
-SECRET_FIELD = "gemini_api_key"
+# 서버 운영용 임베딩 전용 키 (11-19: 모델 비용 실측을 위해 다른 용도와 키를 나눔). 노드 역할은 rebom/* 만 읽는다
+DEFAULT_SECRET_ID = "rebom/embed/prod/gemini_api_key"
+# 시크릿 값이 JSON 이면 이 이름들 중 처음 있는 필드를 쓴다 (photo_embed.py 와 같은 순서)
+SECRET_FIELDS = ("GEMINI_API_KEY", "gemini_api_key", "api_key", "key")
 
 
 def _key_from_secrets_manager() -> str | None:
-    """서버 Pod 용. REBOM_GEMINI_SECRET_ID(기본 rebom/dev/gemini_api_key)를 노드 역할·AWS 프로필로 읽는다."""
+    """서버 Pod 용. REBOM_GEMINI_SECRET_ID(기본 rebom/embed/prod/gemini_api_key)를 노드 역할·AWS 프로필로 읽는다."""
     secret_id = os.environ.get("REBOM_GEMINI_SECRET_ID", DEFAULT_SECRET_ID)
     try:
         import boto3
@@ -71,9 +73,14 @@ def _key_from_secrets_manager() -> str | None:
     try:
         import json
 
-        return json.loads(raw).get(SECRET_FIELD)
+        data = json.loads(raw)
     except ValueError:  # JSON 이 아니면 값 자체가 키
         return raw.strip()
+    if isinstance(data, str):
+        return data.strip()
+    if isinstance(data, dict):
+        return next((str(data[f]).strip() for f in SECRET_FIELDS if data.get(f)), None)
+    return None
 
 
 def load_api_key() -> str:

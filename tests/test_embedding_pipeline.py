@@ -108,7 +108,26 @@ def test_load_api_key_falls_back_to_secrets_manager(monkeypatch):
     monkeypatch.setitem(__import__("sys").modules, "boto3",
                         SimpleNamespace(client=lambda name, region_name=None: FakeSM()))
     assert gemini.load_api_key() == "test-key"
-    assert seen["id"] == "rebom/dev/gemini_api_key"
+    assert seen["id"] == "rebom/embed/prod/gemini_api_key"
+
+
+@pytest.mark.parametrize("secret, want", [
+    (json.dumps({"GEMINI_API_KEY": "k1"}), "k1"),
+    (json.dumps({"api_key": " k2 "}), "k2"),
+    (json.dumps({"other": "x", "key": "k3"}), "k3"),
+    ("  plain-key ", "plain-key"),
+    (json.dumps({"other": "x"}), None),
+])
+def test_secret_field_names(monkeypatch, secret, want):
+    monkeypatch.delenv("REBOM_GEMINI_SECRET_ID", raising=False)
+
+    class FakeSM:
+        def get_secret_value(self, SecretId):
+            return {"SecretString": secret}
+
+    monkeypatch.setitem(__import__("sys").modules, "boto3",
+                        SimpleNamespace(client=lambda name, region_name=None: FakeSM()))
+    assert gemini._key_from_secrets_manager() == want
 
 
 def test_env_key_wins_over_secret(monkeypatch):

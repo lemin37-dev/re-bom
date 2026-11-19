@@ -29,7 +29,7 @@
     빠진 칸은 다음 날 따라잡는다. --limit 5000 은 상한(약 $0.6). 평소 하루 수백 장, 1분 안팎.
   - load 는 RDS 의 sha256 과 비교해 바뀐 칸만 쓴다. --max-write 5000 을 넘거나 차원·정규화가 틀리면 쓰지 않고 실패한다
     (사람이 staged 로 확인한 뒤 손으로 실행). embed 가 실패하면 load 는 돌지 않는다.
-  - Gemini 키(rebom/dev/gemini_api_key)와 DB 접속(rebom/dev/rebom-db)은 노드 역할로 Secrets Manager 에서 읽는다.
+  - Gemini 키(서버 운영 전용 rebom/embed/prod/gemini_api_key)와 DB 접속(rebom/dev/rebom-db)은 노드 역할로 Secrets Manager 에서 읽는다.
     수집 Secret(rebom-ingest)은 붙이지 않는다.
 - 사진의 첫 전체 수집(백필)은 11/11~11/12 에 수동 파드로 끝냈다(docs/data_contract.md 6절). 이 task 는 그 뒤에 생긴
   새 칸과 실패(failed) 칸 재시도만 받는다. 이미 받은 칸은 사진 주소가 바뀌어도 다시 받지 않는다(같은 문서, 별도 작업).
@@ -51,6 +51,7 @@ from airflow.sdk import DAG
 from kubernetes.client import models as k8s
 
 INGEST_IMAGE = "559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/ingest:develop"
+GEMINI_SECRET_ID = "rebom/embed/prod/gemini_api_key"  # 임베딩 전용 키(비용 실측용으로 분리)
 EMBED_IMAGE = "559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/embed:develop"
 DATA_BUCKET = "rebom-data-559987919299"
 # 수집 task 가 XCom 으로 넘긴 Bronze run_id. KubernetesPodOperator 의 arguments 는 템플릿이라 실행할 때 값으로 바뀐다.
@@ -157,7 +158,11 @@ with DAG(
             image=EMBED_IMAGE,
             image_pull_policy="Always",
             arguments=arguments,
-            env_vars={"REBOM_S3_BUCKET": DATA_BUCKET, "AWS_DEFAULT_REGION": "ap-northeast-2"},
+            env_vars={
+                "REBOM_S3_BUCKET": DATA_BUCKET,
+                "AWS_DEFAULT_REGION": "ap-northeast-2",
+                "REBOM_GEMINI_SECRET_ID": GEMINI_SECRET_ID,  # 시크릿 이름만. 키 값은 Pod 안에서 읽는다
+            },
             node_selector={"rebom/pool": "main"},
             # 전체 S3 결과(4만+ 행 × 768, float32)와 manifest 를 메모리에 읽는다. 실측 뒤 조정
             container_resources=k8s.V1ResourceRequirements(
