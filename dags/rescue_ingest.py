@@ -22,8 +22,11 @@
   (photos_done, trigger_rule all_done). 그래서 사진 task 가 실패해도 DAG 실행 결과에는 잘 드러나지 않으니 로그로 따로 확인한다.
 - Silver 는 --check-photo-manifests 로 같은 run_id 의 사진 manifest 도 DRY_RUN 검사한다(PR #36). 이 옵션은 #36 이 들어간
   storage 이미지에만 있으므로, 이 DAG 는 #36 머지와 이미지 빌드가 끝난 뒤에 배포한다. 옛 이미지면 silver_dry_run 이 인자 오류로 실패한다.
-- 사진 임베딩(embed_photos → load_photo_embeddings)은 사진 task 가 끝나면(photos_done) 바로 돈다. Silver 와는 따로 가서
-  서로 막지 않는다. 임베딩 이미지(ECR rebom/embed, infra/docker/embed.Dockerfile)를 쓴다.
+- 사진 임베딩(check_embedding_drift → embed_photos → load_photo_embeddings)은 사진 task 가 끝나면(photos_done) 바로 돈다.
+  Silver 와는 따로 가서 서로 막지 않는다. 임베딩 이미지(ECR rebom/embed, infra/docker/embed.Dockerfile)를 쓴다.
+  - check_embedding_drift: 모델 이름이 같아도 내부가 바뀌면 벡터가 섞이므로, 고정 사진 6장을 다시 임베딩해 기준 벡터와
+    코사인 0.99 이상인지 본다. 미만이면 실패(embed·load 안 함)하고, 이번 벡터를 모델 이름·날짜 경로에 저장하고,
+    로그에 대응 방법을 남긴다(src/rebom/embedding/canary.py). 확인 전에는 이 task 를 '성공'으로 표시하지 않는다.
   - embed 는 run_id 를 받지 않는다. 모든 사진 manifest 의 현재 사진과 S3 결과(gold/image_embedding/)를 sha256 으로 비교해
     새·바뀐 사진만 Gemini 로 보낸다(docs/image_embedding_pipeline.md). 그래서 사진 task 가 일부 실패해도 받은 만큼만 하고,
     빠진 칸은 다음 날 따라잡는다. --limit 5000 은 상한(약 $0.6). 평소 하루 수백 장, 1분 안팎.
@@ -174,6 +177,13 @@ with DAG(
             in_cluster=True,
         )
 
+    # 모델 변화 감시: 고정 사진 6장을 다시 임베딩해 기준과 코사인 0.99 이상이어야 embed·load 로 간다(요청 1번, 약 $0.0007).
+    # 미만이면 종료 코드 3 으로 실패하고, 로그에 대응 방법을 남긴다. 확인 전에는 '성공'으로 표시하지 않는다.
+    check_embedding_drift = embed_task(
+        task_id="check_embedding_drift",
+        name="check-embedding-drift",
+        arguments=["canary"],
+    )
     embed_photos = embed_task(
         task_id="embed_photos",
         name="embed-photos",
@@ -188,4 +198,4 @@ with DAG(
     rescue_incremental >> [generate_ingest_events, rescue_photos]
     rescue_photos >> photos_done
     [generate_ingest_events, photos_done] >> silver_dry_run
-    photos_done >> embed_photos >> load_photo_embeddings
+    photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings

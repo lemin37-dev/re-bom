@@ -423,6 +423,30 @@ def smoke(args: argparse.Namespace) -> int:
     return 0
 
 
+def canary_cmd(args: argparse.Namespace) -> int:
+    """통과하면 0, 벡터가 바뀌었으면 3 (Airflow task 실패 → embed·load 가 돌지 않음)."""
+    from rebom.embedding import canary, gemini
+
+    bucket, s3 = _bucket(), _s3()
+    threshold = canary.THRESHOLD if args.threshold is None else args.threshold
+    if args.reset:
+        archived = canary.archive_reference(s3, bucket, gemini.MODEL, args.dim)
+        ref = canary.build_reference(s3, bucket, gemini.MODEL, args.dim)
+        _print("canary reset", {"archived": archived, "created_at": ref["created_at"],
+                                "photos": [p["sha256"][:12] for p in ref["photos"]]})
+    embedder = gemini.GeminiEmbedder(dim=args.dim)
+    res = canary.run(s3, bucket, embedder, gemini.MODEL, args.dim, threshold)
+    _print("canary (고정 사진 → 기준 벡터 코사인)", {
+        "ok": res.ok, "threshold": threshold, "min_cosine": res.min_cosine,
+        "cosines": {k[:12]: v for k, v in res.cosines.items()}, "created_reference": res.created_reference,
+        "api_usage": res.usage, "check": f"s3://{bucket}/{res.check_key}",
+    })
+    if not res.ok:
+        print(canary.drift_message(res, bucket, gemini.MODEL, args.dim, threshold))
+        return canary.EXIT_DRIFT
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m rebom.embedding.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -454,6 +478,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="쓸 행이 N 을 넘으면 쓰지 않고 실패 (매일 DAG 의 안전장치, 0 이면 상한 없음)")
     ld.add_argument("--dim", type=int, default=768)
     ld.set_defaults(func=load)
+
+    c = sub.add_parser("canary", help="매일 embed 전 모델 변화 감시: 고정 사진 6장 재임베딩 → 기준과 코사인 (요청 1번)")
+    c.add_argument("--threshold", type=float, default=None, help="통과 기준 코사인 (기본 0.99)")
+    c.add_argument("--reset", action="store_true",
+                   help="기준을 지금 S3 벡터로 다시 만든다(이전 기준은 보관). 모델 교체·전체 재임베딩 뒤에만")
+    c.add_argument("--dim", type=int, default=768)
+    c.set_defaults(func=canary_cmd)
 
     s = sub.add_parser("smoke", help="RDS 벡터 점검 (Gemini 를 sample+trunc 번 호출)")
     s.add_argument("--sample", type=int, default=10, help="다시 임베딩해 볼 저장 행 수")

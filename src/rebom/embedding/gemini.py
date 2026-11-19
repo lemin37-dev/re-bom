@@ -149,6 +149,7 @@ class _OpenRouterModels:
         self._post = post or self._http_post
         self.cost = 0.0  # OpenRouter usage.cost 합 (크레딧 = USD)
         self.providers: dict[str, int] = {}
+        self.served_models: dict[str, int] = {}
 
     def _http_post(self, body: dict) -> dict:
         req = urllib.request.Request(
@@ -176,6 +177,8 @@ class _OpenRouterModels:
         self.cost += float((out.get("usage") or {}).get("cost") or 0)
         prov = out.get("provider") or "?"
         self.providers[prov] = self.providers.get(prov, 0) + 1
+        served = out.get("model") or "?"  # 응답이 알려 주는 실제 모델 이름 (버전 추적용)
+        self.served_models[served] = self.served_models.get(served, 0) + 1
         return _Result([_Values(list(d["embedding"])) for d in data])
 
 
@@ -236,7 +239,8 @@ class GeminiEmbedder:
         """요약(summary.json)용: 경로·호출 수·OpenRouter 비용."""
         out: dict[str, Any] = {"via": "openrouter" if self.via_openrouter else "google", "calls": len(self.latencies)}
         if self.via_openrouter:
-            out.update(cost_usd=round(self.client.models.cost, 6), providers=dict(self.client.models.providers))
+            m = self.client.models
+            out.update(cost_usd=round(m.cost, 6), providers=dict(m.providers), served_models=dict(m.served_models))
         return out
 
     def _texts(self, texts: Sequence[str]) -> list[Any]:

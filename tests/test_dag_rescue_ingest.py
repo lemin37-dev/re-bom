@@ -185,8 +185,9 @@ def _embed_tasks() -> dict[str, dict[str, ast.expr]]:
 def test_photo_embedding_runs_after_photos_not_blocking_silver():
     """사진 임베딩은 사진 task 가 끝나면 바로 돌고, Silver 와는 따로 간다(서로 막지 않음)."""
     src = DAG_FILE.read_text(encoding="utf-8")
-    assert "photos_done >> embed_photos >> load_photo_embeddings" in src
-    assert "embed_photos >> silver_dry_run" not in src and "load_photo_embeddings >> silver_dry_run" not in src
+    assert "photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings" in src
+    for task in ("check_embedding_drift", "embed_photos", "load_photo_embeddings"):
+        assert f"{task} >> silver_dry_run" not in src
     assert _constants()["EMBED_IMAGE"].endswith("/rebom/embed:develop")
 
 
@@ -205,3 +206,11 @@ def test_photo_embedding_uses_prod_embed_key_name():
     """임베딩 파드는 서버 운영 전용 Gemini 키 시크릿 이름만 받는다(값은 Pod 안에서 Secrets Manager 로 읽음)."""
     assert _constants()["GEMINI_SECRET_ID"] == "rebom/embed/prod/gemini_api_key"
     assert "GEMINI_API_KEY" not in DAG_FILE.read_text(encoding="utf-8")
+
+
+def test_drift_check_runs_canary_before_embed():
+    """임베딩 전 모델 변화 감시: canary 가 실패하면(기본 all_success) embed·load 는 돌지 않는다."""
+    tasks = _embed_tasks()
+    kw = tasks["check_embedding_drift"]
+    assert ast.literal_eval(kw["arguments"]) == ["canary"]
+    assert "trigger_rule" not in tasks["embed_photos"] and "trigger_rule" not in kw

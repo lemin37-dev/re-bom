@@ -141,9 +141,10 @@ Airflow `rescue_ingest` DAG(매일 03:00)에서 사진 수집이 끝나면 바�
 
 ```
 rescue_incremental → rescue_photos → photos_done ─┬→ silver_dry_run (이벤트와 함께)
-                                                  └→ embed_photos → load_photo_embeddings
+                                                  └→ check_embedding_drift → embed_photos → load_photo_embeddings
 ```
 
+0. `check_embedding_drift` = `canary`: **모델 변화 감시** (7.1). 통과해야 다음 단계로 갑니다.
 1. `embed_photos` = `embed --limit 5000`: 모든 manifest의 현재 사진 중 S3 결과에 없는 sha256만 보냅니다. 같은 파일이 이미 있으면 호출 없이 복사합니다. run_id를 받지 않으므로, 사진 task가 일부 실패해도 받은 만큼만 하고 나머지는 다음 날 따라잡습니다. 5000은 상한입니다(약 $0.6, 평소 하루 수백 장·1분 안팎).
 2. `load_photo_embeddings` = `load --max-write 5000`: RDS sha256과 다른 칸만 씁니다. 쓸 행이 상한을 넘거나 차원·정규화가 틀리면 **쓰지 않고 실패**합니다. 이때는 사람이 `staged`로 확인한 뒤 손으로 `load`를 실행합니다. `embed`가 실패하면 `load`는 돌지 않습니다.
 3. 결과 확인은 Airflow 로그(`plan`, `load plan` 출력)와 S3 `summary.json`으로 합니다. `smoke`는 매일 돌리지 않습니다(과금).
@@ -152,6 +153,34 @@ rescue_incremental → rescue_photos → photos_done ─┬→ silver_dry_run (�
 - 키: Gemini(`rebom/embed/prod/gemini_api_key`, 임베딩 전용)·DB(`rebom/dev/rebom-db`)는 노드 역할로 Secrets Manager에서 읽습니다. 이미지·DAG에 키를 넣지 않습니다.
 - 메모리: S3 결과 전체(4만+ 행 × 768)를 읽습니다. 벡터를 float32 배열로 읽어 수백 MB 안에 들어갑니다(limit 2Gi, 실측 뒤 조정).
 - 처음 배포 순서(사람): ① `infra/terraform/registry`에 `rebom/embed` 저장소 추가 apply ② develop 머지 → CI가 이미지 빌드 ③ Argo CD가 DAG 반영. 이미지가 없으면 `embed_photos`가 이미지 받기 오류로 실패하지만 Silver에는 영향이 없습니다.
+
+### 7.1 모델 변화 감시 (canary)
+
+모델 이름(`gemini-embedding-2`)이 같아도 제공자 쪽에서 내부가 바뀌면, 새로 만든 벡터가 기존 42,820칸과 다른 공간에 놓여 검색이 조용히 망가집니다. 자동화 안에서 이를 잡기 위해 매일 `embed` 전에 확인합니다.
+
+- **고정 사진 6장**: 처음 실행 때 S3 결과 중 API로 만든 행을 sha256 순으로 6장 골라 기준으로 저장합니다. 전처리된 JPEG와 그때의 벡터를 함께 저장하므로, 매일 같은 바이트를 보냅니다(요청 1번, 약 $0.0007/일).
+- **판정**: 6장 모두 기준 벡터와 코사인 **0.99 이상**이면 통과 → `embed`·`load` 진행. 하나라도 미만이면 종료 코드 3으로 **실패** → 그날 `embed`·`load`는 돌지 않습니다(기존 S3·RDS 벡터는 그대로, 새 사진 벡터만 늦어짐).
+- **실패하면 저장·안내**: 이번 벡터를 모델 이름·날짜 경로(`drift/date=YYYY-MM-DD/`)에 저장하고, Airflow 로그에 "임베딩 벡터값이 변경되었습니다. 모델 버전 확인이 필요합니다."와 대응 방법을 출력합니다.
+- **기록**: 매번 결과(코사인, 제공자, 응답 모델 이름, 비용)를 `checks/date=…/`에 남깁니다.
+
+S3 경로 (`gold/image_embedding/` 밖에 둡니다. `load_staged`가 그 아래 파일을 모두 읽기 때문):
+
+```
+gold/image_embedding_canary/model=gemini-embedding-2/dim=768/
+  reference/reference.json, reference/<sha256>.jpg   기준 (처음 실행 때 자동 생성)
+  reference_archive/<시각>/reference.json            --reset 전 기준 보관
+  checks/date=YYYY-MM-DD/<HHMMSS>.json               매일 결과
+  drift/date=YYYY-MM-DD/<HHMMSS>.json                실패한 날의 벡터 (모델 이름·날짜)
+```
+
+실패했을 때 대응 (사람):
+
+1. **일시 현상인지**: Airflow에서 `check_embedding_drift`를 다시 실행(Clear)합니다. 통과하면 그대로 진행됩니다.
+2. **제공자 차이인지**: drift 파일의 `api_usage.providers`·`served_models`를 이전 `checks/`와 비교합니다. OpenRouter는 같은 이름을 Google Vertex(us·global)·Google AI Studio 중 한 곳으로 보냅니다. 특정 제공자만 다르면 `gemini.py`에서 provider를 고정합니다(`order` + `allow_fallbacks: false`).
+3. **모델이 실제로 바뀌었으면**: 새 모델 키로 전체 사진을 다시 임베딩합니다(약 $4, 승인 필요). 검색 품질을 비교한 뒤 검색 API를 전환하고, 다시 임베딩이 끝나면 `canary --reset`으로 기준을 새 벡터로 바꿉니다(이전 기준은 `reference_archive/`에 보관).
+4. 확인 전에는 이 task를 Airflow에서 '성공'으로 표시하지 않습니다. 표시하면 바뀐 벡터가 기존 벡터와 섞입니다.
+
+첫 실행 (2026-11-19, 내 PC → OpenRouter): 기준 6장 생성, 6장 모두 코사인 1.0, 제공자 Google AI Studio, 응답 모델 `gemini-embedding-2`, $0.000697, 12초.
 
 ## 8. 설계 원칙: S3가 원본, RDS는 서비스용 사본
 
