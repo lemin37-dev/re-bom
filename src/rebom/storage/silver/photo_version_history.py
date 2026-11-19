@@ -54,7 +54,9 @@ def build_photo_version_history_rows(manifest):
                 failure_reason = None
             else:
                 failure_reason = item.get("reason")
-                if failure_reason != "replaced_not_found":
+                if failure_reason != "replaced_not_found" and not (
+                    version == 1 and failure_reason == "not_found"
+                ):
                     raise ValueError("지원하지 않는 사진 교체 실패 사유")
 
             result.append({
@@ -266,23 +268,34 @@ def apply_photo_version_history(
         return result
 
     if insert_rows or update_rows:
-        arrow = pa.Table.from_pylist(insert_rows + update_rows, schema=schema)
+        batch_size = 200
+        rows = insert_rows + update_rows
+        inserted = 0
+        updated = 0
 
-        write = table.upsert(
-            arrow,
-            join_cols=list(keys),
-            when_matched_update_all=True,
-            when_not_matched_insert_all=True,
-        )
+        for start in range(0, len(rows), batch_size):
+            batch = rows[start:start + batch_size]
+            arrow = pa.Table.from_pylist(batch, schema=schema)
 
-        result["rows_inserted"] = write.rows_inserted
-        result["rows_updated"] = write.rows_updated
+            table = catalog.load_table(table_name)
+            write = table.upsert(
+                arrow,
+                join_cols=list(keys),
+                when_matched_update_all=True,
+                when_not_matched_insert_all=True,
+            )
+
+            inserted += write.rows_inserted
+            updated += write.rows_updated
+
+        result["rows_inserted"] = inserted
+        result["rows_updated"] = updated
 
         if (
-            write.rows_inserted != len(insert_rows)
-            or write.rows_updated != len(update_rows)
+            inserted != len(insert_rows)
+            or updated != len(update_rows)
         ):
-            raise RuntimeError("사진 이력 INSERT/UPDATE 수량 불일치")
+            raise RuntimeError("?? ?? INSERT/UPDATE ?? ???")
     else:
         result["rows_inserted"] = 0
         result["rows_updated"] = 0
@@ -324,12 +337,26 @@ def plan_photo_current_updates(current_rows, history_rows):
         current[key] = row
 
     latest = select_current_photo_version(history_rows)
+    failed_initial_keys = {
+        (row["desertion_no"], row["image_slot"])
+        for row in history_rows
+        if row.get("status") == "failed"
+        and type(row.get("version")) is int
+        and row["version"] == 1
+        and row.get("replaces") is None
+        and row.get("failure_reason") == "not_found"
+    }
     updates = []
     inserts = []
 
     for key, selected in latest.items():
         if key not in current:
-            if selected["version"] != 1:
+            if selected["version"] != 1 and not (
+                selected["version"] == 2
+                and type(selected.get("replaces")) is int
+                and selected["replaces"] == 1
+                and key in failed_initial_keys
+            ):
                 raise RuntimeError(f"MISSING_PREVIOUS_VERSION: {key}")
 
             inserts.append({
