@@ -40,7 +40,7 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 | 자원 | 값 |
 |---|---|
 | 모델 | `gemini-embedding-2`, `output_dimensionality=768` (지정하지 않으면 3072) |
-| Gemini 키 | Secrets Manager `rebom/embed/prod/gemini_api_key` (서버 운영 전용 키, 11-19 비용 실측용으로 분리. JSON이면 `GEMINI_API_KEY`·`gemini_api_key`·`api_key`·`key` 중 처음 있는 필드, 필드가 하나뿐이면 이름과 상관없이 그 값). 순서: 환경 변수 `GEMINI_API_KEY` → `.env` → Secrets Manager |
+| Gemini 키 | Secrets Manager `rebom/embed/prod/gemini_api_key` (서버 운영 전용 **OpenRouter 키**, 11-19 비용 실측용으로 분리, 9.1절. JSON이면 `GEMINI_API_KEY`·`gemini_api_key`·`api_key`·`key` 중 처음 있는 필드, 필드가 하나뿐이면 이름과 상관없이 그 값). 순서: 환경 변수 `GEMINI_API_KEY` → `.env` → Secrets Manager |
 | 버킷 | `rebom-data-559987919299` (ap-northeast-2) |
 | RDS | `rebom-dev-pg` PostgreSQL 18.3, DB·사용자 `rebom`, 접속 정보 `rebom/dev/rebom-db`, SSL 필수, k3s 노드에서만 접속 |
 | pgvector | 0.8.1. 확장 설치는 관리자(`rds!db-...` 시크릿)만 가능 (아래 5절) |
@@ -176,6 +176,21 @@ rescue_incremental → rescue_photos → photos_done ─┬→ silver_dry_run (�
 | 3072 앞 768 vs 768 | 코사인 1.0 (3장) |
 | RDS 용량 | 1,461행: 테이블 10.4MB, HNSW 4.6MB |
 | 전체 추정 | 남은 고유 약 33,756장, 약 57분, 약 $4 |
+
+### 9.1 OpenRouter 경로 확인 (2026-11-19)
+
+서버 운영 키(`rebom/embed/prod/gemini_api_key`)는 **OpenRouter 키**(`sk-or-v1-…`)입니다. `gemini.py`는 키가 `sk-or-`로 시작하면 OpenRouter `POST /api/v1/embeddings`(모델 `google/gemini-embedding-2`, `dimensions: 768`)로 보내고, 아니면 Google SDK로 직접 보냅니다. 사진은 같은 전처리(JPEG) 결과를 `data:image/jpeg;base64,…` 로 보냅니다.
+
+| 항목 | 값 |
+|---|---|
+| 사진 12장 (4개 실행에서 골고루, png 원본 1장 포함), 1장씩 | S3 기존 벡터(Google 직접)와 코사인 **1.000000** (12/12), 768차원, 노름 1.0 |
+| 같은 12장, 6장씩 묶음 2번 | S3·1장씩 결과와 코사인 1.000000, 순서 일치 12/12 |
+| 코드 경로(`GeminiEmbedder`, 시크릿 → OpenRouter) 6장 | 코사인 1.0, 제공자 `Google AI Studio` |
+| 글 | 문장 3개 → 벡터 3개, 1개씩과 묶음 코사인 1.0 |
+| 비용 | 사진 1장 258토큰 $0.0001161 (6장 $0.000697). 확인 전체 약 $0.004 |
+| 지연 | 1장 요청 p50 1.26초, 최대 10.6초(1번) → 검색 API 5초·재요청 2번 규칙이 필요함 |
+
+벡터가 같으므로 기존 S3·RDS 벡터(42,820칸)는 그대로 쓰고 다시 만들지 않습니다(`model` 값도 `gemini-embedding-2` 유지). `embed` 의 `summary.json` 에 `api_usage`(경로·호출 수·OpenRouter 비용 USD)를 남겨 비용을 실측합니다. 키의 지출 상한은 OpenRouter에서 $20 입니다.
 
 ## 10. 글(텍스트) 벡터 관리 계획 [예정]
 

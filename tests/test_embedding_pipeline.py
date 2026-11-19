@@ -220,6 +220,9 @@ class FakeEmbedder:
     def __init__(self, dim):
         self.dim = dim
 
+    def usage(self):
+        return {"via": "fake", "calls": len(FakeEmbedder.calls)}
+
     def embed_images(self, images):
         FakeEmbedder.calls.append(len(images))
         for d in images:  # 전처리 결과 확인: JPEG, 긴 변 1024 이하

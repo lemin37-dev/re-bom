@@ -8,13 +8,20 @@
 - 접두어: task_type 파라미터가 없어서 문장 앞에 붙인다. 질의는 "task: search result | query: …",
   문서(요약 카드)는 "title: … | text: …". 사진은 접두어 없이 넣는다.
 - 11-18 결정: 사진과 글 모두 이 모델 하나로 만든다 (EG2 는 쓰지 않음).
+- 11-19: 서버 운영 키는 OpenRouter 키(sk-or-…)다. 키가 sk-or- 로 시작하면 OpenRouter
+  (google/gemini-embedding-2, 제공자 Google)로 보내고, 아니면 Google SDK 로 직접 보낸다.
+  사진 12장·글로 실측: Google 직접으로 만든 S3 벡터와 코사인 1.000000 (같은 전처리·768차원), 사진 1장 $0.000116.
 
-설치: pip install -U google-genai python-dotenv
+설치: pip install -U google-genai python-dotenv (OpenRouter 경로는 표준 라이브러리만 씀)
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Sequence
@@ -24,7 +31,11 @@ DEFAULT_DIM = 768
 FULL_DIM = 3072  # output_dimensionality 를 주지 않을 때의 차원
 TEXT_BATCH = 100  # 한 번 호출에 넣는 문장 수
 IMAGE_BATCH = 6  # 한 번 호출에 넣는 사진 수 (로컬 벤치마크와 같음)
-RETRY_CODES = {429, 500, 502, 503, 504}
+RETRY_CODES = {408, 429, 500, 502, 503, 504}
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1/embeddings"
+OPENROUTER_MODEL = f"google/{MODEL}"
+OPENROUTER_KEY_PREFIX = "sk-or-"
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -108,6 +119,80 @@ def _error_code(exc: Exception) -> int | None:
     return code if isinstance(code, int) else None
 
 
+class OpenRouterError(RuntimeError):
+    """OpenRouter HTTP 오류. code 로 재시도 여부를 정한다(GeminiEmbedder._call)."""
+
+    def __init__(self, code: int | None, message: str):
+        super().__init__(f"OpenRouter {code}: {message}")
+        self.code = code
+
+
+@dataclass
+class _Values:
+    values: list[float]
+
+
+@dataclass
+class _Result:
+    embeddings: list[_Values]
+
+
+class _OpenRouterModels:
+    """google-genai 의 client.models.embed_content 와 같은 모양으로 OpenRouter 를 부른다.
+
+    contents 는 문자열(글) 또는 {"content": [{"type": "image_url", ...}]}(사진) 목록. 입력 하나 → 벡터 하나.
+    """
+
+    def __init__(self, api_key: str, timeout: float, post: Callable[[dict], dict] | None = None):
+        self._key = api_key
+        self.timeout = timeout
+        self._post = post or self._http_post
+        self.cost = 0.0  # OpenRouter usage.cost 합 (크레딧 = USD)
+        self.providers: dict[str, int] = {}
+
+    def _http_post(self, body: dict) -> dict:
+        req = urllib.request.Request(
+            OPENROUTER_URL, data=json.dumps(body).encode("utf-8"), method="POST",
+            headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            detail = exc.read()[:300].decode("utf-8", errors="replace")
+            raise OpenRouterError(exc.code, detail) from None
+        except (TimeoutError, urllib.error.URLError) as exc:  # 대기 초과·연결 실패는 다시 시도
+            raise OpenRouterError(408, type(exc).__name__) from None
+
+    def embed_content(self, model: str, contents: Sequence[Any], config: Any) -> _Result:
+        dim = config["output_dimensionality"] if isinstance(config, dict) else config.output_dimensionality
+        out = self._post({"model": OPENROUTER_MODEL if model == MODEL else model, "input": list(contents),
+                          "dimensions": dim, "encoding_format": "float"})
+        if out.get("error"):  # 200 인데 본문에 오류가 오는 경우
+            err = out["error"] if isinstance(out["error"], dict) else {"message": out["error"]}
+            code = err.get("code")
+            raise OpenRouterError(code if isinstance(code, int) else None, str(err.get("message")))
+        data = sorted(out.get("data") or [], key=lambda d: d["index"])
+        self.cost += float((out.get("usage") or {}).get("cost") or 0)
+        prov = out.get("provider") or "?"
+        self.providers[prov] = self.providers.get(prov, 0) + 1
+        return _Result([_Values(list(d["embedding"])) for d in data])
+
+
+class OpenRouterClient:
+    """genai.Client 대신 쓰는 얇은 OpenRouter 클라이언트 (models.embed_content 만)."""
+
+    def __init__(self, api_key: str, timeout: float = 60.0, post: Callable[[dict], dict] | None = None):
+        self.models = _OpenRouterModels(api_key, timeout, post)
+
+    def __repr__(self) -> str:  # 키가 로그에 찍히지 않게
+        return f"OpenRouterClient(timeout={self.models.timeout})"
+
+
+def is_openrouter_key(key: str) -> bool:
+    return key.startswith(OPENROUTER_KEY_PREFIX)
+
+
 def _text_contents(texts: Sequence[str]) -> list[Any]:
     """문장마다 Content 하나. 문자열 목록을 그대로 넘기면 gemini-embedding-2 는 한 입력의 여러 부분으로 보고
     벡터 1개만 돌려준다(2026-11-11 실측)."""
@@ -120,19 +205,50 @@ def _text_contents(texts: Sequence[str]) -> list[Any]:
 
 @dataclass
 class GeminiEmbedder:
-    """embed_content 호출을 감싼다. client 를 넘기면(테스트용) 그대로 쓴다."""
+    """embed_content 호출을 감싼다. client 를 넘기면(테스트용) 그대로 쓴다.
+
+    키가 OpenRouter 키면 OpenRouterClient, 아니면 google-genai Client. timeout 은 OpenRouter 요청 1번의 대기 초
+    (검색 API 질의는 5초 + 재요청 2번: GeminiEmbedder(timeout=5, max_retries=2)).
+    """
 
     dim: int = DEFAULT_DIM
     client: Any = None
     max_retries: int = 5
     sleep: Callable[[float], None] = time.sleep
+    timeout: float = 60.0
     latencies: list[float] = field(default_factory=list)  # 호출별 초
 
     def __post_init__(self) -> None:
         if self.client is None:
-            from google import genai
+            key = load_api_key()
+            if is_openrouter_key(key):
+                self.client = OpenRouterClient(key, timeout=self.timeout)
+            else:
+                from google import genai
 
-            self.client = genai.Client(api_key=load_api_key())
+                self.client = genai.Client(api_key=key)
+
+    @property
+    def via_openrouter(self) -> bool:
+        return isinstance(self.client, OpenRouterClient)
+
+    def usage(self) -> dict[str, Any]:
+        """요약(summary.json)용: 경로·호출 수·OpenRouter 비용."""
+        out: dict[str, Any] = {"via": "openrouter" if self.via_openrouter else "google", "calls": len(self.latencies)}
+        if self.via_openrouter:
+            out.update(cost_usd=round(self.client.models.cost, 6), providers=dict(self.client.models.providers))
+        return out
+
+    def _texts(self, texts: Sequence[str]) -> list[Any]:
+        return list(texts) if self.via_openrouter else _text_contents(texts)
+
+    def _image(self, data: bytes) -> Any:
+        if self.via_openrouter:
+            url = f"data:{sniff_mime(data)};base64," + base64.b64encode(data).decode("ascii")
+            return {"content": [{"type": "image_url", "image_url": {"url": url}}]}
+        from google.genai import types
+
+        return types.Content(parts=[types.Part.from_bytes(data=data, mime_type=sniff_mime(data))])
 
     def _config(self) -> Any:
         try:
@@ -159,26 +275,20 @@ class GeminiEmbedder:
         """문장마다 벡터 1개. 접두어는 호출하는 쪽에서 붙인다(query_text, document_text)."""
         out: list[list[float]] = []
         for i in range(0, len(texts), TEXT_BATCH):
-            out.extend(self._call(_text_contents(texts[i : i + TEXT_BATCH])))
+            out.extend(self._call(self._texts(texts[i : i + TEXT_BATCH])))
         if len(out) != len(texts):
             raise RuntimeError(f"벡터 수가 다름: 문장 {len(texts)}, 벡터 {len(out)}")
         return out
 
     def embed_image(self, data: bytes) -> list[float]:
         """사진 1장 → 벡터 1개."""
-        from google.genai import types
-
-        part = types.Part.from_bytes(data=data, mime_type=sniff_mime(data))
-        return self._call([part])[0]
+        return self._call([self._image(data)])[0]
 
     def embed_images(self, images: Sequence[bytes]) -> list[list[float]]:
         """사진 여러 장(최대 IMAGE_BATCH)을 요청 1번에. 사진마다 Content 1개라 벡터도 사진 수만큼 온다."""
-        from google.genai import types
-
         if len(images) > IMAGE_BATCH:
             raise ValueError(f"한 번에 {IMAGE_BATCH}장까지")
-        contents = [types.Content(parts=[types.Part.from_bytes(data=d, mime_type=sniff_mime(d))]) for d in images]
-        out = self._call(contents)
+        out = self._call([self._image(d) for d in images])
         if len(out) != len(images):
             raise RuntimeError(f"벡터 수가 다름: 사진 {len(images)}, 벡터 {len(out)}")
         return out

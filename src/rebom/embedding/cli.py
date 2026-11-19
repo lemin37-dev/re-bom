@@ -108,7 +108,20 @@ def discover(args: argparse.Namespace) -> int:
         _print("gemini key", {"found": False, "error": str(exc)})
         key = None
 
-    if args.ping and key:
+    if args.ping and key and gemini.is_openrouter_key(key):
+        import urllib.request
+
+        req = urllib.request.Request("https://openrouter.ai/api/v1/embeddings/models",
+                                     headers={"Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=15) as resp:  # 모델 목록 조회, 과금 없음
+            models = {m["id"]: m for m in json.loads(resp.read()).get("data", [])}
+        m = models.get(gemini.OPENROUTER_MODEL)
+        _print("openrouter ping (embeddings/models, 과금 없음)", {
+            "model": gemini.OPENROUTER_MODEL, "available": m is not None,
+            "input_modalities": (m or {}).get("architecture", {}).get("input_modalities"),
+            "pricing": (m or {}).get("pricing"),
+        })
+    elif args.ping and key:
         from google import genai
 
         client = genai.Client(api_key=key)  # 변수로 잡아 두지 않으면 요청 전에 닫힌다
@@ -255,6 +268,7 @@ def embed(args: argparse.Namespace) -> int:
             "sec_per_sha256": round(elapsed / max(done, 1), 4), "workers": args.workers,
             "image_batch": gemini.IMAGE_BATCH, "stats": dict(stats), "plan": plan.stats, "parts": parts,
             "skipped_sha256": skipped, "sha_mismatch_keys": sha_mismatch,
+            "api_usage": embedder.usage(),  # 경로(openrouter/google)·호출 수·OpenRouter 비용(USD)
         }
         s3.put_object(Bucket=bucket, Key=f"{prefix}summary.json",
                       Body=json.dumps(summary, ensure_ascii=False, indent=2).encode("utf-8"))
