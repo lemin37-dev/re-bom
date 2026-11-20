@@ -190,3 +190,51 @@
 
 - 노션: 구조 API 검증 결과 (2.2 수집본 비교, 2.3 수정일 검증, 2.4 사진, 2.7 증분 시험, 2.8 종료 공고)
 - 노션: 구조 API 요청 조건·응답 필드 정리
+
+## 13. 사진 태그 (Gold, 모델 결과) [test 환경, 2026-11-20]
+
+보호중(`status_group = PROTECTING`) 개(`species_code = 417000`)의 대표 사진 한 장에 털·귀·눈매·닮은 품종 태그를 붙여 S3 Gold(Iceberg, Glue DB `rebom_gold`)에 씁니다.
+코드는 `src/rebom/tagging/`, 테이블 정의는 `src/rebom/common/gold_catalog.py`, 실행은 `dags/photo_tags.py`(지금은 손으로만 실행).
+
+### 13.1 대상과 다시 태깅하는 조건
+
+- 대표 사진: Silver 이미지 테이블에서 `original_s3_key` 가 있는 가장 작은 `image_slot`. 키는 Silver 값을 그대로 쓰고(`_v002` 같은 교체 사진 포함), 받은 사진의 sha256 이 Silver 값과 다르면 그 사진은 실패(`SHA_MISMATCH`)로 둡니다.
+- 사진이 없는 개는 `NO_PHOTO` 로 한 번만 기록합니다(`input_hash = "no-photo"`).
+- 다시 부르는 경우는 둘뿐입니다. 대표 사진의 sha256 이 바뀌었을 때, 질문지 버전(`version`)이 바뀌었을 때. 실패(`FAILED`)는 3번까지 다시 시도합니다.
+- 모델: OpenRouter `google/gemini-3.1-flash-lite`, 공급자 `google-ai-studio` 고정(대체 공급자 없음), reasoning low, `media_resolution = MEDIA_RESOLUTION_MEDIUM`, temperature 1.0(평가 때 Google 기본값과 같은 값을 명시). seed 는 보내지 않습니다. 2회 답의 일치로 판정하므로 두 회차가 독립이어야 합니다.
+- 실행을 멈추는 경우: 특징 질문 하나의 prompt_tokens 가 1,500 을 넘을 때(해상도 설정이 빠진 것으로 봄, medium 약 1,294, high 약 1,818), 그리고 키·계정 오류(401, 402, 검열 표시가 없는 403, 키 한도)일 때. 계정 오류를 사진 실패로 세면 모든 대상의 시도 횟수가 쌓여 3번 뒤 영구히 건너뛰기 때문입니다.
+- 사진 크기: 10MB 를 넘는 원본은 보내지 않고 실패(`IMAGE_TOO_LARGE`)로 둡니다.
+- 질문지: 특징 `trait-vision-v10`(작업 `photo_trait`), 품종 `breed-vision-v2-open`(작업 `photo_breed`). 같은 사진에 작업마다 2번 묻습니다(사진당 요청 4번, 약 $0.0033).
+
+### 13.2 태그와 최종 판정 기준
+
+모든 태그는 2번의 답이 같을 때만 붙입니다. 중간·판단 어려움·안 보임 답은 태그를 만들지 않습니다.
+인상(귀염·늠름)은 태깅하지 않으며, '귀염'은 어떤 경우에도 검색 태그로 만들지 않습니다.
+
+| 태그 코드 | 이름 | 판정 기준 | 검색 | 화면 |
+|---|---|---|---|---|
+| `fur.fluffy` | 복슬복슬 | 털이 길거나 곱슬·부풀어 몸 윤곽이 털에 가려짐. 2회 모두 '복슬복슬' | O | O |
+| `fur.short` | 짧은 털 | 털이 짧아 몸 윤곽이 보임(짧고 촘촘한 이중모 포함). 2회 모두 '매끈' | O | O |
+| `ear.drop` | 늘어진 귀 | 귀 전체가 머리 옆으로 처져 내려옴. 2회 모두 '늘어짐' | O | O |
+| `ear.semi` | 반쯤 선 귀 | 귀뿌리는 서 있고 끝이 앞이나 옆으로 접힘. 2회 모두 '반쯤 섬' | O | O |
+| `ear.prick` | 선 귀 | 귀가 끝까지 위로 곧게 섬. 2회 모두 '섬' | O | O |
+| `eye.round` | 둥근 눈매 | 크고 동그란 눈. 2회 모두 '둥글함' | O | O |
+| `eye.sharp` | 날카로운 눈매 | 눈이 가늘고 눈꼬리가 길거나 올라감. 2회 모두 '날카로움' | O | O |
+| `breed.<품종>` | 닮은 품종 | 두 회차 모두 Top3 에 든 품종을 한 행씩 둡니다(`rank`, `similarity` = 두 회차 평균). 평균 유사도 90 이상(강 신호)만 검색에 씁니다 | 강 신호만 | X |
+
+품종 이름은 3년치 공고 빈도로 고른 62종 표준 이름(`src/rebom/tagging/data/breed_candidates_3y.json`)으로 맞춥니다. 화면에는 보이지 않고 자연어 검색·챗봇에만 씁니다(11/17 결정).
+
+### 13.3 테이블
+
+| 테이블 (test 는 이름 뒤 `_test`) | 한 행 | 쓰는 방식 |
+|---|---|---|
+| `gold_animal_tag` | 공고 × 태그 | 다시 태깅하면 (`desertion_no`, `task`) 범위의 이전 행을 통째 교체. 실패한 작업은 교체하지 않아 이전 태그가 남음 |
+| `gold_inference_log` | 공고 × 작업 × 질문지 버전 × 사진 해시 | (`desertion_no`, `task`, `version`, `input_hash`) 로 upsert. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error` |
+| `gold_model_request_log` | 모델 요청 한 번 | append 만. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분) |
+
+`gold_animal_tag` 칸: `desertion_no`, `tag_code`, `source`(photo), `tagger_version`, `task`, `model`, `prompt_version`, `image_slot`, `source_hash`(사진 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
+
+- 위치: test `s3://rebom-data-559987919299/gold/_test/iceberg/`, prod `s3://rebom-data-559987919299/gold/iceberg/`. 실행 중간 파일(대상 목록)은 `gold/_work_test/photo_tags/<run_id>/targets.json`.
+- 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. 파드(노드 역할)는 읽기·쓰기만 합니다.
+- 서비스 DB 적재(pgvector 쪽 태그 테이블)는 별도 작업입니다.
+- 남아 있는 태그(서비스 적재 때 거를 것): `gold_animal_tag` 는 보호가 끝난 공고나 대표 사진이 없어진 공고의 태그를 지우지 않습니다. 대상 고르기는 보호중 공고만 보고, 태그 교체는 다시 태깅한 공고에만 일어나기 때문입니다. 서비스 DB 에 넣거나 검색할 때 공고 상태(`status_group`)와 현재 대표 사진(`source_hash`)으로 걸러야 합니다.

@@ -1,0 +1,21 @@
+{
+  "id": "gen-breed-0001",
+  "model": "google/gemini-3.1-flash-lite-20260507",
+  "provider": "Google AI Studio",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "message": {
+        "role": "assistant",
+        "content": "{\"evidence\": \"황색 단모에 선 귀, 말린 꼬리.\", \"look\": \"순종으로 보임\", \"top\": [{\"rank\": 1, \"breed\": \"진돗개\", \"similarity\": 92, \"reason\": \"선 귀와 말린 꼬리\"}, {\"rank\": 2, \"breed\": \"시바견\", \"similarity\": 70, \"reason\": \"얼굴형\"}, {\"rank\": 3, \"breed\": \"해당 없음\", \"similarity\": 0, \"reason\": \"\"}]}"
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1399,
+    "completion_tokens": 160,
+    "completion_tokens_details": {"reasoning_tokens": 50},
+    "cost": 0.000953
+  }
+}
