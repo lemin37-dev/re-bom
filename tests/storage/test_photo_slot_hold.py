@@ -278,7 +278,7 @@ def test_process_photo_manifest_threads_historical_keys(photo_run, historical_v1
     latest_key = "bronze/rescue/image_runs/dt=2026-11-20/run_id=new/manifest.json"
     latest = dict(
         historical_v1.source,
-        run_id="new", bronze_run_id="new-bronze",
+        run_id="new", bronze_run_id="new-bronze", code_version="2026-11-19",
         generated_at="2026-11-20T10:00:00+09:00",
         updated_at="2026-11-20T10:01:00+09:00",
         files=[dict(

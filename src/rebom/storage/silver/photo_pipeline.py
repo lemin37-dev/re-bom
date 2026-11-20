@@ -11,6 +11,12 @@ from pyiceberg.expressions import And, EqualTo, Or
 from rebom.storage.silver.load_photo_manifest import load_photo_manifest
 from rebom.storage.silver.photo_dry_run_baseline import load_previous_photos
 from rebom.storage.silver.photo_manifest_policy import decide_photo_manifest
+from rebom.storage.silver.photo_snapshot import (
+    load_photo_snapshot,
+    plan_photo_snapshot,
+    verify_snapshot_history,
+    verify_superseding_snapshot,
+)
 from rebom.storage.silver.photo_processing_journal import (
     load_photo_journal_s3,
     make_photo_journal,
@@ -83,8 +89,18 @@ def process_photo_manifest(
             "status": manifest["status"],
         }
 
+    snapshot = load_photo_snapshot(s3, bucket, manifest_key, source)
+    if snapshot is not None and history_table_name is None:
+        raise ValueError("PHOTO_SNAPSHOT_REQUIRES_HISTORY_TABLE")
+
     journal_key = f"{journal_prefix.rstrip('/')}/{run_id}.json"
     existing = load_photo_journal_s3(s3, bucket, journal_key)
+
+    if snapshot is not None and existing is None:
+        for later_run in snapshot["later_runs"]:
+            later_journal = load_photo_journal_s3(s3, bucket, f"{journal_prefix.rstrip('/')}/{later_run}.json")
+            if later_journal and later_journal.get("snapshot_checksum"):
+                raise ValueError(f"PHOTO_SNAPSHOT_SUPERSEDED: {run_id}")
 
     if existing is None and history_table_name is not None:
         return _process_photo_manifest_versioned(
@@ -101,6 +117,7 @@ def process_photo_manifest(
             decision=decision,
             apply=apply,
             historical_manifest_keys=historical_manifest_keys,
+            snapshot=snapshot,
         )
 
     if existing is not None:
@@ -134,9 +151,22 @@ def process_photo_manifest(
         if table.location().rstrip("/") != expected_location.rstrip("/"):
             raise RuntimeError("Iceberg 테이블 저장 위치 불일치")
 
-        current_rows = _index_rows(
-            table.scan().to_arrow().to_pylist()
-        )
+        if snapshot is None:
+            current_rows = _index_rows(table.scan().to_arrow().to_pylist())
+        else:
+            if (
+                existing.get("snapshot_checksum") != snapshot["checksum"]
+                or "current_snapshot_id" not in existing
+            ):
+                raise RuntimeError("PHOTO_SNAPSHOT_JOURNAL_MISMATCH")
+            snapshot_id = existing["current_snapshot_id"]
+            stored_rows = (
+                table.scan(snapshot_id=snapshot_id).to_arrow().to_pylist()
+                if snapshot_id is not None else []
+            )
+            plan = plan_photo_snapshot(stored_rows, snapshot)
+            if plan["updates"] or plan["inserts"]:
+                raise RuntimeError("PHOTO_SNAPSHOT_JOURNAL_CURRENT_MISMATCH")
 
         if history_table_name is not None:
             if not expected_history_location:
@@ -156,47 +186,40 @@ def process_photo_manifest(
 
             history_rows = history_table.scan().to_arrow().to_pylist()
             latest_rows = select_current_photo_version(history_rows)
+            history_by_version = {
+                (row["desertion_no"], row["image_slot"], row["version"]): row
+                for row in history_rows
+            }
+            verify_later_current = None
 
             for photo in manifest["rows"]:
                 key = (photo["desertion_no"], photo["image_slot"])
-                current = current_rows.get(key)
                 latest = latest_rows.get(key)
-
-                if current is None:
-                    raise RuntimeError(
-                        f"Journal 존재하지만 Iceberg 행 누락: {key}"
-                    )
-
                 if latest is None:
-                    raise RuntimeError(
-                        f"Journal 사진 버전 이력 누락: {key}"
-                    )
+                    raise RuntimeError(f"Journal 사진 버전 이력 누락: {key}")
+                if snapshot is None:
+                    current = current_rows.get(key)
+                    if current is None:
+                        raise RuntimeError(f"Journal 존재하지만 Iceberg 행 누락: {key}")
+                    if any(current.get(field) != latest.get(field) for field in PHOTO_FIELDS):
+                        if verify_later_current is None:
+                            verify_later_current = verify_superseding_snapshot(
+                                s3, bucket, manifest_key, journal_prefix, existing, table
+                            )
+                        if not verify_later_current(key, current):
+                            raise RuntimeError(f"현재 사진과 최신 버전 이력 불일치: {key}")
 
-                for field in PHOTO_FIELDS:
-                    if current.get(field) != latest.get(field):
-                        raise RuntimeError(
-                            f"현재 사진과 최신 버전 이력 불일치: {key}, {field}"
-                        )
-
-                matched = [
-                    row
-                    for row in history_rows
-                    if (
-                        row.get("desertion_no") == key[0]
-                        and row.get("image_slot") == key[1]
-                        and row.get("status") == "stored"
-                        and all(
-                            row.get(field) == photo.get(field)
-                            for field in PHOTO_FIELDS
-                        )
-                        and (
-                            photo.get("version") is None
-                            or row.get("version") == photo["version"]
-                        )
-                    )
-                ]
-
-                if not matched:
+                version = photo.get("version")
+                candidates = (
+                    [history_by_version.get((*key, version))]
+                    if version is not None else history_rows
+                )
+                if not any(
+                    row is not None and (row["desertion_no"], row["image_slot"]) == key
+                    and row["status"] == "stored"
+                    and all(row.get(field) == photo.get(field) for field in PHOTO_FIELDS)
+                    for row in candidates
+                ):
                     raise RuntimeError(
                         f"Journal 사진 버전 이력 불일치: {key}"
                     )
@@ -354,6 +377,7 @@ def _process_photo_manifest_versioned(
     apply=False,
     *,
     historical_manifest_keys=None,
+    snapshot=None,
 ):
     """버전 이력과 현재 사진을 순서대로 반영한다."""
     from rebom.storage.silver.photo_version_history import (
@@ -371,19 +395,20 @@ def _process_photo_manifest_versioned(
 
     history_rows = build_photo_version_history_rows(manifest)
 
-    for photo in manifest["rows"]:
-        key = (photo["desertion_no"], photo["image_slot"])
+    if snapshot is None:
+        for photo in manifest["rows"]:
+            key = (photo["desertion_no"], photo["image_slot"])
 
-        head = s3.head_object(
-            Bucket=bucket,
-            Key=photo["original_s3_key"],
-        )
+            head = s3.head_object(
+                Bucket=bucket,
+                Key=photo["original_s3_key"],
+            )
 
-        if (
-            head.get("Metadata", {}).get("sha256", "").lower()
-            != photo["sha256"]
-        ):
-            raise RuntimeError(f"사진 해시 메타데이터 불일치: {key}")
+            if (
+                head.get("Metadata", {}).get("sha256", "").lower()
+                != photo["sha256"]
+            ):
+                raise RuntimeError(f"사진 해시 메타데이터 불일치: {key}")
 
     apply_photo_version_history(
         catalog,
@@ -426,6 +451,14 @@ def _process_photo_manifest_versioned(
         if (row["desertion_no"], row["image_slot"]) in target_keys
     ]
 
+    if snapshot is not None:
+        verify_snapshot_history(snapshot, projected_history)
+        for photo in manifest["rows"]:
+            slot = photo["desertion_no"], photo["image_slot"]
+            current = snapshot["rows"].get(slot)
+            if current is None or current["current_version"] != photo["version"]:
+                raise ValueError(f"PHOTO_SNAPSHOT_MANIFEST_FILE_MISMATCH: {slot}")
+
     current_plan = apply_photo_current_updates(
         catalog,
         table_name,
@@ -433,12 +466,13 @@ def _process_photo_manifest_versioned(
         expected_location,
         apply=False,
         hold_missing_previous=True,
+        snapshot=snapshot,
         dry_run_baseline=(
             partial(
                 load_previous_photos, s3, bucket, historical_manifest_keys,
                 manifest_key, manifest.get("generated_at"),
             )
-            if historical_manifest_keys else None
+            if snapshot is None and historical_manifest_keys else None
         ),
     )
 
@@ -496,6 +530,7 @@ def _process_photo_manifest_versioned(
         stored_target_history,
         expected_location,
         apply=True,
+        snapshot=snapshot,
     )
 
     result["history_inserted"] = history_write["rows_inserted"]
@@ -513,6 +548,10 @@ def _process_photo_manifest_versioned(
         needs_review=decision["needs_review"],
         failed_count=decision["failed_count"],
     )
+
+    if snapshot is not None:
+        journal["snapshot_checksum"] = snapshot["checksum"]
+        journal["current_snapshot_id"] = current_write["current_snapshot_id"]
 
     journal_result = save_photo_journal_s3(
         s3,
