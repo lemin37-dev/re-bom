@@ -171,3 +171,52 @@ def test_silver_runs_after_events_and_photos():
     assert rules["photos_done"] == "all_done"
     assert rules["silver_dry_run"] is None  # 기본(all_success): 이벤트가 실패하면 Silver 는 돌지 않는다
     assert "rescue_incremental >> [generate_ingest_events, rescue_photos]" in src
+
+
+def _embed_tasks() -> dict[str, dict[str, ast.expr]]:
+    tasks = {}
+    for node in ast.walk(_tree()):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "embed_task":
+            kw = {k.arg: k.value for k in node.keywords}
+            tasks[ast.literal_eval(kw["task_id"])] = kw
+    return tasks
+
+
+def test_photo_embedding_runs_after_photos_not_blocking_silver():
+    """사진 임베딩은 사진 task 가 끝나면 바로 돌고, Silver 와는 따로 간다(서로 막지 않음)."""
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert "photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings" in src
+    for task in ("check_embedding_drift", "embed_photos", "load_photo_embeddings"):
+        assert f"{task} >> silver_dry_run" not in src
+    assert _constants()["EMBED_IMAGE"].endswith("/rebom/embed:develop")
+
+
+def test_photo_embedding_has_caps():
+    """embed 는 상한(--limit), load 는 쓰기 상한(--max-write)을 둔다. 0 이면 상한이 없어 막아야 한다."""
+    tasks = _embed_tasks()
+    embed = ast.literal_eval(tasks["embed_photos"]["arguments"])
+    load = ast.literal_eval(tasks["load_photo_embeddings"]["arguments"])
+    assert embed[0] == "embed" and int(embed[embed.index("--limit") + 1]) > 0 and "--dry-run" not in embed
+    assert load[0] == "load" and int(load[load.index("--max-write") + 1]) > 0
+    assert "--full" not in load
+
+
+
+def test_photo_embedding_uses_prod_embed_key_name():
+    """임베딩 파드는 서버 운영 전용 Gemini 키 시크릿 이름만 받는다(값은 Pod 안에서 Secrets Manager 로 읽음)."""
+    assert _constants()["GEMINI_SECRET_ID"] == "rebom/embed/prod/gemini_api_key"
+    assert "GEMINI_API_KEY" not in DAG_FILE.read_text(encoding="utf-8")
+
+
+def test_drift_check_runs_canary_before_embed():
+    """임베딩 전 모델 변화 감시: canary 가 실패하면(기본 all_success) embed·load 는 돌지 않는다."""
+    tasks = _embed_tasks()
+    kw = tasks["check_embedding_drift"]
+    assert ast.literal_eval(kw["arguments"]) == ["canary"]
+    assert "trigger_rule" not in tasks["embed_photos"] and "trigger_rule" not in kw
+
+
+def test_embedding_tasks_label_openrouter_usage():
+    """OpenRouter 비용 구분: 임베딩 파드는 task 이름이 든 REBOM_USAGE_TAG 를 받는다(키 값은 아님)."""
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert '"REBOM_USAGE_TAG": f"rebom-embed:airflow:{task_id}"' in src

@@ -1,0 +1,42 @@
+{
+  "source": "rescue_photos",
+  "run_id": "20261117T030123-bbbbbb",
+  "bronze_run_id": "20261117T030011-8d0526",
+  "generated_at": "2026-11-17T03:01:23+09:00",
+  "status": "ok",
+  "counts": {
+    "stored": 1,
+    "failed": 1
+  },
+  "files": [
+    {
+      "desertionNo": "411300202500001",
+      "slot": 1,
+      "original": "bronze/rescue/images/411300202500001/popfile1_v002.jpg",
+      "ext": "jpg",
+      "bytes": 15,
+      "sha256": "1eb424bfd22285b130b4d3e1de3f84d682bf5e6c76c2a0dff306dd4dd47c1494",
+      "serving": {
+        "image": "images/411300202500001/1_v002.webp",
+        "thumb": "images/411300202500001/1_v002_thumb.webp"
+      },
+      "version": 2,
+      "replaces": 1,
+      "first_seen_at": "2026-11-17T03:01:00+09:00",
+      "source_url": "http://example.invalid/x.jpg"
+    }
+  ],
+  "failed": [
+    {
+      "desertionNo": "411300202500002",
+      "slot": 1,
+      "status": "failed",
+      "reason": "replaced_not_found",
+      "attempts": 1,
+      "version": 2,
+      "replaces": 1,
+      "first_seen_at": "2026-11-17T03:01:00+09:00",
+      "source_url": "http://example.invalid/y.jpg"
+    }
+  ]
+}
