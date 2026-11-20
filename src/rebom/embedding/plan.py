@@ -26,11 +26,15 @@ class Plan:
         return sorted(self.send, key=lambda sha: self.send[sha][0].key)
 
 
-def build(manifests: list[dict], staged: Staged) -> Plan:
-    runs = sorted(manifests, key=lambda d: (d.get("generated_at") or "", d.get("run_id") or ""))
+def build(manifests: list[dict] | None, staged: Staged,
+          current: dict[tuple[str, int], mf.Photo] | None = None) -> Plan:
+    """manifests 만 주면 Bronze 기준(manifest 에서 현재 사진을 고름). current 를 주면 그 사진을 그대로 쓴다
+    (--source silver). manifest 가 없으면 manifest 통계(실행별 새 칸 등)는 비운다."""
+    runs = sorted(manifests or [], key=lambda d: (d.get("generated_at") or "", d.get("run_id") or ""))
     entries = [(m.get("run_id"), p) for m in runs for p in mf.parse_manifest(m)]
     versions = {(p.key, p.version) for _, p in entries}
-    current = mf.latest_photos(runs)
+    if current is None:
+        current = mf.latest_photos(runs)
 
     seen: set[tuple[str, int]] = set()
     new_keys_by_run: dict[str, int] = {}
@@ -53,14 +57,17 @@ def build(manifests: list[dict], staged: Staged) -> Plan:
             plan.send.setdefault(p.sha256, []).append(p)
 
     sha_count = Counter(p.sha256 for p in current.values())
-    plan.stats = {
+    manifest_stats = {
         "manifest_file_entries": len(entries),  # 여러 manifest 에 걸친 files 항목 합
         "repeated_in_manifests": len(entries) - len(versions),  # 같은 칸·같은 버전이 다시 나온 수
         "old_versions_dropped": len(versions) - len(current),  # _v00N 교체로 밀려난 옛 버전
+    } if manifests is not None else {}
+    plan.stats = {
+        **manifest_stats,
         "current_photos": len(current),  # 칸 = (공고, 슬롯) 키 수
         "unique_sha256": len(sha_count),
         "duplicate_photos": len(current) - len(sha_count),  # 같은 파일을 다른 칸·공고가 쓰는 수
-        "new_keys_by_run": new_keys_by_run,
+        **({"new_keys_by_run": new_keys_by_run} if manifests is not None else {}),
         "already_staged": done,
         "reuse_vector": len(plan.reuse),
         "skip_known_blank": len(plan.skip_known),

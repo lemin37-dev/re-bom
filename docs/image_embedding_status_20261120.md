@@ -60,6 +60,9 @@ AWS `rebom` 프로필로 S3·Glue를 읽기만 했습니다. 쓰기·호출은 �
   - Silver의 사진 교체 반영이 "B 반영 전" 상태라서입니다(`docs/data_contract.md` 6절).
   - **이대로 넘어가면 옛 사진을 임베딩하게 됩니다.**
 
+- 같은 결과를 `compare-sources` 명령으로 다시 확인했습니다(`switch_ready: false`).
+- `embed --dry-run --source silver`로 보면 이 6칸은 **옛 사진의 벡터를 재사용**하게 됩니다(`reuse_vector: 6`). 그래서 Silver test로는 쓰기를 막아 두었습니다.
+
 ### 3.2 임베딩 결과 (S3 `gold/image_embedding/`)
 
 | 항목 | 값 |
@@ -90,8 +93,10 @@ AWS `rebom` 프로필로 S3·Glue를 읽기만 했습니다. 쓰기·호출은 �
 | 5 | Bronze 기준과 Silver 기준의 현재 사진 대조에서 차이 0 | 3.1절 대조를 다시 실행 |
 
 **바꾸는 순서:**
-1. 임베딩에 입력 선택 옵션 `--source bronze|silver`를 추가합니다. 기본값은 bronze라 동작은 바뀌지 않습니다. (다음 작업)
-2. 조건 1~4가 충족되면 3.1절 대조를 다시 돌려 차이가 0인지 확인합니다.
+1. ✅ 임베딩에 입력 선택 옵션 `--source bronze|silver`를 추가했습니다(11-20). 기본값은 bronze라 지금 동작은 바뀌지 않습니다.
+   `--source silver --silver-env test`로는 S3·RDS에 쓰지 않고 `--dry-run`·`staged`만 됩니다.
+2. 조건 1~4가 충족되면 대조 명령으로 차이가 0인지 확인합니다. 결과의 `switch_ready`가 `true`여야 합니다.
+   `python -m rebom.embedding.cli compare-sources --silver-env <환경>`
 3. DAG 순서를 바꿉니다. 지금은 사진 task가 끝나면 임베딩이 Silver와 따로 돌지만, 전환 뒤에는 **Silver task가 끝난 뒤** 임베딩이 돌아야 합니다.
 4. DAG의 `embed_photos`에 `--source silver`를 넣습니다.
 5. 첫 실행 뒤 `cli staged`로 결과를 확인합니다. 키가 sha256이라 기준만 같으면 다시 만들 벡터는 없습니다.
@@ -115,7 +120,7 @@ AWS `rebom` 프로필로 S3·Glue를 읽기만 했습니다. 쓰기·호출은 �
 
 | 작업 | 상태 |
 |---|---|
-| 임베딩 `--source bronze\|silver` 옵션 (기본 bronze) | 다음 작업 |
+| 임베딩 `--source bronze\|silver` 옵션 (기본 bronze), 대조 명령 `compare-sources` | ✅ 11-20 추가 (`src/rebom/embedding/sources.py`) |
 | 결과 키(사진 단위·공고 단위)를 Gold에서 관리 | 표 정의(`common/gold_catalog.py`)와 태깅 팀 처리 기록과의 관계를 정한 뒤 진행 |
 | 11-21 DAG 첫 자동 실행 결과 확인 | 11-21 오전 |
 

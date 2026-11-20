@@ -50,6 +50,13 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 
 ## 3. ① embed: 보낼 사진 고르기와 전처리
 
+### 3.0 현재 사진을 읽는 곳 (`sources.py`, 11-20)
+
+- `--source bronze`(기본): 사진 manifest를 모두 읽어 아래 1번 규칙으로 칸별 현재 사진을 고릅니다.
+- `--source silver`: Silver 이미지 표(칸마다 최신 정상 버전)의 `original_s3_key`·`sha256`을 그대로 씁니다. 사진 파일은 두 경우 모두 Bronze S3 원본에서 읽습니다.
+- Silver가 운영으로 열린 뒤 넘어갑니다. 조건·순서: `docs/image_embedding_status_20261120.md` 4절. `--silver-env test`로는 S3·RDS에 쓰지 않습니다.
+- 전환 전 대조: `python -m rebom.embedding.cli compare-sources --silver-env <환경>` → `switch_ready: true`
+
 ### 3.1 보내기 전에 거르는 것 (`plan.py`)
 
 1. **칸별 최신 버전만**: (`desertionNo`, `slot`)마다 `version`이 가장 큰 항목, 같으면 나중 실행. `failed`는 대상 아님.
