@@ -106,6 +106,7 @@ def save_photo_journal_s3(s3, bucket, key, journal):
         "processing_status",
         "applied_count",
         "needs_review",
+        "snapshot_checksum",
     )
 
     for field in fields:
