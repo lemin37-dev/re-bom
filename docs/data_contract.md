@@ -259,6 +259,8 @@
 
 사진 manifest는 그날 처리한 칸만 담는 변경분이라, 하루를 빠뜨리면 Silver가 칸의 현재 사진을 알 수 없습니다(11/19·11/20 실패). 그래서 A가 사진 실행이 `ok`로 끝날 때마다 **오늘 보호중 공고의 모든 칸의 현재 상태**를 함께 씁니다. 원천은 A 상태 파일이고, Silver의 입력입니다(기준 데이터는 Silver).
 
+- **[확정, 11/20 이광훈 님]** Silver 현재 사진 테이블은 검증된 스냅샷 기준으로 갱신하고, 버전 이력 테이블은 지금처럼 manifest로 유지합니다.
+
 ### 14.1 경로와 쓰는 순서
 
 - `bronze/rescue/image_current/dt=<실행일>/run_id=<사진 실행 id>/current.jsonl.gz` (한 줄 = 한 칸, `desertion_no`·`slot` 순 정렬)
@@ -270,6 +272,7 @@
 
 - 오늘 목록에 있는 공고 중, 상태 파일에 버전 기록이 있는 칸만 나옵니다(`--limit`로 아직 한 번도 시도하지 않은 칸은 없음).
 - `active`: 오늘 목록에 그 칸의 주소가 있음. `emptied`: 기록은 있지만 오늘 주소가 없음(보호소가 사진을 뺌). `emptied`는 현재 사진 칸이 모두 null입니다.
+- **`emptied` 처리 [확정, 11/20 이광훈 님]**: Silver는 그 칸의 현재 사진 정보를 비우고, 과거 버전 이력은 보존합니다. 같은 주소가 다시 생기면 같은 버전으로 `active`, 다른 주소면 새 버전입니다.
 - 목록에서 빠진 공고(보호 종료 등)는 나오지 않습니다.
 
 ### 14.3 칸
@@ -289,8 +292,8 @@
 
 ### 14.5 검증
 
-- **A (쓰기 전)**: (`desertion_no`, `slot`) 중복 없음, `slot` 1~8, `slot_state` 값, 현재 null이면 현재 칸 전부 null, `emptied`는 현재 사진 없음·`latest_url` null, `sha256` 64자, 원본 키가 버전 규칙(`popfile<N>[_vNNN].<ext>`)과 맞음, `current_version` ≤ `latest_version`, `row_count = stored_count + no_current_count`, `notice_count` 일치. 하나라도 어기면 쓰지 않고 사진 작업을 실패시킵니다.
-- **B (이광훈 님)**: `status`, 체크섬, 위 건수 합, 공고 수, `slot` 범위, null 일관성, S3 저장 증거, 직전 스냅샷보다 버전이 줄지 않음.
+- **A (쓰기 전)**: (`desertion_no`, `slot`) 중복 없음, `slot` 1~8, `slot_state` 값, 현재 null이면 현재 칸 전부 null, `emptied`는 현재 사진 없음·`latest_url` null, `sha256` 64자, 원본 키가 버전 규칙(`popfile<N>[_vNNN].<ext>`)과 맞음, `current_version` ≤ `latest_version`, `row_count = stored_count + no_current_count + emptied_count`, `notice_count` 일치. 하나라도 어기면 쓰지 않고 사진 작업을 실패시킵니다.
+- **B (이광훈 님)**: `status`, 체크섬, 키 중복, 위 건수 합, 공고 수, `slot` 범위, null 일관성, S3 저장 증거, 직전 스냅샷보다 버전이 줄지 않음. 갱신할 때는 기존 현재 사진 테이블과 스냅샷을 (`desertion_no`, `slot`)으로 비교합니다.
 
 ### 14.6 실패 처리
 
