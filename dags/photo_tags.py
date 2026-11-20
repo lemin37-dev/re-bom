@@ -1,4 +1,10 @@
-"""사진 태깅 DAG. 지금은 손으로만 실행한다(schedule=None). Silver 가 운영(prod)으로 넘어가면 수집 DAG 뒤에 매일 돌린다.
+"""사진 태깅 DAG. 아직은 손으로만 실행한다(schedule=None).
+
+연계 기준(2026-11-20 결정): 이 DAG 는 rescue_ingest 의 Silver task 뒤에 돈다. 태깅은 Silver 의 보호중 여부와
+칸별 현재 사진(키·sha256)을 읽으므로 Bronze 사진 task(photos_done) 뒤가 아니라 Silver 뒤가 맞다.
+다만 지금의 Silver task(silver_dry_run)는 dry run 이라 테이블을 갱신하지 않으므로, 연계 실행은 실제로 이루어지지 않는다.
+Silver 가 매일 apply 로 바뀌고 200마리 시험이 끝나면 Silver task 에 outlets=[Asset(...)] 를 달고
+이 DAG 를 schedule=[그 Asset] 으로 바꾼다(그 전에 연결하면 첫 실행부터 하루 1000장씩 유료 태깅이 돈다).
 
 실제 처리는 사진 태깅 이미지(ECR rebom/tag-img, infra/docker/tag-img.Dockerfile)가 한다.
 이 파일에는 순서와 호출만 둔다 (AGENTS.md 3번).

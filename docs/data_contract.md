@@ -210,7 +210,7 @@
 ## 13. 사진 태그 (Gold, 모델 결과) [test 환경, 2026-11-20]
 
 보호중(`status_group = PROTECTING`) 개(`species_code = 417000`)의 대표 사진 한 장에 털·귀·눈매·닮은 품종 태그를 붙여 S3 Gold(Iceberg, Glue DB `rebom_gold`)에 씁니다.
-코드는 `src/rebom/tagging/`, 테이블 정의는 `src/rebom/common/gold_catalog.py`, 실행은 `dags/photo_tags.py`(지금은 손으로만 실행).
+코드는 `src/rebom/tagging/`, 테이블 정의는 `src/rebom/common/gold_catalog.py`, 실행은 `dags/photo_tags.py`입니다. 연계 위치는 수집 DAG 의 Silver task 뒤로 정했지만, 지금 Silver 가 dry run 이라 연계 실행은 실제로 이루어지지 않고 손으로만 실행합니다(Silver apply 전환 뒤 Airflow Asset 으로 연결).
 
 ### 13.1 대상과 다시 태깅하는 조건
 
