@@ -212,11 +212,24 @@
 보호중(`status_group = PROTECTING`) 개(`species_code = 417000`)의 대표 사진 한 장에 털·귀·눈매·닮은 품종 태그를 붙여 S3 Gold(Iceberg, Glue DB `rebom_gold`)에 씁니다.
 코드는 `src/rebom/tagging/`, 테이블 정의는 `src/rebom/common/gold_catalog.py`, 실행은 `dags/photo_tags.py`입니다. 연계 위치는 수집 DAG 의 Silver task 뒤로 정했지만, 지금 Silver 가 dry run 이라 연계 실행은 실제로 이루어지지 않고 손으로만 실행합니다(Silver apply 전환 뒤 Airflow Asset 으로 연결).
 
+### 13.0 공용 키 (subject_type, subject_key) [2026-11-20 결정]
+
+Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지**를 두 칸으로 가리킵니다. 사진 태깅·글 태깅·임베딩이 같은 처리 기록·요청 기록 테이블을 같이 씁니다.
+
+| `subject_type` | `subject_key` | 쓰는 곳 |
+|---|---|---|
+| `photo` | 사진 원본 sha256 | 사진 태깅, 사진 임베딩 |
+| `animal` | 공고번호(`desertion_no`) | 글(특이사항) 태깅·글 임베딩, 사진 없음(`NO_PHOTO`) 기록 |
+
+- 사진은 sha256 단위라 **같은 사진이 여러 공고에 올라와도 한 번만 부릅니다.** 공고–사진 연결은 Gold 에 두지 않고 Silver 현재 사진 테이블(`desertion_no`, `image_slot`, `sha256`)에서 합니다.
+- 비용은 `gold_model_request_log.cost_usd` 에 OpenRouter 가 돌려준 `usage.cost` 를 그대로 넣습니다(임베딩도 같은 칸).
+
 ### 13.1 대상과 다시 태깅하는 조건
 
 - 대표 사진: Silver 이미지 테이블에서 `original_s3_key` 가 있는 가장 작은 `image_slot`. 키는 Silver 값을 그대로 쓰고(`_v002` 같은 교체 사진 포함), 받은 사진의 sha256 이 Silver 값과 다르면 그 사진은 실패(`SHA_MISMATCH`)로 둡니다.
-- 사진이 없는 개는 `NO_PHOTO` 로 한 번만 기록합니다(`input_hash = "no-photo"`).
-- 다시 부르는 경우는 둘뿐입니다. 대표 사진의 sha256 이 바뀌었을 때, 질문지 버전(`version`)이 바뀌었을 때. 실패(`FAILED`)는 3번까지 다시 시도합니다.
+- 보호중 개들의 대표 사진을 sha256 으로 묶어 사진 단위로 부릅니다. 다른 공고에서 이미 태깅한 사진이면 부르지 않습니다.
+- 사진이 없는 개는 `NO_PHOTO` 로 한 번만 기록합니다(`subject_type = animal`, `subject_key` = 공고번호, `input_hash = "no-photo"`). 나중에 사진이 생기면 그 사진(sha256)이 새 대상이 됩니다.
+- 다시 부르는 경우는 둘뿐입니다. 공고의 대표 사진이 아직 태깅하지 않은 sha256 으로 바뀌었을 때, 질문지 버전(`version`)이 바뀌었을 때. 실패(`FAILED`)는 3번까지 다시 시도합니다.
 - 모델: OpenRouter `google/gemini-3.1-flash-lite`, 공급자 `google-ai-studio` 고정(대체 공급자 없음), reasoning low, `media_resolution = MEDIA_RESOLUTION_MEDIUM`, temperature 1.0(평가 때 Google 기본값과 같은 값을 명시). seed 는 보내지 않습니다. 2회 답의 일치로 판정하므로 두 회차가 독립이어야 합니다.
 - 실행을 멈추는 경우: 특징 질문 하나의 prompt_tokens 가 1,500 을 넘을 때(해상도 설정이 빠진 것으로 봄, medium 약 1,294, high 약 1,818), 그리고 키·계정 오류(401, 402, 검열 표시가 없는 403, 키 한도)일 때. 계정 오류를 사진 실패로 세면 모든 대상의 시도 횟수가 쌓여 3번 뒤 영구히 건너뛰기 때문입니다.
 - 사진 크기: 10MB 를 넘는 원본은 보내지 않고 실패(`IMAGE_TOO_LARGE`)로 둡니다.
@@ -244,13 +257,80 @@
 
 | 테이블 (test 는 이름 뒤 `_test`) | 한 행 | 쓰는 방식 |
 |---|---|---|
-| `gold_animal_tag` | 공고 × 태그 | 다시 태깅하면 (`desertion_no`, `task`) 범위의 이전 행을 통째 교체. 실패한 작업은 교체하지 않아 이전 태그가 남음 |
-| `gold_inference_log` | 공고 × 작업 × 질문지 버전 × 사진 해시 | (`desertion_no`, `task`, `version`, `input_hash`) 로 upsert. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error` |
-| `gold_model_request_log` | 모델 요청 한 번 | append 만. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분) |
+| `gold_animal_tag` | 대상 × 작업 × 질문지 버전 × 태그 | 같은 대상·같은 질문지 버전으로 다시 태깅했을 때만 (`subject_type`, `subject_key`, `task`, `prompt_version`) 범위의 행을 교체. 사진이 바뀌면 새 sha256 이 새 행이 되고, 질문지 버전을 올려도 이전 행은 남음(이전 버전 보존). 실패한 작업은 교체하지 않음 |
+| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error` |
+| `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분) |
 
-`gold_animal_tag` 칸: `desertion_no`, `tag_code`, `source`(photo), `tagger_version`, `task`, `model`, `prompt_version`, `image_slot`, `source_hash`(사진 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
+`gold_animal_tag` 칸: `subject_type`, `subject_key`, `tag_code`, `source`(photo), `tagger_version`, `task`, `model`, `prompt_version`, `source_hash`(입력 해시, 사진은 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
 
 - 위치: test `s3://rebom-data-559987919299/gold/_test/iceberg/`, prod `s3://rebom-data-559987919299/gold/iceberg/`. 실행 중간 파일(대상 목록)은 `gold/_work_test/photo_tags/<run_id>/targets.json`.
-- 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. 파드(노드 역할)는 읽기·쓰기만 합니다.
+- 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. `subject_type`·`subject_key` 가 없는 옛 테이블(11/20 이전 `desertion_no` 키)은 칸 추가로 맞추지 않고 멈추며, test 는 `--create --recreate` 로 지우고 다시 만듭니다(옛 행은 버림, prod 는 거부). 파드(노드 역할)는 읽기·쓰기만 합니다.
 - 서비스 DB 적재(pgvector 쪽 태그 테이블)는 별도 작업입니다.
-- 남아 있는 태그(서비스 적재 때 거를 것): `gold_animal_tag` 는 보호가 끝난 공고나 대표 사진이 없어진 공고의 태그를 지우지 않습니다. 대상 고르기는 보호중 공고만 보고, 태그 교체는 다시 태깅한 공고에만 일어나기 때문입니다. 서비스 DB 에 넣거나 검색할 때 공고 상태(`status_group`)와 현재 대표 사진(`source_hash`)으로 걸러야 합니다.
+- 이전 버전 보존(2026-11-20 결정): `gold_animal_tag` 는 사진이 바뀌거나 질문지 버전을 올려도 이전 행을 지우지 않습니다. 오래된 버전 정리는 공고·이미지 정리 기준이 정해진 뒤에 따로 합니다.
+- 서비스 DB 에 넣을 행(활성 태그): Silver 에서 공고별 대표 사진을 구해 사진 태그와 잇습니다. 아래 조건을 모두 만족하는 행만 고릅니다.
+  1. 공고 `status_group` 이 보호중
+  2. 그 공고의 대표 사진(Silver 현재 사진 테이블에서 키가 있는 가장 작은 칸)의 sha256 = 태그의 `subject_key` (`subject_type = photo`)
+  3. `prompt_version` 이 작업별 현재 질문지 버전(`run_photo_tags.VERSIONS`: `photo_trait` = `trait-vision-v10`, `photo_breed` = `breed-vision-v2-open`)
+- 남아 있는 태그: `gold_animal_tag` 는 이전 사진·이전 버전·보호가 끝난 공고의 사진 태그를 지우지 않습니다. 위 조건으로 걸러서 씁니다.
+
+
+## 14. 현재 사진 스냅샷 [합의, 2026-11-20 이광훈 님 · A 구현 `CODE_VERSION` 2026-11-20]
+
+사진 manifest는 그날 처리한 칸만 담는 변경분이라, 하루를 빠뜨리면 Silver가 칸의 현재 사진을 알 수 없습니다(11/19·11/20 실패). 그래서 A가 사진 실행이 `ok`로 끝날 때마다 **오늘 보호중 공고의 모든 칸의 현재 상태**를 함께 씁니다. 원천은 A 상태 파일이고, Silver의 입력입니다(기준 데이터는 Silver).
+
+- **[확정, 11/20 이광훈 님]** Silver 현재 사진 테이블은 검증된 스냅샷 기준으로 갱신하고, 버전 이력 테이블은 지금처럼 manifest로 유지합니다.
+
+### 14.1 경로와 쓰는 순서
+
+- `bronze/rescue/image_current/dt=<실행일>/run_id=<사진 실행 id>/current.jsonl.gz` (한 줄 = 한 칸, `desertion_no`·`slot` 순 정렬)
+- 같은 폴더의 `snapshot.json`을 **마지막에** 씁니다. `snapshot.json`이 있으면 `current.jsonl.gz`는 다 쓰인 것입니다.
+- 사진을 다 받았을 때만 씁니다. 끊긴 실행·dry run에는 쓰지 않습니다.
+- **manifest가 `ok`이면 스냅샷이 반드시 있습니다 [11/20 결정].** 순서: 받은 기록을 manifest `in_progress`로 저장 → 스냅샷 검증·쓰기 → manifest `ok`. 스냅샷에서 실패하면 manifest를 `aborted`로 두고 맨 위에 `abort_reason`(`snapshot: ...`)을 남긴 뒤 사진 task를 실패시킵니다. 받은 사진(`files`)은 기존 `aborted` 규칙대로 반영할 수 있습니다.
+
+### 14.2 줄 범위와 `slot_state`
+
+- 오늘 목록에 있는 공고 중, 상태 파일에 버전 기록이 있는 칸만 나옵니다(`--limit`로 아직 한 번도 시도하지 않은 칸은 없음).
+- `active`: 오늘 목록에 그 칸의 주소가 있음. `emptied`: 기록은 있지만 오늘 주소가 없음(보호소가 사진을 뺌). `emptied`는 현재 사진 칸이 모두 null입니다.
+- **`emptied` 처리 [확정, 11/20 이광훈 님]**: Silver는 그 칸의 현재 사진 정보를 비우고, 과거 버전 이력은 보존합니다. 같은 주소가 다시 생기면 같은 버전으로 `active`, 다른 주소면 새 버전입니다.
+- 목록에서 빠진 공고(보호 종료 등)는 나오지 않습니다.
+
+### 14.3 칸
+
+| 칸 | 뜻 |
+|---|---|
+| `desertion_no`, `slot` | 키. `slot`은 1~8 |
+| `slot_state` | `active` / `emptied` |
+| `current_version` | 마지막으로 저장에 성공한 버전. 없으면 null |
+| `original_s3_key`, `serving_s3_key`, `thumb_s3_key`, `sha256`, `ext`, `bytes`, `source_url`, `stored_at` | 현재 버전의 저장 정보. `current_version`이 null이면 모두 null |
+| `latest_version`, `latest_status`, `latest_url` | 가장 큰 버전과 그 상태(`success`·`pending`·`failed`·`gave_up`), 주소. `emptied`면 `latest_url` null |
+| `first_seen_at` | 가장 큰 버전의 주소를 처음 본 시각 |
+
+### 14.4 `snapshot.json`
+
+`source`, `photo_run_id`, `bronze_run_id`, `generated_at`, `code_version`, `status`(`ok`), `file`, `checksum`(gz 파일 sha256), 그리고 건수 `row_count`, `notice_count`, `stored_count`, `no_current_count`, `emptied_count`, `url_reverted_count`(주소가 옛 버전 주소로 돌아간 칸, 처리하지 않고 건수만).
+
+### 14.5 검증
+
+- **A (쓰기 전)**: (`desertion_no`, `slot`) 중복 없음, `slot` 1~8, `slot_state` 값, 현재 null이면 현재 칸 전부 null, `emptied`는 현재 사진 없음·`latest_url` null, `sha256` 64자, 원본 키가 버전 규칙(`popfile<N>[_vNNN].<ext>`)과 맞음, `current_version` ≤ `latest_version`, `row_count = stored_count + no_current_count + emptied_count`, `notice_count` 일치. 하나라도 어기면 쓰지 않고 사진 작업을 실패시킵니다.
+- **B (이광훈 님)**: `status`, 체크섬, 키 중복, 위 건수 합, 공고 수, `slot` 범위, null 일관성, S3 저장 증거, 직전 스냅샷보다 버전이 줄지 않음. 갱신할 때는 기존 현재 사진 테이블과 스냅샷을 (`desertion_no`, `slot`)으로 비교합니다.
+
+### 14.6 실패 처리
+
+- 검증 실패: B는 기존 데이터를 유지하고 실행을 실패로 둡니다.
+- 사진 작업은 성공했는데 스냅샷이 없음: 계약 위반으로 봅니다.
+- manifest `aborted` + `abort_reason`이 `snapshot:`으로 시작: 사진은 받았지만 스냅샷이 없습니다. 기존 데이터를 유지하고 실행을 실패로 둡니다.
+- 스냅샷은 있는데 manifest가 `in_progress`로 남음(마지막 `ok` 저장만 실패): 기존 정체 규칙(1시간)으로 처리합니다. 스냅샷은 그 실행 결과까지 반영한 것이라 틀린 값은 아닙니다.
+
+### 14.7 실측 (11/20 상태 파일, 오프라인)
+
+| 항목 | 값 |
+|---|---|
+| 줄 / 공고 | 41,891 / 18,809 |
+| 현재 사진 있음 / 없음 | 38,836 / 3,055 (`gave_up` 2,303, `failed` 752) |
+| `emptied` / 주소 되돌아감 | 0 / 0 |
+| 크기 / 시간 | gz 2.5MB (원본 31MB) / 1.6초 |
+
+### 14.8 범위 밖
+
+- 빈(백지) 사진 측정값(`pixel_std` 등)은 나중에 칸을 더합니다. Bronze는 측정만, 판정은 Silver.
+- 주소가 옛 버전으로 돌아간 칸의 처리 규칙(지금은 건수만).

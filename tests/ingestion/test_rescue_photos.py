@@ -618,7 +618,7 @@ def test_version_and_first_seen_are_fixed_even_if_limit_postpones_the_download(s
 
 def test_old_state_records_without_version_are_read_as_version_1(store):
     """11/16 이전 기록(version·previous 없음)은 옮기지 않고 버전 1로 읽는다."""
-    legacy = {"status": "success", "attempts": 1, "reason": None, "ext": "jpg", "bytes": 10, "sha256": "ab",
+    legacy = {"status": "success", "attempts": 1, "reason": None, "ext": "jpg", "bytes": 10, "sha256": "ab" * 32,
               "source_url": "http://x/a", "stored_at": "2026-11-11T14:03:04+09:00"}
     store.put_bytes(rp.STATE_KEY, json.dumps({"version": 1, "notices": {"111": {"slots": {"1": legacy}}}}).encode("utf-8"))
     assert rp.slot_versions(legacy)[0] | {} == {**legacy, "version": 1, "replaces": None, "first_seen_at": "2026-11-11T14:03:04+09:00"}
@@ -627,7 +627,7 @@ def test_old_state_records_without_version_are_read_as_version_1(store):
     assert fetch.calls == []  # 같은 주소라 받지 않는다
     run_with(store, RUN3, "http://x/b", fetch, 2)
     rec = state_of(store)["notices"]["111"]["slots"]["1"]
-    assert rec["version"] == 2 and rec["replaces"] == 1 and rec["previous"][0]["sha256"] == "ab"
+    assert rec["version"] == 2 and rec["replaces"] == 1 and rec["previous"][0]["sha256"] == "ab" * 32
 
 
 def test_version_keys_sort_in_version_order():
@@ -635,3 +635,132 @@ def test_version_keys_sort_in_version_order():
     assert keys[0] == "bronze/rescue/images/1/popfile1.jpg"
     assert sorted(keys[1:]) == [rp.original_key("1", 1, "jpg", v) for v in (2, 3, 10)]  # 세 자리라 v010 이 v002 뒤
     assert rp.serving_key("1", 2, thumb=True, version=12) == "images/1/2_v012_thumb.webp"
+
+
+# ---------- 현재 사진 스냅샷 (11/20 이광훈 님과 합의) ----------
+
+def read_snapshot(store, photo_run_id, dt="2026-11-04"):
+    prefix = f"{rp.CURRENT_PREFIX}/dt={dt}/run_id={photo_run_id}"
+    meta_raw = store.get_bytes(f"{prefix}/snapshot.json")
+    if meta_raw is None:
+        return None, None
+    data = store.get_bytes(f"{prefix}/current.jsonl.gz")
+    meta = json.loads(meta_raw.decode("utf-8"))
+    assert meta["checksum"] == hashlib.sha256(data).hexdigest()
+    lines = [json.loads(x) for x in gzip.decompress(data).decode("utf-8").splitlines() if x.strip()]
+    return meta, lines
+
+
+def by_key(lines):
+    return {(ln["desertion_no"], ln["slot"]): ln for ln in lines}
+
+
+def test_snapshot_has_one_line_per_slot_with_current_and_latest(store):
+    jpg = image_bytes()
+    seed_bronze(store, [row("111", "http://x/a", "http://x/b")], [row("222", "http://x/c")])
+    fetch = FakeFetch({"http://x/a": (jpg, None), "http://x/b": (None, "not_found"), "http://x/c": (jpg, None)})
+    out = rp.run_photos(store, fetch, RUN_ID, now=NOW, photo_run_id="p0")
+    meta, lines = read_snapshot(store, "p0")
+    assert out["snapshot"].endswith("run_id=p0/snapshot.json")
+    assert [(ln["desertion_no"], ln["slot"]) for ln in lines] == [("111", 1), ("111", 2), ("222", 1)]  # 공고·칸 순
+    a, b = by_key(lines)[("111", 1)], by_key(lines)[("111", 2)]
+    assert a["slot_state"] == "active" and a["current_version"] == 1 and a["latest_status"] == "success"
+    assert a["original_s3_key"] == "bronze/rescue/images/111/popfile1.jpg" and a["sha256"] == hashlib.sha256(jpg).hexdigest()
+    assert a["serving_s3_key"] == "images/111/1.webp" and a["thumb_s3_key"] == "images/111/1_thumb.webp"
+    # 저장된 적 없는 칸도 한 줄. 현재 사진 칸은 모두 비어 있고 최근 상태로 알 수 있다
+    assert b["current_version"] is None and all(b[f] is None for f in rp.CURRENT_FIELDS)
+    assert (b["latest_version"], b["latest_status"], b["latest_url"]) == (1, "failed", "http://x/b")
+    assert {k: meta[k] for k in ("row_count", "notice_count", "stored_count", "no_current_count", "emptied_count", "url_reverted_count")} == {
+        "row_count": 3, "notice_count": 2, "stored_count": 2, "no_current_count": 1, "emptied_count": 0, "url_reverted_count": 0}
+    assert meta["status"] == "ok" and meta["bronze_run_id"] == RUN_ID and meta["photo_run_id"] == "p0"
+
+
+def test_snapshot_follows_replacement_and_keeps_old_photo_when_new_one_fails(store):
+    fetch = FakeFetch({"http://x/a": (image_bytes(), None), "http://x/b": (image_bytes(color=(1, 1, 1)), None), "http://x/c": (None, "not_found")})
+    run_with(store, RUN_ID, "http://x/a", fetch, 0)
+    run_with(store, RUN2, "http://x/b", fetch, 1)
+    _, lines = read_snapshot(store, "p1", dt="2026-11-05")
+    ln = lines[0]
+    assert (ln["current_version"], ln["latest_version"]) == (2, 2)
+    assert ln["original_s3_key"] == "bronze/rescue/images/111/popfile1_v002.jpg" and ln["serving_s3_key"] == "images/111/1_v002.webp"
+    run_with(store, RUN3, "http://x/c", fetch, 2)  # 새 주소가 404 면 현재 사진은 v2 그대로
+    _, lines = read_snapshot(store, "p2", dt="2026-11-06")
+    ln = lines[0]
+    assert (ln["current_version"], ln["latest_version"], ln["latest_status"], ln["latest_url"]) == (2, 3, "failed", "http://x/c")
+    assert ln["source_url"] == "http://x/b"
+
+
+def test_snapshot_marks_emptied_slot_and_drops_notice_that_left_the_list(store):
+    fetch = FakeFetch({"http://x/a": (image_bytes(), None), "http://x/b": (image_bytes(), None)})
+    seed_bronze(store, [row("111", "http://x/a", "http://x/b"), row("222", "http://x/a")])
+    rp.run_photos(store, fetch, RUN_ID, now=NOW, photo_run_id="p0")
+    seed_bronze(store, [row("111", "http://x/a")], run_id=RUN2)  # 111 의 2번 칸이 비고, 222 는 목록에서 빠짐(종료)
+    rp.run_photos(store, fetch, RUN2, now=NOW + timedelta(days=1), photo_run_id="p1")
+    meta, lines = read_snapshot(store, "p1", dt="2026-11-05")
+    rows_ = by_key(lines)
+    assert set(rows_) == {("111", 1), ("111", 2)}  # 목록에서 빠진 공고는 스냅샷 대상이 아니다
+    e = rows_[("111", 2)]
+    assert e["slot_state"] == "emptied" and e["current_version"] is None and e["latest_url"] is None
+    assert (meta["stored_count"], meta["emptied_count"]) == (1, 1)
+
+
+def test_snapshot_counts_url_that_went_back_to_an_old_version(store):
+    fetch = FakeFetch({"http://x/a": (image_bytes(), None), "http://x/b": (image_bytes(color=(1, 1, 1)), None)})
+    run_with(store, RUN_ID, "http://x/a", fetch, 0)
+    run_with(store, RUN2, "http://x/b", fetch, 1)
+    run_with(store, RUN3, "http://x/a", fetch, 2)  # A→B→A. 처리하지 않고 세기만 한다
+    meta, lines = read_snapshot(store, "p2", dt="2026-11-06")
+    assert meta["url_reverted_count"] == 1 and lines[0]["current_version"] == 2
+
+
+def test_snapshot_skips_slot_postponed_by_limit_and_is_not_written_on_abort_or_dry_run(tmp_path):
+    store = LocalStore(tmp_path)
+    seed_bronze(store, [row("111", "http://x/a"), row("222", "http://x/b")])
+    fetch = FakeFetch({"http://x/a": (image_bytes(), None), "http://x/b": (image_bytes(), None)})
+    rp.run_photos(store, fetch, RUN_ID, dry_run=True, now=NOW, photo_run_id="pd")
+    assert read_snapshot(store, "pd")[0] is None
+    rp.run_photos(store, fetch, RUN_ID, limit=1, now=NOW, photo_run_id="pl")
+    meta, lines = read_snapshot(store, "pl")
+    assert meta["row_count"] == 1  # 기록이 없는 칸(이번에 밀린 새 칸)은 다음 실행에 나온다
+    failing = FailingStore(tmp_path / "f", fail_on=1)
+    seed_bronze(failing, [row("333", "http://x/a")])
+    out = rp.run_photos(failing, fetch, RUN_ID, now=NOW, photo_run_id="pa")
+    assert out["aborted"] and "snapshot" not in out and read_snapshot(failing, "pa")[0] is None
+
+
+def test_check_snapshot_rejects_broken_lines():
+    good = {"desertion_no": "111", "slot": 1, "slot_state": "active", "current_version": None,
+            **{f: None for f in rp.CURRENT_FIELDS}, "latest_version": 1, "latest_status": "failed", "latest_url": "http://x/a", "first_seen_at": None}
+    counts = {"row_count": 1, "notice_count": 1, "stored_count": 0, "no_current_count": 1, "emptied_count": 0, "url_reverted_count": 0}
+    rp.check_snapshot([good], counts)
+    with pytest.raises(rp.SnapshotError):
+        rp.check_snapshot([good, dict(good)], {**counts, "row_count": 2, "no_current_count": 2})  # 중복 칸
+    with pytest.raises(rp.SnapshotError):
+        rp.check_snapshot([{**good, "sha256": "ab"}], counts)  # 현재 버전이 없는데 칸이 차 있음
+    with pytest.raises(rp.SnapshotError):
+        rp.check_snapshot([{**good, "slot": 9}], counts)
+    with pytest.raises(rp.SnapshotError):
+        rp.check_snapshot([good], {**counts, "row_count": 2})  # 합계가 안 맞음
+
+
+def test_manifest_is_ok_only_after_snapshot_is_written(tmp_path, monkeypatch):
+    store = LocalStore(tmp_path)
+    seed_bronze(store, [row("111", "http://x/a")])
+    fetch = FakeFetch({"http://x/a": (image_bytes(), None)})
+    rp.run_photos(store, fetch, RUN_ID, now=NOW, photo_run_id="ok1")
+    assert read_manifest(store, "ok1")["status"] == "ok" and read_snapshot(store, "ok1")[0] is not None
+
+    # 스냅샷에서 실패하면 manifest 는 ok 가 아니라 aborted + 사유이고, 받은 사진 기록은 남는다
+    store2 = LocalStore(tmp_path / "s2")
+    seed_bronze(store2, [row("222", "http://x/a")])
+
+    def broken(lines, counts):
+        raise rp.SnapshotError("test")
+    monkeypatch.setattr(rp, "check_snapshot", broken)
+    with pytest.raises(rp.SnapshotError):
+        rp.run_photos(store2, fetch, RUN_ID, now=NOW, photo_run_id="bad1")
+    m = read_manifest(store2, "bad1")
+    assert m["status"] == "aborted" and "snapshot" in m["abort_reason"]
+    assert [f["desertionNo"] for f in m["files"]] == ["222"]
+    assert read_snapshot(store2, "bad1")[0] is None
+    assert state_of(store2)["notices"]["222"]["slots"]["1"]["status"] == "success"
