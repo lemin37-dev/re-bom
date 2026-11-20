@@ -20,8 +20,10 @@ def img_row(no, slot, sha="a" * 64, key=None):
             "sha256": sha}
 
 
-def log_row(no, task, version, sha, status, attempts=1):
-    return {"desertion_no": no, "task": task, "version": version, "input_hash": sha, "status": status, "attempts": attempts}
+def log_row(sha, task, version, status, attempts=1):
+    """사진 처리 기록: 대상은 사진 sha256 (subject_type=photo)."""
+    return {"subject_type": "photo", "subject_key": sha, "task": task, "version": version, "input_hash": sha,
+            "status": status, "attempts": attempts}
 
 
 # ------------------------------------------------------------ 대상 고르기
@@ -39,36 +41,57 @@ def test_uses_versioned_key_from_silver_as_is():
     assert targets[0].s3_key.endswith("popfile1_v002.jpg")
 
 
+def test_same_photo_on_two_notices_is_called_once():
+    """같은 사진(sha256)을 대표 사진으로 쓰는 공고가 둘이면 한 번만 부른다."""
+    rows = [img_row("2", 1, "a" * 64), img_row("1", 1, "a" * 64), img_row("3", 1, "c" * 64)]
+    targets, _ = rpt.select_targets(["1", "2", "3"], rows, [])
+    assert [(t.sha256[:1], t.desertion_nos) for t in targets] == [("a", ("1", "2")), ("c", ("3",))]
+
+
 def test_skip_done_and_retag_when_hash_or_version_changes():
     sha_old, sha_new = "a" * 64, "c" * 64
-    logs = [log_row("1", TRAIT, TV, sha_old, "OK"), log_row("1", BREED, BV, sha_old, "NO_RESULT")]
+    logs = [log_row(sha_old, TRAIT, TV, "OK"), log_row(sha_old, BREED, BV, "NO_RESULT")]
     targets, _ = rpt.select_targets(["1"], [img_row("1", 1, sha_old)], logs)
     assert targets == []
     targets, _ = rpt.select_targets(["1"], [img_row("1", 1, sha_new)], logs)
-    assert targets[0].tasks == (TRAIT, BREED)
+    assert targets[0].tasks == (TRAIT, BREED) and targets[0].sha256 == sha_new
     targets, _ = rpt.select_targets(["1"], [img_row("1", 1, sha_old)], logs, versions={TRAIT: "trait-vision-v11", BREED: BV})
     assert targets[0].tasks == (TRAIT,)
 
 
+def test_photo_done_for_one_notice_is_done_for_another():
+    """다른 공고에서 이미 태깅한 사진이면 새 공고에 올라와도 다시 부르지 않는다."""
+    sha = "a" * 64
+    logs = [log_row(sha, TRAIT, TV, "OK"), log_row(sha, BREED, BV, "OK")]
+    assert rpt.select_targets(["9"], [img_row("9", 1, sha)], logs)[0] == []
+
+
 def test_failed_is_retried_until_three_attempts():
     sha = "a" * 64
-    two = [log_row("1", TRAIT, TV, sha, "FAILED", 2), log_row("1", BREED, BV, sha, "OK")]
+    two = [log_row(sha, TRAIT, TV, "FAILED", 2), log_row(sha, BREED, BV, "OK")]
     assert rpt.select_targets(["1"], [img_row("1", 1, sha)], two)[0][0].tasks == (TRAIT,)
-    three = [log_row("1", TRAIT, TV, sha, "FAILED", 3), log_row("1", BREED, BV, sha, "OK")]
+    three = [log_row(sha, TRAIT, TV, "FAILED", 3), log_row(sha, BREED, BV, "OK")]
     assert rpt.select_targets(["1"], [img_row("1", 1, sha)], three)[0] == []
 
 
-def test_no_photo_recorded_once():
+def test_no_photo_recorded_once_per_notice():
     targets, no_photo = rpt.select_targets(["2", "1"], [img_row("1", 1)], [])
-    assert [t.desertion_no for t in targets] == ["1"] and no_photo == ["2"]
+    assert [t.desertion_nos for t in targets] == [("1",)] and no_photo == ["2"]
     logs = rpt.no_photo_rows(no_photo, "r", datetime.now(UTC))
+    assert {(r["subject_type"], r["subject_key"]) for r in logs} == {("animal", "2")}
     assert rpt.select_targets(["2"], [], logs)[1] == []
 
 
 def test_limit_keeps_sorted_order():
-    rows = [img_row(n, 1) for n in ("3", "1", "2")]
+    rows = [img_row(n, 1, n * 64) for n in ("3", "1", "2")]
     targets, _ = rpt.select_targets(["3", "1", "2"], rows, [], limit=2)
-    assert [t.desertion_no for t in targets] == ["1", "2"]
+    assert [t.desertion_nos for t in targets] == [("1",), ("2",)]
+
+
+def test_pending_targets_drops_tasks_done_since_select():
+    t = rpt.Target("a" * 64, "k", (TRAIT, BREED), ("1",))
+    assert rpt.pending_targets([t], [log_row("a" * 64, TRAIT, TV, "OK")])[0].tasks == (BREED,)
+    assert rpt.Target.from_dict({**rpt.asdict(t)}) == t
 
 
 # ------------------------------------------------------------ 호출 → 결과
@@ -111,7 +134,7 @@ class FakeClient:
 
 
 def target(no="1", tasks=(TRAIT, BREED)):
-    return rpt.Target(no, 1, f"k/{no}.jpg", "a" * 64, tasks)
+    return rpt.Target(no * 64, f"k/{no}.jpg", tasks, (no,))
 
 
 def cfg():
@@ -142,7 +165,9 @@ def test_bad_answer_marks_task_failed_and_keeps_old_tags():
     o = outcomes[0]
     assert o.tasks[BREED].status == "FAILED" and o.tasks[TRAIT].status == "OK"
     scope, _ = rpt.replaced_tag_rows(outcomes)
-    assert scope == [("1", TRAIT)]  # 품종은 교체하지 않는다
+    assert scope == [("1" * 64, TRAIT, TV)]  # 품종은 교체하지 않는다
+    assert {(r["subject_type"], r["subject_key"]) for r in o.tasks[TRAIT].tag_rows} == {("photo", "1" * 64)}
+    assert {(r["subject_type"], r["subject_key"]) for r in o.requests} == {("photo", "1" * 64)}
     assert {r["status"] for r in o.requests if r["task"] == BREED} == {"BAD_ANSWER"}
 
 
@@ -183,7 +208,7 @@ def test_s3_or_api_error_fails_only_that_photo():
 
 def test_inference_rows_count_attempts():
     outcomes, _ = rpt.tag_photos([(target(), jpeg())], FakeClient(), cfg())
-    prev = rpt.log_index([log_row("1", TRAIT, TV, "a" * 64, "FAILED", 2)])
+    prev = rpt.log_index([log_row("1" * 64, TRAIT, TV, "FAILED", 2)])
     rows = {r["task"]: r for r in rpt.inference_rows(outcomes, prev, "run-1", datetime.now(UTC))}
     assert rows[TRAIT]["attempts"] == 3 and rows[TRAIT]["status"] == "OK" and rows[TRAIT]["tag_count"] == 3
     assert rows[BREED]["attempts"] == 1 and rows[BREED]["tag_count"] == 1
@@ -198,9 +223,9 @@ def test_fetch_image_checks_sha(tmp_path):
         def get_object(self, Bucket, Key):
             return {"Body": io.BytesIO(data)}
 
-    ok = rpt.Target("1", 1, "k", hashlib.sha256(data).hexdigest(), (TRAIT,))
+    ok = rpt.Target(hashlib.sha256(data).hexdigest(), "k", (TRAIT,), ("1",))
     assert rpt.fetch_image(S3(), "b", ok) == data
-    bad = rpt.Target("1", 1, "k", "0" * 64, (TRAIT,))
+    bad = rpt.Target("0" * 64, "k", (TRAIT,), ("1",))
     assert "SHA_MISMATCH" in str(rpt.fetch_image(S3(), "b", bad))
 
 
@@ -209,4 +234,4 @@ def test_local_sink_round_trip(tmp_path):
     ts = datetime.now(UTC)
     sink.write([], [], rpt.no_photo_rows(["9"], "r", ts), [])
     logs = sink.read_inference_log()
-    assert {(r["desertion_no"], r["status"]) for r in logs} == {("9", "NO_PHOTO")}
+    assert {(r["subject_type"], r["subject_key"], r["status"]) for r in logs} == {("animal", "9", "NO_PHOTO")}
