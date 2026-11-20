@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from rebom.common.openrouter import (
-    ChatRequest,
     AccountError,
+    ChatRequest,
     OpenRouterClient,
     OpenRouterError,
 )
