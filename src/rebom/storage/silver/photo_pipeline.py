@@ -2,13 +2,14 @@
 
 import json
 import tempfile
-from functools import reduce
+from functools import partial, reduce
 from pathlib import Path
 
 import pyarrow as pa
 from pyiceberg.expressions import And, EqualTo, Or
 
 from rebom.storage.silver.load_photo_manifest import load_photo_manifest
+from rebom.storage.silver.photo_dry_run_baseline import load_previous_photos
 from rebom.storage.silver.photo_manifest_policy import decide_photo_manifest
 from rebom.storage.silver.photo_processing_journal import (
     load_photo_journal_s3,
@@ -45,7 +46,12 @@ def process_photo_manifest(
     apply=False,
     history_table_name=None,
     expected_history_location=None,
+    *,
+    historical_manifest_keys=None,
 ):
+    if apply and historical_manifest_keys is not None:
+        raise ValueError("PHOTO_BASELINE_DRY_RUN_ONLY")
+
     if not (
         manifest_key.startswith("bronze/rescue/image_runs/")
         and manifest_key.endswith("/manifest.json")
@@ -94,6 +100,7 @@ def process_photo_manifest(
             journal_key=journal_key,
             decision=decision,
             apply=apply,
+            historical_manifest_keys=historical_manifest_keys,
         )
 
     if existing is not None:
@@ -345,6 +352,8 @@ def _process_photo_manifest_versioned(
     journal_key,
     decision,
     apply=False,
+    *,
+    historical_manifest_keys=None,
 ):
     """버전 이력과 현재 사진을 순서대로 반영한다."""
     from rebom.storage.silver.photo_version_history import (
@@ -353,6 +362,9 @@ def _process_photo_manifest_versioned(
         build_photo_version_history_rows,
         plan_photo_history_inserts,
     )
+
+    if apply and historical_manifest_keys is not None:
+        raise ValueError("PHOTO_BASELINE_DRY_RUN_ONLY")
 
     if not expected_history_location:
         raise ValueError("사진 이력 테이블 위치 누락")
@@ -421,6 +433,13 @@ def _process_photo_manifest_versioned(
         expected_location,
         apply=False,
         hold_missing_previous=True,
+        dry_run_baseline=(
+            partial(
+                load_previous_photos, s3, bucket, historical_manifest_keys,
+                manifest_key, manifest.get("generated_at"),
+            )
+            if historical_manifest_keys else None
+        ),
     )
 
     held_slots = current_plan["held_slots"]

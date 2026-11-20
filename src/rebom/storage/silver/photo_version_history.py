@@ -439,8 +439,12 @@ def apply_photo_current_updates(
     apply=False,
     *,
     hold_missing_previous=False,
+    dry_run_baseline=None,
 ):
     """버전 이력을 기준으로 현재 사진을 Iceberg에 반영한다."""
+    if apply and dry_run_baseline is not None:
+        raise ValueError("PHOTO_BASELINE_DRY_RUN_ONLY")
+
     import pyarrow as pa
     from functools import reduce
     from pyiceberg.expressions import And, EqualTo, Or
@@ -453,8 +457,18 @@ def apply_photo_current_updates(
     schema = table.schema().as_arrow()
     before_rows = table.scan().to_arrow().to_pylist()
 
+    comparison_current = before_rows
+    comparison_history = history_rows
+    if dry_run_baseline is not None:
+        from rebom.storage.silver.photo_dry_run_baseline import photo_comparison_rows
+
+        comparison_current, comparison_history = photo_comparison_rows(
+            before_rows, history_rows, dry_run_baseline
+        )
+
     plan = plan_photo_current_updates(
-        before_rows, history_rows, hold_missing_previous=hold_missing_previous
+        comparison_current, comparison_history,
+        hold_missing_previous=hold_missing_previous,
     )
     updates = plan["updates"]
     inserts = plan["inserts"]
