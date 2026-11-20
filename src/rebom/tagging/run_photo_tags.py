@@ -39,9 +39,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from rebom.common.openrouter import (
+    AccountError,
     ChatRequest,
     ChatResult,
-    AccountError,
     OpenRouterClient,
     OpenRouterError,
 )
@@ -63,6 +63,8 @@ DOG_SPECIES_CODE = "417000"
 PROTECTING = "PROTECTING"
 NO_PHOTO_HASH = "no-photo"
 SOURCE = "photo"
+# 처리 대상의 종류(Gold 공용 키, 2026-11-20 결정). 사진 태그는 사진 sha256 단위, 사진 없음 기록은 공고 단위.
+SUBJECT_PHOTO, SUBJECT_ANIMAL = "photo", "animal"
 TASKS = (trait_tags.TASK, breed_tags.TASK)
 VERSIONS = {trait_tags.TASK: trait_tags.PROMPT_VERSION, breed_tags.TASK: breed_tags.PROMPT_VERSION}
 
@@ -80,15 +82,16 @@ class ResolutionGuardError(RuntimeError):
 
 @dataclass(frozen=True)
 class Target:
-    desertion_no: str
-    image_slot: int
-    s3_key: str
+    """태깅할 사진 한 장. 같은 사진(sha256)이 여러 공고에 올라와도 한 번만 부른다."""
+
     sha256: str
+    s3_key: str
     tasks: tuple[str, ...]  # 이번에 부를 질문지
+    desertion_nos: tuple[str, ...] = ()  # 이 사진을 대표 사진으로 쓰는 공고 (기록·확인용)
 
     @classmethod
     def from_dict(cls, d: dict) -> Target:
-        return cls(str(d["desertion_no"]), int(d["image_slot"]), d["s3_key"], d["sha256"], tuple(d["tasks"]))
+        return cls(d["sha256"], d["s3_key"], tuple(d["tasks"]), tuple(str(n) for n in d.get("desertion_nos") or ()))
 
 
 def representative_photos(image_rows: Iterable[dict]) -> dict[str, dict]:
@@ -111,8 +114,16 @@ def is_done(log_row: dict | None) -> bool:
     return log_row.get("status") == FAILED and int(log_row.get("attempts") or 0) >= MAX_ATTEMPTS
 
 
+def log_key(subject_type: str, subject_key: str, task: str, version: str, input_hash: str) -> tuple:
+    return (subject_type, str(subject_key), task, version, input_hash)
+
+
 def log_index(log_rows: Iterable[dict]) -> dict[tuple, dict]:
-    return {(str(r["desertion_no"]), r["task"], r["version"], r["input_hash"]): r for r in log_rows}
+    return {log_key(r["subject_type"], r["subject_key"], r["task"], r["version"], r["input_hash"]): r for r in log_rows}
+
+
+def _photo_key(sha: str, task: str, version: str) -> tuple:
+    return log_key(SUBJECT_PHOTO, sha, task, version, sha)
 
 
 def select_targets(
@@ -123,24 +134,42 @@ def select_targets(
     versions: dict[str, str] = VERSIONS,
     limit: int | None = None,
 ) -> tuple[list[Target], list[str]]:
-    """(부를 대상, 새로 NO_PHOTO 로 적을 공고). 공고번호 순으로 정렬해 재실행해도 같은 순서가 되게 한다."""
+    """(부를 사진, 새로 NO_PHOTO 로 적을 공고).
+
+    보호중 개마다 대표 사진을 고른 뒤 sha256 으로 묶는다. 같은 사진은 한 번만 부르고, 그 사진·질문지 버전으로 이미 끝났으면
+    부르지 않는다. 사진 순서는 그 사진을 쓰는 가장 작은 공고번호 순이라 재실행해도 같다.
+    """
     reps = representative_photos(image_rows)
     done = log_index(log_rows)
-    targets: list[Target] = []
+    photos: dict[str, dict] = {}  # sha256 -> {"s3_key", "nos"}
     no_photo: list[str] = []
     for no in sorted({str(n) for n in dog_nos}):
         rep = reps.get(no)
         if rep is None:
-            if not all(is_done(done.get((no, t, v, NO_PHOTO_HASH))) for t, v in versions.items()):
+            if not all(is_done(done.get(log_key(SUBJECT_ANIMAL, no, t, v, NO_PHOTO_HASH))) for t, v in versions.items()):
                 no_photo.append(no)
             continue
         sha = str(rep["sha256"]).lower()
-        tasks = tuple(t for t, v in versions.items() if not is_done(done.get((no, t, v, sha))))
+        photos.setdefault(sha, {"s3_key": rep["original_s3_key"], "nos": []})["nos"].append(no)
+    targets: list[Target] = []
+    for sha, p in photos.items():
+        tasks = tuple(t for t, v in versions.items() if not is_done(done.get(_photo_key(sha, t, v))))
         if tasks:
-            targets.append(Target(no, int(rep["image_slot"]), rep["original_s3_key"], sha, tasks))
+            targets.append(Target(sha, p["s3_key"], tasks, tuple(p["nos"])))
     if limit:
         targets = targets[:limit]
     return targets, no_photo
+
+
+def pending_targets(targets: Iterable[Target], log_rows: Iterable[dict], versions: dict[str, str] = VERSIONS) -> list[Target]:
+    """대상 목록을 만든 뒤 다른 실행이 끝낸 질문지를 뺀다."""
+    done = log_index(log_rows)
+    out = []
+    for t in targets:
+        tasks = tuple(task for task in t.tasks if not is_done(done.get(_photo_key(t.sha256, task, versions[task]))))
+        if tasks:
+            out.append(Target(t.sha256, t.s3_key, tasks, t.desertion_nos))
+    return out
 
 
 # ---------------------------------------------------------------- 호출과 판정
@@ -181,7 +210,8 @@ def _request_row(target: Target, task: str, run_no: int, result: ChatResult | No
                  error: Exception | None, requested_at: datetime, canonical_slug: str | None, run_id: str) -> dict:
     return {
         "request_id": result.request_id if result else None,
-        "desertion_no": target.desertion_no,
+        "subject_type": SUBJECT_PHOTO,
+        "subject_key": target.sha256,
         "task": task,
         "prompt_version": VERSIONS[task],
         "run_no": run_no,
@@ -237,14 +267,14 @@ def breed_tag_rows(target: Target, answers: Sequence[breed_tags.BreedAnswer], ru
 
 def _tag_row(target, task, code, tdef, rank, similarity, detail, run_id, now) -> dict:
     return {
-        "desertion_no": target.desertion_no,
+        "subject_type": SUBJECT_PHOTO,
+        "subject_key": target.sha256,
         "tag_code": code,
         "source": SOURCE,
         "tagger_version": f"{MODEL}@{VERSIONS[task]}",
         "task": task,
         "model": MODEL,
         "prompt_version": VERSIONS[task],
-        "image_slot": target.image_slot,
         "source_hash": target.sha256,
         "searchable": tdef.searchable,
         "displayable": tdef.displayable,
@@ -373,14 +403,14 @@ def inference_rows(outcomes: Sequence[PhotoOutcome], previous: dict[tuple, dict]
     rows = []
     for o in outcomes:
         for task, t in o.tasks.items():
-            key = (o.target.desertion_no, task, VERSIONS[task], o.target.sha256)
+            key = _photo_key(o.target.sha256, task, VERSIONS[task])
             attempts = int((previous.get(key) or {}).get("attempts") or 0) + 1
             rows.append({
-                "desertion_no": o.target.desertion_no,
+                "subject_type": SUBJECT_PHOTO,
+                "subject_key": o.target.sha256,
                 "task": task,
                 "version": VERSIONS[task],
                 "input_hash": o.target.sha256,
-                "image_slot": o.target.image_slot,
                 "status": t.status,
                 "attempts": attempts,
                 "tag_count": sum(1 for r in t.tag_rows if r["searchable"]),
@@ -394,8 +424,8 @@ def inference_rows(outcomes: Sequence[PhotoOutcome], previous: dict[tuple, dict]
 def no_photo_rows(nos: Iterable[str], run_id: str, ts: datetime) -> list[dict]:
     return [
         {
-            "desertion_no": no, "task": task, "version": version, "input_hash": NO_PHOTO_HASH, "image_slot": None,
-            "status": NO_PHOTO, "attempts": 1, "tag_count": 0, "last_error": None, "gold_run_id": run_id,
+            "subject_type": SUBJECT_ANIMAL, "subject_key": no, "task": task, "version": version,
+            "input_hash": NO_PHOTO_HASH, "status": NO_PHOTO, "attempts": 1, "tag_count": 0, "last_error": None, "gold_run_id": run_id,
             "gold_updated_at": ts,
         }
         for no in nos
@@ -403,13 +433,17 @@ def no_photo_rows(nos: Iterable[str], run_id: str, ts: datetime) -> list[dict]:
     ]
 
 
-def replaced_tag_rows(outcomes: Sequence[PhotoOutcome]) -> tuple[list[tuple[str, str]], list[dict]]:
-    """((공고, 질문지) 교체 범위, 새 태그 행). FAILED 인 질문지는 이전 태그를 그대로 둔다."""
+def replaced_tag_rows(outcomes: Sequence[PhotoOutcome]) -> tuple[list[tuple[str, str, str]], list[dict]]:
+    """((사진 sha256, 작업, 질문지 버전) 교체 범위, 새 태그 행).
+
+    교체는 같은 사진·같은 질문지 버전으로 다시 태깅한 경우만이다. 공고의 사진이 바뀌면 새 sha256 이 새 행이 되고,
+    질문지 버전을 올려도 이전 행은 그대로 남는다(이전 버전 보존, 2026-11-20 결정). FAILED 인 작업은 교체하지 않는다.
+    """
     scope, rows = [], []
     for o in outcomes:
         for task, t in o.tasks.items():
             if t.status in (OK, NO_RESULT):
-                scope.append((o.target.desertion_no, task))
+                scope.append((o.target.sha256, task, VERSIONS[task]))
                 rows.extend(t.tag_rows)
     return scope, rows
 
@@ -435,7 +469,7 @@ class LocalSink:
         if p.exists():
             for line in p.read_text(encoding="utf-8").splitlines():
                 r = json.loads(line)
-                latest[(r["desertion_no"], r["task"], r["version"], r["input_hash"])] = r
+                latest[log_key(r["subject_type"], r["subject_key"], r["task"], r["version"], r["input_hash"])] = r
         return list(latest.values())
 
     def write(self, scope, tag_rows, log_rows, request_rows) -> None:
@@ -445,7 +479,11 @@ class LocalSink:
 
 
 class GoldSink:
-    """Gold Iceberg 테이블에 쓴다. 태그는 (공고, 질문지) 범위를 통째 교체, 처리 기록은 upsert, 요청 기록은 append."""
+    """Gold Iceberg 테이블에 쓴다.
+
+    태그는 (photo, 사진 sha256, 작업, 질문지 버전) 범위만 교체하고 이전 사진·이전 질문지 버전의 행은 남긴다.
+    처리 기록은 upsert, 요청 기록은 append.
+    """
 
     def __init__(self, catalog, env):
         from rebom.common import gold_catalog as gc
@@ -465,20 +503,27 @@ class GoldSink:
         return pa.Table.from_pylist(rows, schema=table.schema().as_arrow())
 
     def write(self, scope, tag_rows, log_rows, request_rows) -> None:
-        from pyiceberg.expressions import And, EqualTo, In
-
         if request_rows:
             self.requests.append(self._arrow(self.requests, request_rows))
         if scope:
-            by_task: dict[str, list[str]] = {}
-            for no, task in scope:
-                by_task.setdefault(task, []).append(no)
-            for task, nos in by_task.items():
-                flt = And(And(In("desertion_no", nos), EqualTo("source", SOURCE)), EqualTo("task", task))
-                rows = [r for r in tag_rows if r["task"] == task]
-                self.tag.overwrite(self._arrow(self.tag, rows), overwrite_filter=flt)
+            by_group: dict[tuple[str, str], list[str]] = {}
+            for sha, task, version in scope:
+                by_group.setdefault((task, version), []).append(sha)
+            for (task, version), shas in by_group.items():
+                rows = [r for r in tag_rows if r["task"] == task and r["prompt_version"] == version]
+                self.tag.overwrite(self._arrow(self.tag, rows), overwrite_filter=tag_scope_filter(task, version, shas))
         if log_rows:
             self.inference.upsert(self._arrow(self.inference, log_rows), join_cols=list(self.gc.INFERENCE_LOG_KEYS))
+
+
+def tag_scope_filter(task: str, version: str, shas: Sequence[str]):
+    """교체할 태그 행: source=photo, subject_type=photo, 이 작업·질문지 버전, 그리고 이 사진들."""
+    from pyiceberg.expressions import And, EqualTo, In
+
+    return And(
+        And(And(EqualTo("source", SOURCE), EqualTo("subject_type", SUBJECT_PHOTO)), EqualTo("task", task)),
+        And(EqualTo("prompt_version", version), In("subject_key", sorted(set(shas)))),
+    )
 
 
 # ---------------------------------------------------------------- Silver 읽기·S3
@@ -570,10 +615,12 @@ def cmd_select(args) -> int:
     calls = sum(len(t.tasks) for t in targets) * REPEATS
     summary = {
         "run_id": args.run_id, "selected_at": _now().isoformat(), "silver_env": args.silver_env,
-        "protecting_dogs": len(set(dogs)), "targets": len(targets), "no_photo_new": len(no_photo), "calls": calls,
+        "protecting_dogs": len(set(dogs)), "targets": len(targets), "target_dogs": sum(len(t.desertion_nos) for t in targets),
+        "no_photo_new": len(no_photo), "calls": calls,
         "prompt_versions": VERSIONS, "items": [asdict(t) for t in targets],
     }
-    print(f"보호중 개 {summary['protecting_dogs']}마리, 대상 사진 {len(targets)}장(호출 {calls}번), 새 NO_PHOTO {len(no_photo)}마리")
+    print(f"보호중 개 {summary['protecting_dogs']}마리, 대상 사진 {len(targets)}장({summary['target_dogs']}마리, 호출 {calls}번), "
+          f"새 NO_PHOTO {len(no_photo)}마리")
     if args.dry_run:
         print("dry-run: 목록·처리 기록을 쓰지 않습니다")
         return 0
@@ -589,12 +636,7 @@ def cmd_run(args) -> int:
     targets = [Target.from_dict(d) for d in data["items"]]
     sink = _sink(args, catalog)
     # 목록을 만든 뒤 다른 실행이 끝낸 것은 건너뛴다
-    targets, _ = select_targets(
-        [t.desertion_no for t in targets],
-        [{"desertion_no": t.desertion_no, "image_slot": t.image_slot, "original_s3_key": t.s3_key, "sha256": t.sha256}
-         for t in targets],
-        sink.read_inference_log(),
-    )
+    targets = pending_targets(targets, sink.read_inference_log())
     if args.max_photos:
         targets = targets[: args.max_photos]
     print(f"태깅할 사진 {len(targets)}장")

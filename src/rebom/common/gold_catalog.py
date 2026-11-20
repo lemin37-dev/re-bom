@@ -1,13 +1,21 @@
 """S3 Gold(Iceberg, Glue DB rebom_gold) 모델 결과 테이블: 스키마, 환경별 이름·위치, 테이블 만들기.
 
+모든 테이블은 공용 키 (subject_type, subject_key) 로 처리 대상을 가리킨다(2026-11-20 결정):
+- subject_type = animal → subject_key = 공고번호 (글 태깅·글 임베딩, 사진 없음 기록)
+- subject_type = photo  → subject_key = 사진 sha256 (사진 태깅·사진 임베딩). 같은 사진은 공고가 달라도 한 번만 처리하고,
+  공고–사진 연결은 Silver 현재 사진 테이블에서 한다.
+
 테이블 세 개 (docs/data_contract.md 13절):
-- gold_animal_tag        태그 한 개가 한 행. 다시 태깅하면 (desertion_no, task) 단위로 통째 교체(overwrite)
-- gold_inference_log     사진·질문지당 한 행. (desertion_no, task, version, input_hash) 로 upsert
+- gold_animal_tag        태그 한 개가 한 행. 같은 대상·같은 질문지 버전으로 다시 태깅할 때만
+                         (subject_type, subject_key, task, prompt_version) 범위를 교체(overwrite). 사진이 바뀌면 새 sha256 이
+                         새 행이 되고, 질문지 버전을 올려도 이전 행은 남는다(이전 버전 보존)
+- gold_inference_log     대상·작업·버전·입력당 한 행. (subject_type, subject_key, task, version, input_hash) 로 upsert
 - gold_model_request_log 모델 요청 한 번이 한 행. append 만, dt(요청 UTC 날짜) 파티션
 
 테이블 만들기·칸 추가(create_tables)는 클라우드 리소스를 바꾸는 일이라 사람이 PC 관리자 프로필로 직접 실행한다:
   python -m rebom.common.gold_catalog --env test --create --profile rebom
-노드 역할에는 glue:CreateTable 이 없어 파드에서는 만들 수 없다(읽기·쓰기만).
+키 칸이 바뀐 옛 test 테이블은 --recreate 로 지우고 다시 만든다(test 만 허용, 사람이 실행). 노드 역할에는 glue:CreateTable 이
+없어 파드에서는 만들 수 없다(읽기·쓰기만).
 """
 from __future__ import annotations
 
@@ -46,7 +54,8 @@ TAG_TABLE = "gold_animal_tag"
 INFERENCE_LOG_TABLE = "gold_inference_log"
 REQUEST_LOG_TABLE = "gold_model_request_log"
 
-INFERENCE_LOG_KEYS = ("desertion_no", "task", "version", "input_hash")
+INFERENCE_LOG_KEYS = ("subject_type", "subject_key", "task", "version", "input_hash")
+KEY_FIELDS = ("subject_type", "subject_key")  # 세 테이블 공용. 이 칸이 없는 테이블은 옛 스키마
 
 
 def get_gold_environment(name: str = "test") -> GoldEnvironment:
@@ -75,14 +84,14 @@ def schemas():
         return NestedField(field_id=i, name=name, field_type=typ, required=required)
 
     tag = Schema(
-        f(1, "desertion_no", StringType(), True),
-        f(2, "tag_code", StringType(), True),
-        f(3, "source", StringType(), True),
-        f(4, "tagger_version", StringType(), True),
-        f(5, "task", StringType(), True),
-        f(6, "model", StringType()),
-        f(7, "prompt_version", StringType()),
-        f(8, "image_slot", IntegerType()),
+        f(1, "subject_type", StringType(), True),
+        f(2, "subject_key", StringType(), True),
+        f(3, "tag_code", StringType(), True),
+        f(4, "source", StringType(), True),
+        f(5, "tagger_version", StringType(), True),
+        f(6, "task", StringType(), True),
+        f(7, "model", StringType()),
+        f(8, "prompt_version", StringType(), True),
         f(9, "source_hash", StringType()),
         f(10, "searchable", BooleanType()),
         f(11, "displayable", BooleanType()),
@@ -91,52 +100,53 @@ def schemas():
         f(14, "detail", StringType()),
         f(15, "gold_run_id", StringType()),
         f(16, "gold_updated_at", TimestamptzType()),
-        identifier_field_ids=[1, 2, 3, 4],
+        identifier_field_ids=[1, 2, 6, 8, 3],
     )
     inference = Schema(
-        f(1, "desertion_no", StringType(), True),
-        f(2, "task", StringType(), True),
-        f(3, "version", StringType(), True),
-        f(4, "input_hash", StringType(), True),
-        f(5, "image_slot", IntegerType()),
+        f(1, "subject_type", StringType(), True),
+        f(2, "subject_key", StringType(), True),
+        f(3, "task", StringType(), True),
+        f(4, "version", StringType(), True),
+        f(5, "input_hash", StringType(), True),
         f(6, "status", StringType()),
         f(7, "attempts", IntegerType()),
         f(8, "tag_count", IntegerType()),
         f(9, "last_error", StringType()),
         f(10, "gold_run_id", StringType()),
         f(11, "gold_updated_at", TimestamptzType()),
-        identifier_field_ids=[1, 2, 3, 4],
+        identifier_field_ids=[1, 2, 3, 4, 5],
     )
     request = Schema(
         f(1, "request_id", StringType()),
-        f(2, "desertion_no", StringType()),
-        f(3, "task", StringType()),
-        f(4, "prompt_version", StringType()),
-        f(5, "run_no", IntegerType()),
-        f(6, "requested_model", StringType()),
-        f(7, "response_model", StringType()),
-        f(8, "provider", StringType()),
-        f(9, "canonical_slug", StringType()),
-        f(10, "media_resolution", StringType()),
-        f(11, "prompt_tokens", IntegerType()),
-        f(12, "completion_tokens", IntegerType()),
-        f(13, "reasoning_tokens", IntegerType()),
-        f(14, "cost_usd", DoubleType()),
-        f(15, "latency_ms", LongType()),
-        f(16, "attempts", IntegerType()),
-        f(17, "status", StringType()),
-        f(18, "error_code", StringType()),
-        f(19, "raw_answer", StringType()),
-        f(20, "requested_at", TimestamptzType(), True),
-        f(21, "gold_run_id", StringType()),
-        f(22, "dt", StringType(), True),  # requested_at 의 UTC 날짜 YYYY-MM-DD (파티션)
-        f(23, "temperature", DoubleType()),
-        f(24, "reasoning_effort", StringType()),
-        f(25, "finish_reason", StringType()),
-        f(26, "native_finish_reason", StringType()),
+        f(2, "subject_type", StringType()),
+        f(3, "subject_key", StringType()),
+        f(4, "task", StringType()),
+        f(5, "prompt_version", StringType()),
+        f(6, "run_no", IntegerType()),
+        f(7, "requested_model", StringType()),
+        f(8, "response_model", StringType()),
+        f(9, "provider", StringType()),
+        f(10, "canonical_slug", StringType()),
+        f(11, "media_resolution", StringType()),
+        f(12, "prompt_tokens", IntegerType()),
+        f(13, "completion_tokens", IntegerType()),
+        f(14, "reasoning_tokens", IntegerType()),
+        f(15, "cost_usd", DoubleType()),  # OpenRouter usage.cost 그대로 (임베딩도 같은 칸)
+        f(16, "latency_ms", LongType()),
+        f(17, "attempts", IntegerType()),
+        f(18, "status", StringType()),
+        f(19, "error_code", StringType()),
+        f(20, "raw_answer", StringType()),
+        f(21, "requested_at", TimestamptzType(), True),
+        f(22, "gold_run_id", StringType()),
+        f(23, "dt", StringType(), True),  # requested_at 의 UTC 날짜 YYYY-MM-DD (파티션)
+        f(24, "temperature", DoubleType()),
+        f(25, "reasoning_effort", StringType()),
+        f(26, "finish_reason", StringType()),
+        f(27, "native_finish_reason", StringType()),
     )
     # day 변환 파티션은 pyiceberg-core 가 있어야 써져서, 날짜 문자열 칸으로 identity 파티션을 둔다
-    request_spec = PartitionSpec(PartitionField(source_id=22, field_id=1000, transform=IdentityTransform(), name="dt"))
+    request_spec = PartitionSpec(PartitionField(source_id=23, field_id=1000, transform=IdentityTransform(), name="dt"))
     return {
         TAG_TABLE: (tag, PartitionSpec()),
         INFERENCE_LOG_TABLE: (inference, PartitionSpec()),
@@ -144,12 +154,19 @@ def schemas():
     }
 
 
-def create_tables(env: GoldEnvironment, catalog) -> list[str]:
+class OldSchemaError(RuntimeError):
+    """키 칸(subject_type·subject_key)이 없는 옛 스키마 테이블. 칸 추가로는 맞출 수 없다."""
+
+
+def create_tables(env: GoldEnvironment, catalog, *, recreate: bool = False) -> list[str]:
     """없는 테이블을 만들고, 이미 있는 테이블에는 빠진 칸을 더한다. 바꾼 것 목록("만듦 이름", "칸 추가 이름: 칸들").
 
     GoldSink 는 테이블의 현재 스키마로 행을 만들어서, 칸이 없으면 새 값이 소리 없이 버려진다. 그래서 칸을 늘린 코드를
     배포하기 전에 이 명령으로 테이블을 맞춘다. 칸을 지우거나 타입을 바꾸지는 않는다.
+    키 칸이 없는 옛 테이블은 OldSchemaError. recreate=True 면 (test 환경만) 지우고 새로 만든다.
     """
+    if recreate and env.name != "test":
+        raise ValueError("RECREATE_TEST_ONLY: prod 테이블은 지우지 않는다")
     changed = []
     if _has_namespace(catalog, env.database):
         existing = {".".join(t) for t in catalog.list_tables(env.database)}
@@ -164,6 +181,13 @@ def create_tables(env: GoldEnvironment, catalog) -> list[str]:
             continue
         table = catalog.load_table(name)
         have = {f.name for f in table.schema().fields}
+        if not set(KEY_FIELDS) <= have:
+            if not recreate:
+                raise OldSchemaError(f"{name}: subject_type·subject_key 칸이 없는 옛 스키마. test 면 --recreate 로 다시 만든다")
+            catalog.drop_table(name)
+            catalog.create_table(name, schema=schema, partition_spec=spec, location=env.location(base))
+            changed.append(f"다시 만듦 {name} (옛 행은 버림)")
+            continue
         missing = [f.name for f in schema.fields if f.name not in have]
         if missing:
             with table.update_schema() as update:
@@ -180,6 +204,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Gold 모델 결과 테이블 확인·생성 (생성은 사람이 직접 실행)")
     ap.add_argument("--env", default="test", choices=sorted(ENVIRONMENTS))
     ap.add_argument("--create", action="store_true", help="없는 테이블을 만들고 빠진 칸을 더한다 (Glue·S3 리소스 변경)")
+    ap.add_argument("--recreate", action="store_true",
+                    help="--create 와 함께: 키 칸이 없는 옛 test 테이블을 지우고 다시 만든다 (옛 행은 버림, test 만)")
     ap.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드에서는 비운다")
     args = ap.parse_args()
 
@@ -195,7 +221,7 @@ def main() -> None:
         except Exception:  # noqa: BLE001 - NoSuchTableError 등
             print(f"없음  {name}  → {env.location(base)}")
     if args.create:
-        for line in create_tables(env, catalog):
+        for line in create_tables(env, catalog, recreate=args.recreate):
             print(line)
 
 
