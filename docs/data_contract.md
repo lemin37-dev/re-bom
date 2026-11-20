@@ -254,3 +254,64 @@
 - 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. 파드(노드 역할)는 읽기·쓰기만 합니다.
 - 서비스 DB 적재(pgvector 쪽 태그 테이블)는 별도 작업입니다.
 - 남아 있는 태그(서비스 적재 때 거를 것): `gold_animal_tag` 는 보호가 끝난 공고나 대표 사진이 없어진 공고의 태그를 지우지 않습니다. 대상 고르기는 보호중 공고만 보고, 태그 교체는 다시 태깅한 공고에만 일어나기 때문입니다. 서비스 DB 에 넣거나 검색할 때 공고 상태(`status_group`)와 현재 대표 사진(`source_hash`)으로 걸러야 합니다.
+
+## 14. 현재 사진 스냅샷 [합의, 2026-11-20 이광훈 님 · A 구현 `CODE_VERSION` 2026-11-20]
+
+사진 manifest는 그날 처리한 칸만 담는 변경분이라, 하루를 빠뜨리면 Silver가 칸의 현재 사진을 알 수 없습니다(11/19·11/20 실패). 그래서 A가 사진 실행이 `ok`로 끝날 때마다 **오늘 보호중 공고의 모든 칸의 현재 상태**를 함께 씁니다. 원천은 A 상태 파일이고, Silver의 입력입니다(기준 데이터는 Silver).
+
+- **[확정, 11/20 이광훈 님]** Silver 현재 사진 테이블은 검증된 스냅샷 기준으로 갱신하고, 버전 이력 테이블은 지금처럼 manifest로 유지합니다.
+
+### 14.1 경로와 쓰는 순서
+
+- `bronze/rescue/image_current/dt=<실행일>/run_id=<사진 실행 id>/current.jsonl.gz` (한 줄 = 한 칸, `desertion_no`·`slot` 순 정렬)
+- 같은 폴더의 `snapshot.json`을 **마지막에** 씁니다. `snapshot.json`이 있으면 `current.jsonl.gz`는 다 쓰인 것입니다.
+- 사진을 다 받았을 때만 씁니다. 끊긴 실행·dry run에는 쓰지 않습니다.
+- **manifest가 `ok`이면 스냅샷이 반드시 있습니다 [11/20 결정].** 순서: 받은 기록을 manifest `in_progress`로 저장 → 스냅샷 검증·쓰기 → manifest `ok`. 스냅샷에서 실패하면 manifest를 `aborted`로 두고 맨 위에 `abort_reason`(`snapshot: ...`)을 남긴 뒤 사진 task를 실패시킵니다. 받은 사진(`files`)은 기존 `aborted` 규칙대로 반영할 수 있습니다.
+
+### 14.2 줄 범위와 `slot_state`
+
+- 오늘 목록에 있는 공고 중, 상태 파일에 버전 기록이 있는 칸만 나옵니다(`--limit`로 아직 한 번도 시도하지 않은 칸은 없음).
+- `active`: 오늘 목록에 그 칸의 주소가 있음. `emptied`: 기록은 있지만 오늘 주소가 없음(보호소가 사진을 뺌). `emptied`는 현재 사진 칸이 모두 null입니다.
+- **`emptied` 처리 [확정, 11/20 이광훈 님]**: Silver는 그 칸의 현재 사진 정보를 비우고, 과거 버전 이력은 보존합니다. 같은 주소가 다시 생기면 같은 버전으로 `active`, 다른 주소면 새 버전입니다.
+- 목록에서 빠진 공고(보호 종료 등)는 나오지 않습니다.
+
+### 14.3 칸
+
+| 칸 | 뜻 |
+|---|---|
+| `desertion_no`, `slot` | 키. `slot`은 1~8 |
+| `slot_state` | `active` / `emptied` |
+| `current_version` | 마지막으로 저장에 성공한 버전. 없으면 null |
+| `original_s3_key`, `serving_s3_key`, `thumb_s3_key`, `sha256`, `ext`, `bytes`, `source_url`, `stored_at` | 현재 버전의 저장 정보. `current_version`이 null이면 모두 null |
+| `latest_version`, `latest_status`, `latest_url` | 가장 큰 버전과 그 상태(`success`·`pending`·`failed`·`gave_up`), 주소. `emptied`면 `latest_url` null |
+| `first_seen_at` | 가장 큰 버전의 주소를 처음 본 시각 |
+
+### 14.4 `snapshot.json`
+
+`source`, `photo_run_id`, `bronze_run_id`, `generated_at`, `code_version`, `status`(`ok`), `file`, `checksum`(gz 파일 sha256), 그리고 건수 `row_count`, `notice_count`, `stored_count`, `no_current_count`, `emptied_count`, `url_reverted_count`(주소가 옛 버전 주소로 돌아간 칸, 처리하지 않고 건수만).
+
+### 14.5 검증
+
+- **A (쓰기 전)**: (`desertion_no`, `slot`) 중복 없음, `slot` 1~8, `slot_state` 값, 현재 null이면 현재 칸 전부 null, `emptied`는 현재 사진 없음·`latest_url` null, `sha256` 64자, 원본 키가 버전 규칙(`popfile<N>[_vNNN].<ext>`)과 맞음, `current_version` ≤ `latest_version`, `row_count = stored_count + no_current_count + emptied_count`, `notice_count` 일치. 하나라도 어기면 쓰지 않고 사진 작업을 실패시킵니다.
+- **B (이광훈 님)**: `status`, 체크섬, 키 중복, 위 건수 합, 공고 수, `slot` 범위, null 일관성, S3 저장 증거, 직전 스냅샷보다 버전이 줄지 않음. 갱신할 때는 기존 현재 사진 테이블과 스냅샷을 (`desertion_no`, `slot`)으로 비교합니다.
+
+### 14.6 실패 처리
+
+- 검증 실패: B는 기존 데이터를 유지하고 실행을 실패로 둡니다.
+- 사진 작업은 성공했는데 스냅샷이 없음: 계약 위반으로 봅니다.
+- manifest `aborted` + `abort_reason`이 `snapshot:`으로 시작: 사진은 받았지만 스냅샷이 없습니다. 기존 데이터를 유지하고 실행을 실패로 둡니다.
+- 스냅샷은 있는데 manifest가 `in_progress`로 남음(마지막 `ok` 저장만 실패): 기존 정체 규칙(1시간)으로 처리합니다. 스냅샷은 그 실행 결과까지 반영한 것이라 틀린 값은 아닙니다.
+
+### 14.7 실측 (11/20 상태 파일, 오프라인)
+
+| 항목 | 값 |
+|---|---|
+| 줄 / 공고 | 41,891 / 18,809 |
+| 현재 사진 있음 / 없음 | 38,836 / 3,055 (`gave_up` 2,303, `failed` 752) |
+| `emptied` / 주소 되돌아감 | 0 / 0 |
+| 크기 / 시간 | gz 2.5MB (원본 31MB) / 1.6초 |
+
+### 14.8 범위 밖
+
+- 빈(백지) 사진 측정값(`pixel_std` 등)은 나중에 칸을 더합니다. Bronze는 측정만, 판정은 Silver.
+- 주소가 옛 버전으로 돌아간 칸의 처리 규칙(지금은 건수만).
