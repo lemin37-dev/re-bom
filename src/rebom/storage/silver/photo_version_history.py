@@ -263,13 +263,16 @@ def apply_photo_version_history(
         "mode": "APPLY" if apply else "DRY_RUN",
     }
 
+    batch_size = 200
+    rows = insert_rows + update_rows
+
     if not apply:
+        for start in range(0, len(rows), batch_size):
+            pa.Table.from_pylist(rows[start:start + batch_size], schema=schema)
         result["result"] = "DRY_RUN_PASS"
         return result
 
-    if insert_rows or update_rows:
-        batch_size = 200
-        rows = insert_rows + update_rows
+    if rows:
         inserted = 0
         updated = 0
 
@@ -317,7 +320,7 @@ def apply_photo_version_history(
 
     return result
 
-def plan_photo_current_updates(current_rows, history_rows):
+def plan_photo_current_updates(current_rows, history_rows, *, hold_missing_previous=False):
     """사진 이력을 기준으로 현재 사진 테이블의 변경사항을 계산한다."""
     fields = (
         "original_s3_key",
@@ -348,6 +351,7 @@ def plan_photo_current_updates(current_rows, history_rows):
     }
     updates = []
     inserts = []
+    held_slots = []
 
     for key, selected in latest.items():
         if key not in current:
@@ -357,7 +361,16 @@ def plan_photo_current_updates(current_rows, history_rows):
                 and selected["replaces"] == 1
                 and key in failed_initial_keys
             ):
-                raise RuntimeError(f"MISSING_PREVIOUS_VERSION: {key}")
+                if not hold_missing_previous:
+                    raise RuntimeError(f"MISSING_PREVIOUS_VERSION: {key}")
+                held_slots.append({
+                    "desertion_no": selected["desertion_no"],
+                    "image_slot": selected["image_slot"],
+                    "version": selected["version"],
+                    "replaces": selected.get("replaces"),
+                    "reason": "MISSING_PREVIOUS_VERSION",
+                })
+                continue
 
             inserts.append({
                 "desertion_no": selected["desertion_no"],
@@ -414,6 +427,7 @@ def plan_photo_current_updates(current_rows, history_rows):
         "updates": updates,
         "inserts": inserts,
         "changed_count": len(updates) + len(inserts),
+        "held_slots": held_slots,
     }
 
 
@@ -423,6 +437,8 @@ def apply_photo_current_updates(
     history_rows,
     expected_location,
     apply=False,
+    *,
+    hold_missing_previous=False,
 ):
     """버전 이력을 기준으로 현재 사진을 Iceberg에 반영한다."""
     import pyarrow as pa
@@ -437,7 +453,9 @@ def apply_photo_current_updates(
     schema = table.schema().as_arrow()
     before_rows = table.scan().to_arrow().to_pylist()
 
-    plan = plan_photo_current_updates(before_rows, history_rows)
+    plan = plan_photo_current_updates(
+        before_rows, history_rows, hold_missing_previous=hold_missing_previous
+    )
     updates = plan["updates"]
     inserts = plan["inserts"]
 
@@ -449,6 +467,16 @@ def apply_photo_current_updates(
     }
 
     if not apply:
+        if updates or inserts:
+            required = {"desertion_no", "image_slot", "original_s3_key",
+                        "serving_s3_key", "thumb_s3_key", "sha256"}
+            if not required.issubset(schema.names):
+                raise ValueError("현재 사진 Iceberg 필수 컬럼 누락")
+            arrow = pa.Table.from_pylist(updates + inserts, schema=schema)
+            for field in schema:
+                if not field.nullable and arrow[field.name].null_count:
+                    raise ValueError(f"현재 사진 Iceberg 필수 값 누락: {field.name}")
+        result["held_slots"] = plan["held_slots"]
         result["result"] = "DRY_RUN_PASS"
         return result
 

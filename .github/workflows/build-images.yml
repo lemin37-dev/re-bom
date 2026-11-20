@@ -17,6 +17,7 @@ on:
       - "infra/docker/api*"
       - "infra/docker/ingest*"
       - "infra/docker/storage*"
+      - "infra/docker/embed*"
       - "scripts/storage/rebom_run_aws_real_silver_test.py"
       - "infra/docker/tag-img*"
       - ".dockerignore"

@@ -1,0 +1,26 @@
+{
+ "model": "google/embeddinggemma-2",
+ "revision": "f9972ac22e696a105c482202646979e33e4b5a1e",
+ "dtype": "float32",
+ "image_input": "{\"text\": \"<|image|>\", \"image\": [path]}",
+ "text_prompt": "Document",
+ "normalized": true,
+ "created_kst": "2026-11-04 12:28:30",
+ "cpu_gpu_cosine": {
+  "n": 195,
+  "min": 1.0,
+  "mean": 1.0
+ },
+ "libs": {
+  "torch": "2.14.1+cu130",
+  "transformers": "5.23.0",
+  "sentence_transformers": "6.3.0"
+ },
+ "timing": {
+  "gpu": "Tesla T4",
+  "gpu_sec_per_img_median": 0.49,
+  "cpu_sec_per_img_week1": 27.53,
+  "images": 1182,
+  "parts": 19
+ }
+}
