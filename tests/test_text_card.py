@@ -100,3 +100,13 @@ def test_phone_masked_before_api():
     assert "010-1234-5678" not in sent and "[번호]" in sent and "12-345" not in sent
     assert sent.startswith("title: none | text: 진도견")
     assert tc.MODEL_KEY == "gemini-embedding-2:768"
+
+
+def test_hash_is_of_masked_template_card():
+    """규칙 4 (Gold 공통 규칙 초안): 입력 해시 = 실제로 넣는 값. 카드는 build_card 안에서 이미 번호를 가리고
+    관리 번호를 지운 템플릿 본문이고, 해시는 이 본문(접두어 없이, 공백 정리)으로 만든다."""
+    silver = {"breed_name_raw": "진도견", "weight_raw": "3(Kg)", "color_raw": "흰색",
+              "special_mark": "관리번호 12-345 순함 문의 010-1234-5678", "care_tel": "010-9999-9999"}
+    text, sha = tc.card_from_silver(silver, "A2")
+    assert "010-" not in text and "12-345" not in text and "[번호]" in text
+    assert sha == tc.text_sha256(text) and tc.doc_input(text).endswith(text)
