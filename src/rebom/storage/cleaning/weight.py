@@ -52,3 +52,15 @@ def parse_weight(weight, species_name=None):
             return minimum, maximum, "parsed_range"
 
     return None, None, "ambiguous"
+
+
+_DOG_CODE = "417000"
+
+
+def size_class(weight_max, species_code=None, species_name=None):
+    """개만: 10kg 미만 small, 10~25kg 미만 medium, 25kg 이상 large (11-20 결정). 몸무게 없거나 개가 아니면 None."""
+    is_dog = (str(species_code or "").strip() == _DOG_CODE
+              or str(species_name or "").strip().strip("[]") == "개")
+    if weight_max is None or not is_dog:
+        return None
+    return "small" if weight_max < 10 else "medium" if weight_max < 25 else "large"

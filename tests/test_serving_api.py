@@ -115,8 +115,8 @@ def test_region_multiple_tokens(client):
 def test_age_and_weight_filters(client):
     items = client.get("/animals", params={"age_min": 2, "age_max": 7, "size": 100}).json()["items"]
     assert items and all(2 <= i["ageYears"] <= 7 for i in items)
-    items = client.get("/animals", params={"weight_min": 8, "weight_lt": 15, "size": 100}).json()["items"]
-    assert items and all(8 <= i["weightKg"] < 15 for i in items)
+    items = client.get("/animals", params={"weight_min": 10, "weight_lt": 25, "species": "dog", "size": 100}).json()["items"]
+    assert items and all(10 <= i["weightKg"] < 25 and i["size"] == "medium" for i in items)
 
 
 def test_text_query_matches_any_word(client):

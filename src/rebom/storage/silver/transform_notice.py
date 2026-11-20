@@ -4,7 +4,7 @@ from rebom.storage.cleaning.breed import parse_breed
 from rebom.storage.cleaning.color import parse_color, parse_color_tags
 from rebom.storage.cleaning.date import parse_date
 from rebom.storage.cleaning.status import parse_status
-from rebom.storage.cleaning.weight import parse_weight
+from rebom.storage.cleaning.weight import parse_weight, size_class
 
 
 def transform_notice(raw, source_type=None):
@@ -52,17 +52,7 @@ def transform_notice(raw, source_type=None):
         "weight_min_kg": weight_min,
         "weight_max_kg": weight_max,
         "weight_kg": weight_max,
-        "size": (
-            "small" if weight_max <= 10
-            else "medium" if weight_max < 25
-            else "large"
-        ) if (
-            weight_max is not None
-            and (
-                str(raw.get("upKindCd") or "").strip() == "417000"
-                or str(raw.get("upKindNm") or "").strip().strip("[]") == "\uac1c"
-            )
-        ) else None,
+        "size": size_class(weight_max, raw.get("upKindCd"), raw.get("upKindNm")),
         "weight_parse_status": weight_status,
         "process_state_raw": raw.get("processState"),
         "status_group": status_group,

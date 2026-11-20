@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from rebom.storage.cleaning.weight import parse_weight, size_class
+
 _YEAR = re.compile(r"(\d{4})")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
@@ -37,17 +39,14 @@ def age_label(age_text: str | None, today: date) -> str | None:
     return "1살 미만" if years == 0 else f"{years}살"
 
 
-def weight_kg(weight_text: str | None) -> float | None:
-    """'13(Kg)' → 13, '0.8~0.9(Kg)' → 0.85 (범위는 평균), '330g(Kg)' → 0.33."""
-    text = (weight_text or "").replace(",", ".")
-    nums = [float(n) for n in _NUMBER.findall(text)]
-    if not nums:
-        return None
-    value = sum(nums[:2]) / len(nums[:2])
-    head = text.split("(")[0].lower()
-    if head.endswith("g") and not head.endswith("kg"):
-        value /= 1000
-    return round(value, 2)
+def weight_kg(weight_text: str | None, species_name: str | None = None) -> float | None:
+    """Silver weight_kg 와 같은 값: '13(Kg)' → 13, '0.8~0.9(Kg)' → 0.9 (범위는 큰 값), '330g(Kg)' → 0.33."""
+    return parse_weight(weight_text, species_name)[1]
+
+
+def size(weight_text: str | None, species_code: str | None, species_name: str | None) -> str | None:
+    """Silver size 와 같은 값 (개만 small / medium / large)."""
+    return size_class(weight_kg(weight_text, species_name), species_code, species_name)
 
 
 def sido(addr: str | None) -> str | None:

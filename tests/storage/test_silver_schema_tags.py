@@ -39,8 +39,9 @@ import pytest
 @pytest.mark.parametrize(
     "weight,expected_weight,expected_size",
     [
-        ("10(Kg)", 10.0, "small"),
-        ("10.1(Kg)", 10.1, "medium"),
+        ("9.9(Kg)", 9.9, "small"),
+        ("10(Kg)", 10.0, "medium"),  # 11-20: 10kg 미만 소형
+        ("24.7(Kg)", 24.7, "medium"),
         ("24.9(Kg)", 24.9, "medium"),
         ("25(Kg)", 25.0, "large"),
         ("1.8~2.0(Kg)", 2.0, "small"),

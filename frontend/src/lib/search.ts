@@ -19,15 +19,12 @@ export function filtersToParams(filters: Filters): AnimalSearchParams {
   if (filters.region !== '전국') p.region = REGION_WORDS[filters.region]
   if (filters.type === '개') p.species = 'dog'
   else if (filters.type === '고양이') p.species = 'cat'
-  else if (filters.type === '기타') p.species = 'etc'
   if (filters.gender === '수컷') p.sex = 'M'
   else if (filters.gender === '암컷') p.sex = 'F'
-  if (filters.age === '1살 미만') p.ageMax = 0
-  else if (filters.age === '1~7살') { p.ageMin = 1; p.ageMax = 7 }
-  else if (filters.age === '8살 이상') p.ageMin = 8
-  if (filters.size.startsWith('소형')) p.weightLt = 8
-  else if (filters.size.startsWith('중형')) { p.weightMin = 8; p.weightLt = 15 }
-  else if (filters.size.startsWith('대형')) p.weightMin = 15
+  // 크기: Silver size 경계와 같게 몸무게(weight_kg, 범위는 큰 값)로 거름
+  if (filters.size.startsWith('소형')) p.weightLt = 10
+  else if (filters.size.startsWith('중형')) { p.weightMin = 10; p.weightLt = 25 }
+  else if (filters.size.startsWith('대형')) p.weightMin = 25
   return p
 }
 
