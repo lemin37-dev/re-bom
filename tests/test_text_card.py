@@ -1,4 +1,4 @@
-"""text_card.py 가 기준 구현(text_card_reference.py)과 글자까지 같은 카드를 내는지."""
+"""text_card.py 가 기준 구현(handoff_20261120/text_card_reference.py, LLM 인계본)과 글자까지 같은 카드를 내는지."""
 import importlib.util
 from pathlib import Path
 
@@ -6,7 +6,8 @@ import pytest
 
 from rebom.embedding import text_card as tc
 
-REF_PATH = Path(__file__).resolve().parents[1] / "src" / "rebom" / "embedding" / "text_card_reference.py"
+REF_PATH = (Path(__file__).resolve().parents[1] / "src" / "rebom" / "embedding" / "handoff_20261120"
+            / "text_card_reference.py")
 
 
 @pytest.fixture(scope="module")
@@ -29,6 +30,8 @@ ROWS = [
     {"kindNm": None, "age": None, "weight": "1,5(Kg)", "colorCd": "어두운색", "sfeSoci": "사람 좋아함",
      "specialMark": "  여러   칸  공백  "},
     {"kindNm": "믹스견", "weight": "30(Kg)", "colorCd": None},
+    {"kindNm": "믹스견", "weight": "10(Kg)", "colorCd": "흰색"},  # 경계: A1 소형, A2 중형
+    {"kindNm": "믹스견", "weight": "24.7(Kg)", "colorCd": "흰색"},
 ]
 TAGS = [("털 길이", "단모"), ("귀", "확인불가"), ("꼬리", ""), ("눈", None), ("체형", "날씬")]
 
@@ -69,26 +72,26 @@ def test_bad_template():
         tc.build_card(ROWS[0], "B1")
 
 
-REF2_PATH = REF_PATH.with_name("text_card_reference2.py")
-
-
-@pytest.fixture(scope="module")
-def ref2():
-    if not REF2_PATH.exists():
-        pytest.skip("text_card_reference2.py 없음")
-    spec = importlib.util.spec_from_file_location("text_card_reference2", REF2_PATH)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 @pytest.mark.parametrize("row", ROWS)
-def test_gemini_inputs_same_as_reference2(ref2, row):
+def test_gemini_inputs_same_as_reference(ref, row):
     card = tc.build_card(row, "A2", TAGS)
-    assert card == ref2.build_card(row, "A2", TAGS)
-    assert tc.doc_input(card) == ref2.gemini_doc_input(card)
+    assert tc.doc_input(card) == ref.gemini_doc_input(card)
     for q in [" 순한 아이 ", "흰색 소형견", "\t검정 고양이\n"]:
-        assert tc.query_input(q) == ref2.gemini_query_input(q)
+        assert tc.query_input(q) == ref.gemini_query_input(q)
+
+
+def test_soci_only_when_asked(ref):
+    row = ROWS[3]
+    assert "사람 좋아함" not in tc.build_card(row, "A2")
+    assert tc.build_card(row, "A2", soci=True) == ref.build_card(row, "A2", soci=True)
+    assert "사람 좋아함" in tc.build_card(row, "A2", soci=True)
+    with pytest.raises(ValueError):
+        tc.build_card(row, "A1", soci=True)
+
+
+def test_size_rule_by_template():
+    assert tc.size_of(9.9) == "소형" and tc.size_of(10) == "중형" and tc.size_of(24.7) == "중형"
+    assert tc.size_of(25) == "대형" and tc.size_of(10, "A1") == "소형" and tc.size_of(float("nan")) == ""
 
 
 def test_phone_masked_before_api():
