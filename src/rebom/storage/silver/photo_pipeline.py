@@ -373,7 +373,7 @@ def _process_photo_manifest_versioned(
         ):
             raise RuntimeError(f"사진 해시 메타데이터 불일치: {key}")
 
-    history_plan = apply_photo_version_history(
+    apply_photo_version_history(
         catalog,
         history_table_name,
         history_rows,
@@ -420,7 +420,20 @@ def _process_photo_manifest_versioned(
         target_history,
         expected_location,
         apply=False,
+        hold_missing_previous=True,
     )
+
+    held_slots = current_plan["held_slots"]
+    held_keys = {
+        (row["desertion_no"], row["image_slot"]) for row in held_slots
+    }
+    if held_keys:
+        target_keys -= held_keys
+        history_rows = [
+            row for row in history_rows
+            if (row["desertion_no"], row["image_slot"]) not in held_keys
+        ]
+        history_changes = plan_photo_history_inserts(history_rows, existing_history)
 
     result = {
         "run_id": manifest["run_id"],
@@ -428,9 +441,10 @@ def _process_photo_manifest_versioned(
         "decision": decision["decision"],
         "manifest_files": len(manifest["rows"]),
         "failed_count": decision["failed_count"],
-        "history_insert_count": history_plan["insert_count"],
-        "history_update_count": history_plan["update_count"],
+        "history_insert_count": history_changes["insert_count"],
+        "history_update_count": history_changes["update_count"],
         "changed_rows": current_plan["changed_count"],
+        "held_slots": held_slots,
     }
 
     if not apply:
@@ -465,6 +479,13 @@ def _process_photo_manifest_versioned(
         apply=True,
     )
 
+    result["history_inserted"] = history_write["rows_inserted"]
+    result["history_updated"] = history_write["rows_updated"]
+    result["current_changed"] = current_write["changed_count"]
+    if held_slots:
+        result["result"] = "APPLIED_WITH_HELD_SLOTS"
+        return result
+
     journal = make_photo_journal(
         run_id=manifest["run_id"],
         manifest_key=manifest_key,
@@ -481,9 +502,6 @@ def _process_photo_manifest_versioned(
         journal,
     )
 
-    result["history_inserted"] = history_write["rows_inserted"]
-    result["history_updated"] = history_write["rows_updated"]
-    result["current_changed"] = current_write["changed_count"]
     result["journal_result"] = journal_result
     result["result"] = "APPLIED_AND_VERIFIED"
 

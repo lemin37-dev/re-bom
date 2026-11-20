@@ -261,6 +261,8 @@ def main():
         "already_processed": 0,
         "ready": 0,
         "applied": 0,
+        "manifests_with_held_slots": 0,
+        "held_slots": 0,
         "deferred": 0,
         "stale_review": 0,
         "invalid_timestamp": 0,
@@ -321,6 +323,7 @@ def main():
             "ALREADY_PROCESSED": "already_processed",
             "DRY_RUN_PASS": "ready",
             "APPLIED_AND_VERIFIED": "applied",
+            "APPLIED_WITH_HELD_SLOTS": "applied",
             "DEFERRED": "deferred",
         }
 
@@ -328,6 +331,10 @@ def main():
             raise RuntimeError(f"알 수 없는 처리 결과: {result}")
 
         counts[mapping[state]] += 1
+        held_count = len(result.get("held_slots", []))
+        if held_count:
+            counts["manifests_with_held_slots"] += 1
+            counts["held_slots"] += held_count
 
         print("RUN:", run_id, json.dumps(result, ensure_ascii=False))
 
