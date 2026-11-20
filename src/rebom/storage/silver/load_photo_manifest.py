@@ -7,7 +7,10 @@ from pathlib import Path, PurePosixPath
 
 def load_photo_manifest(path):
     path = Path(path)
-    manifest = json.loads(path.read_text(encoding="utf-8-sig"))
+    return parse_photo_manifest(json.loads(path.read_text(encoding="utf-8-sig")))
+
+
+def parse_photo_manifest(manifest):
 
     run_id = manifest.get("run_id")
     bronze_run_id = manifest.get("bronze_run_id")
@@ -154,4 +157,5 @@ def load_photo_manifest(path):
         "rows": list(rows.values()),
         "failed_rows": failed_rows,
         "updated_at": manifest.get("updated_at"),
+        "generated_at": manifest.get("generated_at"),
     }

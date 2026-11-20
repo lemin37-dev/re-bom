@@ -243,6 +243,8 @@ def main():
         config["manifest_prefix"],
     )
 
+    historical_manifest_keys = None if args.apply else tuple(keys)
+
     if args.bronze_run_id:
         keys = filter_manifests_by_bronze_run(
             s3,
@@ -315,6 +317,7 @@ def main():
                 config["expected_history_location"] or None
             ),
             apply=args.apply,
+            historical_manifest_keys=historical_manifest_keys,
         )
 
         state = result["result"]
