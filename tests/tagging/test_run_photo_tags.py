@@ -1,0 +1,212 @@
+"""run_photo_tags: 대표 사진 고르기, 다시 부르는 조건, 호출 결과 → 태그·처리 기록·요청 기록, 멈춤 조건. 실제 호출 없음."""
+import io
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+
+from PIL import Image
+
+from rebom.common.openrouter import AccountError, ChatResult, OpenRouterError
+from rebom.tagging import image_input
+from rebom.tagging import run_photo_tags as rpt
+
+FIX = Path(__file__).resolve().parents[1] / "fixtures" / "tagging"
+TRAIT, BREED = rpt.trait_tags.TASK, rpt.breed_tags.TASK
+TV, BV = rpt.VERSIONS[TRAIT], rpt.VERSIONS[BREED]
+
+
+def img_row(no, slot, sha="a" * 64, key=None):
+    return {"desertion_no": no, "image_slot": slot, "original_s3_key": key or f"bronze/rescue/images/{no}/popfile{slot}.jpg",
+            "sha256": sha}
+
+
+def log_row(no, task, version, sha, status, attempts=1):
+    return {"desertion_no": no, "task": task, "version": version, "input_hash": sha, "status": status, "attempts": attempts}
+
+
+# ------------------------------------------------------------ 대상 고르기
+
+
+def test_representative_is_smallest_stored_slot():
+    rows = [img_row("1", 2, "b" * 64), img_row("1", 7), {**img_row("1", 1), "original_s3_key": None}]
+    rep = rpt.representative_photos(rows)
+    assert rep["1"]["image_slot"] == 2
+
+
+def test_uses_versioned_key_from_silver_as_is():
+    rows = [img_row("1", 1, key="bronze/rescue/images/1/popfile1_v002.jpg")]
+    targets, _ = rpt.select_targets(["1"], rows, [])
+    assert targets[0].s3_key.endswith("popfile1_v002.jpg")
+
+
+def test_skip_done_and_retag_when_hash_or_version_changes():
+    sha_old, sha_new = "a" * 64, "c" * 64
+    logs = [log_row("1", TRAIT, TV, sha_old, "OK"), log_row("1", BREED, BV, sha_old, "NO_RESULT")]
+    targets, _ = rpt.select_targets(["1"], [img_row("1", 1, sha_old)], logs)
+    assert targets == []
+    targets, _ = rpt.select_targets(["1"], [img_row("1", 1, sha_new)], logs)
+    assert targets[0].tasks == (TRAIT, BREED)
+    targets, _ = rpt.select_targets(["1"], [img_row("1", 1, sha_old)], logs, versions={TRAIT: "trait-vision-v11", BREED: BV})
+    assert targets[0].tasks == (TRAIT,)
+
+
+def test_failed_is_retried_until_three_attempts():
+    sha = "a" * 64
+    two = [log_row("1", TRAIT, TV, sha, "FAILED", 2), log_row("1", BREED, BV, sha, "OK")]
+    assert rpt.select_targets(["1"], [img_row("1", 1, sha)], two)[0][0].tasks == (TRAIT,)
+    three = [log_row("1", TRAIT, TV, sha, "FAILED", 3), log_row("1", BREED, BV, sha, "OK")]
+    assert rpt.select_targets(["1"], [img_row("1", 1, sha)], three)[0] == []
+
+
+def test_no_photo_recorded_once():
+    targets, no_photo = rpt.select_targets(["2", "1"], [img_row("1", 1)], [])
+    assert [t.desertion_no for t in targets] == ["1"] and no_photo == ["2"]
+    logs = rpt.no_photo_rows(no_photo, "r", datetime.now(UTC))
+    assert rpt.select_targets(["2"], [], logs)[1] == []
+
+
+def test_limit_keeps_sorted_order():
+    rows = [img_row(n, 1) for n in ("3", "1", "2")]
+    targets, _ = rpt.select_targets(["3", "1", "2"], rows, [], limit=2)
+    assert [t.desertion_no for t in targets] == ["1", "2"]
+
+
+# ------------------------------------------------------------ 호출 → 결과
+
+
+def jpeg():
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), "white").save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+def result_from(name, **over):
+    raw = json.loads((FIX / name).read_text(encoding="utf-8"))
+    u = raw["usage"]
+    kw = {
+        "content": raw["choices"][0]["message"]["content"], "request_id": raw["id"], "requested_model": rpt.MODEL,
+        "response_model": raw["model"], "provider": raw["provider"], "prompt_tokens": u["prompt_tokens"],
+        "completion_tokens": u["completion_tokens"],
+        "reasoning_tokens": u["completion_tokens_details"]["reasoning_tokens"],
+        "cost_usd": u["cost"], "latency_ms": 1700, "attempts": 1, "raw": raw,
+        "finish_reason": raw["choices"][0].get("finish_reason"),
+        "native_finish_reason": raw["choices"][0].get("native_finish_reason"),
+    }
+    kw.update(over)
+    return ChatResult(**kw)
+
+
+class FakeClient:
+    def __init__(self, trait=None, breed=None):
+        self.trait = trait or (lambda: result_from("openrouter_trait_response.json"))
+        self.breed = breed or (lambda: result_from("openrouter_breed_response.json"))
+        self.requests = []
+
+    def chat(self, req):
+        self.requests.append(req)
+        out = self.trait() if req.schema_name == "trait" else self.breed()
+        if isinstance(out, Exception):
+            raise out
+        return out
+
+
+def target(no="1", tasks=(TRAIT, BREED)):
+    return rpt.Target(no, 1, f"k/{no}.jpg", "a" * 64, tasks)
+
+
+def cfg():
+    return rpt.TaggerConfig(run_id="run-1", concurrency=2, canonical_slug="google/gemini-3.1-flash-lite-20260507")
+
+
+def test_tag_photos_makes_four_requests_and_tags():
+    client = FakeClient()
+    outcomes, stop = rpt.tag_photos([(target(), jpeg())], client, cfg())
+    assert stop is None and len(client.requests) == 4
+    assert all(r.media_resolution == "MEDIA_RESOLUTION_MEDIUM" and r.provider == "google-ai-studio" for r in client.requests)
+    assert {r.temperature for r in client.requests} == {1.0}
+    o = outcomes[0]
+    assert o.tasks[TRAIT].status == "OK"
+    assert [r["tag_code"] for r in o.tasks[TRAIT].tag_rows] == ["fur.short", "ear.prick", "eye.sharp"]
+    breed_rows = o.tasks[BREED].tag_rows
+    assert [(r["tag_code"], r["searchable"], r["displayable"], r["similarity"]) for r in breed_rows] == [
+        ("breed.진도견", True, False, 92), ("breed.시바", False, False, 70)]
+    assert len(o.requests) == 4 and {r["cost_usd"] for r in o.requests} == {0.000697, 0.000953}
+    assert all(r["canonical_slug"] and r["media_resolution"] == "MEDIA_RESOLUTION_MEDIUM" for r in o.requests)
+    assert {(r["temperature"], r["reasoning_effort"], r["finish_reason"]) for r in o.requests} == {(1.0, "low", "stop")}
+
+
+def test_bad_answer_marks_task_failed_and_keeps_old_tags():
+    client = FakeClient(breed=lambda: result_from("openrouter_breed_response.json", content="{not json"))
+    outcomes, stop = rpt.tag_photos([(target(), jpeg())], client, cfg())
+    assert stop is None
+    o = outcomes[0]
+    assert o.tasks[BREED].status == "FAILED" and o.tasks[TRAIT].status == "OK"
+    scope, _ = rpt.replaced_tag_rows(outcomes)
+    assert scope == [("1", TRAIT)]  # 품종은 교체하지 않는다
+    assert {r["status"] for r in o.requests if r["task"] == BREED} == {"BAD_ANSWER"}
+
+
+def test_resolution_guard_stops_run():
+    client = FakeClient(trait=lambda: result_from("openrouter_trait_response.json", prompt_tokens=1818))
+    outcomes, stop = rpt.tag_photos([(target(), jpeg())], client, cfg())
+    assert isinstance(stop, rpt.ResolutionGuardError)
+    assert all(not o.tasks for o in outcomes)  # 처리 기록·태그는 쓰지 않는다
+    assert rpt.replaced_tag_rows(outcomes) == ([], [])
+
+
+def test_account_error_stops_run_without_counting_attempts():
+    client = FakeClient(trait=lambda: AccountError("Insufficient credits", status=402))
+    outcomes, stop = rpt.tag_photos([(target("1"), jpeg()), (target("2"), jpeg())], client, cfg())
+    assert isinstance(stop, AccountError)
+    assert rpt.inference_rows(outcomes, {}, "run-1", datetime.now(UTC)) == []
+
+
+def test_oversized_image_fails_only_that_photo(monkeypatch):
+    small = jpeg()
+    big = small + bytes(200)
+    monkeypatch.setattr(image_input, "MAX_IMAGE_BYTES", len(small) + 100)
+    client = FakeClient()
+    outcomes, stop = rpt.tag_photos([(target("1"), small), (target("2"), big)], client, cfg())
+    assert stop is None and len(client.requests) == 4
+    assert {t.status for t in outcomes[1].tasks.values()} == {"FAILED"}
+    assert "IMAGE_TOO_LARGE" in outcomes[1].tasks[TRAIT].error
+
+
+def test_s3_or_api_error_fails_only_that_photo():
+    client = FakeClient(trait=lambda: OpenRouterError("HTTP 400", status=400))
+    outcomes, stop = rpt.tag_photos([(target("1", (TRAIT,)), jpeg()), (target("2"), RuntimeError("SHA_MISMATCH"))], client, cfg())
+    assert stop is None
+    assert outcomes[0].tasks[TRAIT].status == "FAILED"
+    assert {t.status for t in outcomes[1].tasks.values()} == {"FAILED"}
+    assert "SHA_MISMATCH" in outcomes[1].tasks[TRAIT].error
+
+
+def test_inference_rows_count_attempts():
+    outcomes, _ = rpt.tag_photos([(target(), jpeg())], FakeClient(), cfg())
+    prev = rpt.log_index([log_row("1", TRAIT, TV, "a" * 64, "FAILED", 2)])
+    rows = {r["task"]: r for r in rpt.inference_rows(outcomes, prev, "run-1", datetime.now(UTC))}
+    assert rows[TRAIT]["attempts"] == 3 and rows[TRAIT]["status"] == "OK" and rows[TRAIT]["tag_count"] == 3
+    assert rows[BREED]["attempts"] == 1 and rows[BREED]["tag_count"] == 1
+
+
+def test_fetch_image_checks_sha(tmp_path):
+    import hashlib
+
+    data = jpeg()
+
+    class S3:
+        def get_object(self, Bucket, Key):
+            return {"Body": io.BytesIO(data)}
+
+    ok = rpt.Target("1", 1, "k", hashlib.sha256(data).hexdigest(), (TRAIT,))
+    assert rpt.fetch_image(S3(), "b", ok) == data
+    bad = rpt.Target("1", 1, "k", "0" * 64, (TRAIT,))
+    assert "SHA_MISMATCH" in str(rpt.fetch_image(S3(), "b", bad))
+
+
+def test_local_sink_round_trip(tmp_path):
+    sink = rpt.LocalSink(tmp_path)
+    ts = datetime.now(UTC)
+    sink.write([], [], rpt.no_photo_rows(["9"], "r", ts), [])
+    logs = sink.read_inference_log()
+    assert {(r["desertion_no"], r["status"]) for r in logs} == {("9", "NO_PHOTO")}
