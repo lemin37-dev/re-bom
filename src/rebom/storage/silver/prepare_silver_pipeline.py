@@ -13,7 +13,14 @@ def prepare_silver_pipeline(
     event_manifest_path,
     previous_silver_rows,
     previous_observed_on,
+    dry_run_baseline_rows=None,
 ):
+    baseline_rows = (
+        previous_silver_rows
+        if dry_run_baseline_rows is None
+        else dry_run_baseline_rows
+    )
+
     bronze = load_bronze_run(bronze_manifest_path)
 
     events = load_silver_events(
@@ -25,7 +32,7 @@ def prepare_silver_pipeline(
 
     prepared = prepare_notice_delta(
         verified,
-        previous_silver_rows,
+        baseline_rows,
     )
 
     if not prepared["ready"]:
@@ -38,7 +45,7 @@ def prepare_silver_pipeline(
 
     reconstructed = reconstruct_status_snapshot(
         verified,
-        previous_silver_rows,
+        baseline_rows,
         prepared,
         previous_observed_on,
     )
@@ -52,7 +59,7 @@ def prepare_silver_pipeline(
         }
 
     notice = prepare_notice_status_delta(
-        previous_silver_rows,
+        baseline_rows,
         prepared,
         reconstructed,
     )

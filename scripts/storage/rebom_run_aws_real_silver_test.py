@@ -89,7 +89,12 @@ def load_history_observation(history_rows):
     return max(dates) if dates else None
 
 
-def prepare_new(bronze_path, event_path, notice, history):
+def prepare_new(
+    bronze_path, event_path, notice, history,
+    dry_run_baseline_rows=None, apply=False,
+):
+    if apply and dry_run_baseline_rows is not None:
+        raise RuntimeError("DRY_RUN_BASELINE_FORBIDDEN_FOR_APPLY")
     previous_notice = notice.scan().to_arrow().to_pylist()
     previous_history = history.scan().to_arrow().to_pylist()
     prepared = prepare_silver_pipeline(
@@ -97,6 +102,7 @@ def prepare_new(bronze_path, event_path, notice, history):
         event_manifest_path=str(event_path),
         previous_silver_rows=previous_notice,
         previous_observed_on=load_history_observation(previous_history),
+        dry_run_baseline_rows=dry_run_baseline_rows,
     )
     if not prepared.get("ready"):
         raise RuntimeError(f"Silver preparation failed: {prepared.get('stage')}; {prepared.get('conflicts')}")
@@ -210,9 +216,53 @@ def execute(args):
     else:
         if record is not None:
             raise RuntimeError("Journal exists but prepared snapshot is missing; investigate")
-        prepared, notice_arrow, history_arrow = prepare_new(
-            args.bronze_manifest, args.event_manifest, notice, history
-        )
+        try:
+            prepared, notice_arrow, history_arrow = prepare_new(
+                args.bronze_manifest, args.event_manifest, notice, history,
+                apply=args.apply,
+            )
+        except RuntimeError as exc:
+            if (
+                args.apply
+                or state_s3 is None
+                or "Silver preparation failed: STATUS_HISTORY;" not in str(exc)
+                or "previous_not_found" not in str(exc)
+            ):
+                raise
+
+            import gzip
+            from rebom.storage.silver.dry_run_baseline import (
+                build_dry_run_baseline,
+            )
+            from rebom.storage.silver.dry_run_previous_bronze import (
+                fetch_previous_day_bronze,
+            )
+
+            with tempfile.TemporaryDirectory(
+                prefix="rebom-previous-bronze-"
+            ) as previous_dir:
+                previous_bronze = fetch_previous_day_bronze(
+                    state_s3, args.s3_state_bucket, run_id, previous_dir
+                )
+                event_file = args.event_manifest.parent / "events.jsonl.gz"
+
+                with gzip.open(event_file, "rt", encoding="utf-8") as stream:
+                    event_rows = [
+                        json.loads(line) for line in stream if line.strip()
+                    ]
+
+                baseline = build_dry_run_baseline(
+                    notice.scan().to_arrow().to_pylist(),
+                    previous_bronze,
+                    event_rows,
+                )
+
+                prepared, notice_arrow, history_arrow = prepare_new(
+                    args.bronze_manifest, args.event_manifest, notice, history,
+                    apply=False, dry_run_baseline_rows=baseline,
+                )
+
+            print("DRY_RUN_BASELINE_RECOVERY: PASS")
         if prepared["run_id"] != run_id:
             raise RuntimeError("Run ID differs from verified Bronze manifest")
         assert_schema(notice_arrow, notice)
