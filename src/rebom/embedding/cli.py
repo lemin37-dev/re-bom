@@ -14,6 +14,11 @@
         S3 결과 → RDS image_embedding (확인·승인 뒤). manifest 의 현재 sha256 과 RDS sha256 을 비교해 변경분만 쓴다.
     python -m rebom.embedding.cli smoke [--sample 10] [--trunc 3]
         RDS 벡터 차원·manifest 대조, 사진 질의로 자기 자신 찾기, 재임베딩 일치, 3072 앞부분 비교, 지연 p95.
+    python -m rebom.embedding.cli compare-sources [--silver-env test]
+        Bronze manifest 와 Silver 이미지 표의 현재 사진 대조 (읽기만). switch_ready 가 true 여야 Silver 로 넘어간다.
+
+현재 사진을 읽는 곳 (embed·staged·load·smoke): --source bronze(기본, 사진 manifest) | silver(Silver 이미지 표).
+silver 는 Silver 가 운영(apply)으로 열린 뒤 쓴다. --silver-env test 로는 S3·RDS 에 쓰지 않는다 (sources.py).
 
 환경 변수: REBOM_S3_BUCKET(필수), AWS_PROFILE·AWS_DEFAULT_REGION, REBOM_GEMINI_SECRET_ID, REBOM_DB_SECRET_ID,
 REBOM_DB_HOST·REBOM_DB_PORT(포트포워딩 때). 비밀값은 출력하지 않는다.
@@ -47,6 +52,24 @@ def _s3():
     import boto3
 
     return boto3.client("s3", region_name=os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-2"))
+
+
+def _current(args: argparse.Namespace, s3: Any, bucket: str, writes: bool = False):
+    """--source 에 따라 현재 사진을 읽는다. (현재 사진, manifest 목록 또는 None)
+
+    silver test 표는 현재 사진의 일부만 담고 사진 교체(v2)도 반영 전이라, S3·RDS 에 쓰는 실행(writes)은 막는다.
+    Silver 로 넘어가는 조건과 순서: docs/image_embedding_status_20261120.md 4절."""
+    from rebom.embedding import sources
+
+    source = getattr(args, "source", sources.DEFAULT_SOURCE)
+    silver_env = getattr(args, "silver_env", "test")
+    if source == "silver" and writes and silver_env == "test":
+        sys.exit("--source silver --silver-env test 로는 S3·RDS 에 쓰지 않습니다 (Silver test 표는 현재 사진의 일부만 담음). "
+                 "--dry-run 이나 compare-sources 로 확인만 해 주세요.")
+    current, manifests = sources.load_current(source, s3, bucket, silver_env)
+    if source == "silver":
+        print(f"입력: Silver 이미지 표 ({silver_env}), 현재 사진 {len(current)}칸")
+    return current, manifests
 
 
 def _print(title: str, value: Any) -> None:
@@ -178,7 +201,8 @@ def embed(args: argparse.Namespace) -> int:
 
     bucket, s3 = _bucket(), _s3()
     staged = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION)
-    plan = planmod.build(mf.load_manifests(s3, bucket), staged)
+    current, manifests = _current(args, s3, bucket, writes=not args.dry_run)
+    plan = planmod.build(manifests, staged, current)
     order = plan.send_order()[: args.limit]
     retry_keys = [k for p in plan.send.values() for k in [p[0].s3_key] if k in staged.read_errors]
     _print("plan (보내기 전)", {
@@ -324,7 +348,7 @@ def staged_cmd(args: argparse.Namespace) -> int:
 
     bucket, s3 = _bucket(), _s3()
     st = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION, run_ids=args.run_id)
-    current = mf.latest_photos(mf.load_manifests(s3, bucket))
+    current, _ = _current(args, s3, bucket)
     rows = list(st.rows.values())
     norms = [_norm(r["embedding"]) for r in rows]
     stale = [k for k, r in st.rows.items() if (p := current.get(k)) is None or p.sha256 != r["sha256"]]
@@ -361,7 +385,7 @@ def load(args: argparse.Namespace) -> int:
 
     bucket, s3 = _bucket(), _s3()
     st = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION, run_ids=args.run_id)
-    current = mf.latest_photos(mf.load_manifests(s3, bucket))
+    current, _ = _current(args, s3, bucket, writes=not args.dry_run)
     with store.connect() as conn:
         if not store.table_exists(conn):
             sys.exit(f"{store.TABLE} 테이블이 없습니다. db/migrations/001_init.sql 을 먼저 적용해 주세요.")
@@ -396,7 +420,7 @@ def smoke(args: argparse.Namespace) -> int:
     from rebom.embedding import gemini, prep, store
 
     bucket, s3 = _bucket(), _s3()
-    current = mf.latest_photos(mf.load_manifests(s3, bucket))
+    current, _ = _current(args, s3, bucket)
 
     with store.connect() as conn:
         conn.read_only = True
@@ -485,6 +509,26 @@ def canary_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_source(p: argparse.ArgumentParser) -> None:
+    from rebom.embedding import sources
+
+    p.add_argument("--source", choices=sources.SOURCES, default=sources.DEFAULT_SOURCE,
+                   help="현재 사진을 읽는 곳. bronze: 사진 manifest (기본) / silver: Silver 이미지 표 (Silver 운영 뒤)")
+    p.add_argument("--silver-env", default="test", help="--source silver 일 때 Silver 환경 (test 는 쓰기 금지)")
+
+
+def compare_sources(args: argparse.Namespace) -> int:
+    """Bronze manifest 와 Silver 이미지 표의 현재 사진 대조 (읽기만). 모두 0 이어야 --source silver 로 넘어간다."""
+    from rebom.embedding import sources
+
+    bucket, s3 = _bucket(), _s3()
+    bronze, _ = sources.load_current("bronze", s3, bucket)
+    silver = sources.load_silver(args.silver_env)
+    result = sources.compare(bronze, silver)
+    _print(f"bronze manifest vs silver 이미지 표 ({args.silver_env})", result)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m rebom.embedding.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -501,11 +545,13 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--workers", type=int, default=4, help="동시에 보내는 요청 수 (요청 1번 = 사진 최대 6장)")
     e.add_argument("--part-size", type=int, default=5000, help="parquet 파일 1개당 행 수")
     e.add_argument("--dim", type=int, default=768, help="벡터 차원 (테이블 vector(768) 과 같아야 함)")
+    _add_source(e)
     e.set_defaults(func=embed)
 
     g = sub.add_parser("staged", help="S3 parquet 결과 점검 (과금 없음)")
     g.add_argument("--run-id", action="append", help="이 실행만 (여러 번 줄 수 있음). 없으면 전체")
     g.add_argument("--dim", type=int, default=768)
+    _add_source(g)
     g.set_defaults(func=staged_cmd)
 
     ld = sub.add_parser("load", help="S3 parquet → RDS image_embedding (확인·승인 뒤)")
@@ -515,6 +561,7 @@ def main(argv: list[str] | None = None) -> int:
     ld.add_argument("--max-write", type=int, default=0, metavar="N",
                     help="쓸 행이 N 을 넘으면 쓰지 않고 실패 (매일 DAG 의 안전장치, 0 이면 상한 없음)")
     ld.add_argument("--dim", type=int, default=768)
+    _add_source(ld)
     ld.set_defaults(func=load)
 
     c = sub.add_parser("canary", help="매일 embed 전 모델 변화 감시: 고정 사진 6장 재임베딩 → 기준과 코사인 (요청 1번)")
@@ -528,7 +575,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--sample", type=int, default=10, help="다시 임베딩해 볼 저장 행 수")
     s.add_argument("--trunc", type=int, default=3, help="3072 차원으로도 받아 앞부분을 비교할 장 수 (0 이면 생략)")
     s.add_argument("--dim", type=int, default=768)
+    _add_source(s)
     s.set_defaults(func=smoke)
+
+    cs = sub.add_parser("compare-sources", help="Bronze manifest 와 Silver 이미지 표의 현재 사진 대조 (읽기만)")
+    cs.add_argument("--silver-env", default="test")
+    cs.set_defaults(func=compare_sources)
 
     args = parser.parse_args(argv)
     return args.func(args)
