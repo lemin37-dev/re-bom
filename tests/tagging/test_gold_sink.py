@@ -23,7 +23,7 @@ def sink(tmp_path):
     catalog = SqlCatalog("t", uri=f"sqlite:///{tmp_path}/c.db", warehouse=f"file://{tmp_path}/wh")
     env = gc.GoldEnvironment("unit", "rebom_gold", "_unit", f"file://{tmp_path}/wh/gold")
     made = gc.create_tables(env, catalog)
-    assert len(made) == 3
+    assert len(made) == len(gc.schemas())  # 태깅·임베딩 묶음 전부
     assert gc.create_tables(env, catalog) == []  # 두 번째는 만들 것이 없다
     return rpt.GoldSink(catalog, env)
 
