@@ -1,11 +1,13 @@
-"""공고 1건 → 글 카드 (A 템플릿). 규칙은 text_card_reference.py 와 글자까지 같다.
+"""공고 1건 → 글 카드 (A 템플릿). 규칙은 handoff_20261120/text_card_reference.py (LLM 인계 기준 구현) 와 글자까지 같다.
 
 - Silver 칼럼 이름을 공공데이터 API 이름으로 바꿔 넣는다 (SILVER_TO_API).
 - Silver 의 color_tag·size 는 쓰지 않는다. 원래 값(color_raw·weight_raw)에서 같은 규칙으로 다시 계산한다.
 - 보호자 실명·연락처 칼럼은 읽지 않는다. 특징 글 안 전화번호는 [번호] 로 가리고 앞의 관리 번호는 지운다.
 - A1 = 벤치마크 글 (smoke ① 카드 일치 확인용), A2 = A1 + 태그 (첫 적재).
 - 11-18: 글도 gemini-embedding-2(768). 보낼 때는 doc_input()/query_input() 접두어를 붙인다
-  (text_card_reference2 와 같음). 전화번호 가리기는 build_card() 안에서 하므로 API 로 나가기 전에 끝난다.
+  전화번호 가리기는 build_card() 안에서 하므로 API 로 나가기 전에 끝난다.
+- 11-20: 크기 경계는 템플릿마다 다르다. A1(벤치마크) 10kg 이하 소형, A2(Silver 규칙) 10kg 미만 소형 ·
+  10~25kg 미만 중형 · 25kg 이상 대형. 사회성(sfeSoci)은 soci=True 일 때만 넣는다 (A2 포함 여부는 결정 필요).
 """
 from __future__ import annotations
 
@@ -73,10 +75,15 @@ def kg(weight: Any) -> float | None:
     return val if 0 < val <= 100 else None
 
 
-def size_of(k: float | None) -> str:
-    if k is None:
+SIZE_SMALL_MAX_INCLUSIVE = {"A1": True, "A2": False}  # A1: 10kg 이하 소형 (벤치마크) · A2: 10kg 미만 소형 (Silver)
+
+
+def size_of(k: float | None, template: str = "A2") -> str:
+    """몸무게(kg) → 소형/중형/대형. 기본은 Silver 규칙(A2). 정확히 10kg 은 A1 이면 소형, A2 면 중형."""
+    if k is None or (isinstance(k, float) and math.isnan(k)):  # NaN 이 '대형'이 되는 것을 막음
         return ""
-    return "소형" if k <= 10 else ("중형" if k < 25 else "대형")
+    small = k <= 10 if SIZE_SMALL_MAX_INCLUSIVE[template] else k < 10
+    return "소형" if small else ("중형" if k < 25 else "대형")
 
 
 def birth_year(age: Any) -> int | None:
@@ -84,19 +91,22 @@ def birth_year(age: Any) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def persona(row: Mapping[str, Any]) -> str:
-    """사회성(sfeSoci) + 특이사항(specialMark) → 관리 번호 지우기 → 공백 정리 → 전화번호 가리기"""
-    s = " ".join(_s(row.get(c)) for c in ["sfeSoci", "specialMark"] if c in row)
+def persona(row: Mapping[str, Any], soci: bool = False) -> str:
+    """(soci 면 사회성 sfeSoci +) 특이사항 specialMark → 관리 번호 지우기 → 공백 정리 → 전화번호 가리기"""
+    cols = ["sfeSoci", "specialMark"] if soci else ["specialMark"]
+    s = " ".join(_s(row.get(c)) for c in cols if c in row)
     s = LEADING_ID.sub("", s, count=1)
     s = re.sub(r"\s+", " ", s).strip()
     return PHONE.sub("[번호]", s)
 
 
 def build_card(row: Mapping[str, Any], template: str = "A2",
-               tags: Iterable[tuple[str, Any]] | None = None) -> str:
-    """row: API 이름 dict · tags: [(이름표, 값), …] (A2 에서만, 확인불가·빈 값은 뺌)"""
+               tags: Iterable[tuple[str, Any]] | None = None, soci: bool = False) -> str:
+    """row: API 이름 dict · tags: [(이름표, 값), …] (A2 에서만, 확인불가·빈 값은 뺌) · soci: 사회성 포함 (A1 은 불가)"""
     if template not in TEMPLATE_VERSIONS:
         raise ValueError(f"template 은 {TEMPLATE_VERSIONS} 중 하나")
+    if template == "A1" and soci:
+        raise ValueError("A1(벤치마크 글)에는 사회성을 넣지 않음")
     k = kg(row.get("weight"))
     y = birth_year(row.get("age"))
     ct = color_tag(row.get("colorCd"))
@@ -106,7 +116,7 @@ def build_card(row: Mapping[str, Any], template: str = "A2",
              f"{y}년생" if y is not None else "",
              {"M": "수컷", "F": "암컷"}.get(_s(row.get("sexCd")), ""),
              {"Y": "중성화함", "N": "중성화 안 함"}.get(_s(row.get("neuterYn")), ""),
-             f"{k:g}kg {size_of(k)}" if k is not None else "",
+             f"{k:g}kg {size_of(k, template)}" if k is not None else "",
              ("털색 " + "·".join(ct)) if ct else "",
              f"(공고 털색 {color})" if isinstance(color, str) else ""]
     if template == "A2":
@@ -115,7 +125,7 @@ def build_card(row: Mapping[str, Any], template: str = "A2",
             if v.lower() not in UNKNOWN_TAG:
                 parts.append(f"{label} {v}")
     text = ", ".join(p for p in parts if p)
-    p = persona(row)
+    p = persona(row, soci)
     return text + (". 특징: " + p if p else "")
 
 

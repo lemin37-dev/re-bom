@@ -59,7 +59,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def query_text(text: str) -> str:
-    """검색 질의·제로샷 보기 문장용 접두어. 앞뒤 공백은 지운다 (text_card_reference2 와 같음)."""
+    """검색 질의·제로샷 보기 문장용 접두어. 앞뒤 공백은 지운다 (handoff_20261120/text_card_reference.py 와 같음)."""
     return f"task: search result | query: {text.strip()}"
 
 
@@ -83,7 +83,7 @@ def sniff_mime(data: bytes) -> str:
 
 # 서버 운영용 임베딩 전용 키 (11-19: 모델 비용 실측을 위해 다른 용도와 키를 나눔). 노드 역할은 rebom/* 만 읽는다
 DEFAULT_SECRET_ID = "rebom/embed/prod/gemini_api_key"
-# 시크릿 값이 JSON 이면 이 이름들 중 처음 있는 필드를 쓴다 (photo_embed.py 와 같은 순서)
+# 시크릿 값이 JSON 이면 이 이름들 중 처음 있는 필드를 쓴다 (handoff_20261120/tools/photo_embed.py 와 같은 순서)
 SECRET_FIELDS = ("GEMINI_API_KEY", "gemini_api_key", "api_key", "key")
 
 

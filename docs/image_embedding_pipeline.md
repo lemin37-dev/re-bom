@@ -257,7 +257,7 @@ OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 prov
 | 모델 | `gemini-embedding-2`, `output_dimensionality=768`, 받은 벡터는 L2 정규화 |
 | 입력 형식 | 저장하는 카드는 `"title: none \| text: " + 카드`, 검색어는 `"task: search result \| query: " + 검색어` (벤치마크 I2와 같음). `gemini.py`의 `document_text`·`query_text`가 이 형식과 같은지 확인 |
 | 요청 | 요청 1번에 여러 문장 (벤치마크는 20개, `TEXT_BATCH` 100도 결과는 같음). 문장마다 Content 1개 |
-| 카드 내용 | **A 템플릿**. `text_card_reference.py`의 `build_card()`와 글자까지 같게 만듭니다 (벤치마크 글 960/960 일치) |
+| 카드 내용 | **A 템플릿**. `src/rebom/embedding/handoff_20261120/text_card_reference.py`의 `build_card()`와 글자까지 같게 만듭니다 (벤치마크 글 960/960 일치) |
 | Silver 칼럼 | Silver 이름을 API 이름(kindNm·age·sexCd·neuterYn·weight·colorCd·specialMark)으로 바꿔 넣습니다. A2의 특징 글은 정제 단계가 `specialMark`·`sfeSoci`·`sfeHealth` 등을 합쳐 정리한 문장 칼럼 하나를 씁니다(11-18 결정, 칼럼 이름은 정리 뒤 확정). Silver의 `color_tag`·`size`는 쓰지 않고, 원래 털색·몸무게 값에서 같은 규칙으로 다시 계산합니다 |
 | 제외 | 보호자 실명(`careOwnerNm`)·연락처(AGENTS.md 1번). 특징 글 안의 전화번호는 **API로 보내기 전에** `[번호]`로 가리고, 앞의 관리 번호는 지웁니다 |
 | 발견 장소 | 카드에 넣지 않고 지역 필터로 씁니다 [제안] |
@@ -270,7 +270,7 @@ OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 prov
 | 2 | age | `2026년생` (네 자리 연도만) |
 | 3 | sexCd | 수컷 / 암컷 (미상은 뺌) |
 | 4 | neuterYn | 중성화함 / 중성화 안 함 (미상은 뺌) |
-| 5 | weight | `2.3kg 소형` (10kg 이하 소형 · 25kg 미만 중형 · 그 이상 대형) |
+| 5 | weight | `2.3kg 소형` — A1(벤치마크): 10kg 이하 소형 · A2(11-20, Silver 규칙): 10kg 미만 소형 · 10~25kg 미만 중형 · 25kg 이상 대형. `size_of(k, template)` |
 | 6 | colorCd | `털색 흰색계열·검정계열` (5계열 사전) + `(공고 털색 <원래 값>)` |
 | 7 | (A2) 태그 | `털 길이 장모`처럼 `이름표 값`, 확인불가·빈 값은 뺌 |
 | 8 | A1: specialMark / A2: 정리된 특징 문장 (specialMark + sfeSoci + sfeHealth 등) | `. 특징: <글>` (관리 번호 지우기·전화번호 가리기는 똑같이) |
@@ -324,7 +324,7 @@ OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 prov
   - 카드 만들기: `text_card.py` (A 템플릿 규칙 + 전화번호 가리기 + `template_version`)
   - 기존 모듈 재사용: `gemini.py`(글 접두어), `plan.py`·`staging.py`·`store.py`를 사진·글 공용으로 일반화
 - smoke 항목 (기준 파일: Colab `cell_S1_글시험기준.py` 11-18판 → `text_smoke_ref.parquet`, 30마리)
-  1. **카드 일치**: Silver 칼럼으로 만든 A1 카드(사회성 빼고)가 기준 `text`와 글자까지 같은가 → 다르면 칼럼 매핑 문제
+  1. **카드 일치**: Silver 칼럼으로 만든 A1 카드(사회성 빼고 — `build_card`는 `soci=True`가 아니면 sfeSoci를 넣지 않음)가 기준 `text`와 글자까지 같은가 → 다르면 칼럼 매핑 문제. `handoff_20261120/silver_schema_check.py --card-ref text_smoke_ref.parquet`로 미리 확인 가능
   2. **벡터 일치**: 기준 `doc_input`을 Gemini 768로 임베딩한 값과 기준 `vec`의 코사인이 0.99 이상인가 → 다르면 모델 이름·차원·접두어 문제
   3. 카드 질의로 자기 공고 찾기
   4. 글 질의 지연 p95 (서버 Pod에서. Colab에서는 0.218초)
