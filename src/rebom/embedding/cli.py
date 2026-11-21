@@ -16,6 +16,9 @@
         RDS 벡터 차원·manifest 대조, 사진 질의로 자기 자신 찾기, 재임베딩 일치, 3072 앞부분 비교, 지연 p95.
     python -m rebom.embedding.cli compare-sources [--silver-env test]
         Bronze manifest 와 Silver 이미지 표의 현재 사진 대조 (읽기만). switch_ready 가 true 여야 Silver 로 넘어간다.
+    python -m rebom.embedding.cli gold-migrate --gold-env test|prod [--write] [--profile rebom]
+        옛 S3 parquet → Gold Iceberg 임베딩 표 (사진당 1행, Gemini 호출 없음, gold_migrate.py).
+        기본은 계획만 출력. --write 면 쓰고 다시 읽어 검증한다. 표는 gold_catalog --create 로 먼저 만든다(사람).
 
 현재 사진을 읽는 곳 (embed·staged·load·smoke): --source bronze(기본, 사진 manifest) | silver(Silver 이미지 표).
 silver 는 Silver 가 운영(apply)으로 열린 뒤 쓴다. --silver-env test 로는 S3·RDS 에 쓰지 않는다 (sources.py).
@@ -529,6 +532,31 @@ def compare_sources(args: argparse.Namespace) -> int:
     return 0
 
 
+def gold_migrate_cmd(args: argparse.Namespace) -> int:
+    """옛 parquet → Gold Iceberg 표. 기본은 계획만, --write 면 쓰고 검증 (Gemini 호출 없음)."""
+    from rebom.common import gold_catalog as gc
+    from rebom.embedding import gemini, gold_migrate as gm, prep, sources
+
+    bucket, s3 = _bucket(), _s3()
+    runs = gm.read_runs(s3, bucket, gemini.MODEL, args.dim)
+    current, _ = sources.load_current("bronze", s3, bucket)
+    scores = gm.measure_blanks(s3, bucket, runs, current)
+    plan = gm.build(runs, gemini.MODEL, args.dim, prep.PREP_VERSION,
+                    gm.read_canary_docs(s3, bucket, gemini.MODEL, args.dim), scores)
+    env = gc.get_gold_environment(args.gold_env)
+    _print(f"gold-migrate plan → {env.name} ({env.location_prefix})", plan.stats)
+    if not args.write:
+        return 0
+    from rebom.storage.silver.aws_catalog import get_aws_catalog
+
+    catalog = get_aws_catalog(profile=args.profile)
+    t0 = time.time()
+    written = gm.write(catalog, env, plan)
+    result = gm.verify(catalog, env, plan)
+    _print(f"gold-migrate written {round(time.time() - t0)}s", {"written": written, "verify": result})
+    return 0 if result["ok"] else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m rebom.embedding.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -581,6 +609,13 @@ def main(argv: list[str] | None = None) -> int:
     cs = sub.add_parser("compare-sources", help="Bronze manifest 와 Silver 이미지 표의 현재 사진 대조 (읽기만)")
     cs.add_argument("--silver-env", default="test")
     cs.set_defaults(func=compare_sources)
+
+    gm = sub.add_parser("gold-migrate", help="옛 S3 parquet → Gold Iceberg 임베딩 표 (기본은 계획만)")
+    gm.add_argument("--gold-env", required=True, choices=("test", "prod"))
+    gm.add_argument("--write", action="store_true", help="표에 쓰고 다시 읽어 검증 (표는 사람이 먼저 만든다)")
+    gm.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드에서는 비운다")
+    gm.add_argument("--dim", type=int, default=768)
+    gm.set_defaults(func=gold_migrate_cmd)
 
     args = parser.parse_args(argv)
     return args.func(args)
