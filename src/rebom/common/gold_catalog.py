@@ -9,20 +9,21 @@
 - gold_animal_tag        태그 한 개가 한 행. 같은 대상·같은 질문지 버전으로 다시 태깅할 때만
                          (subject_type, subject_key, task, prompt_version) 범위를 교체(overwrite). 사진이 바뀌면 새 sha256 이
                          새 행이 되고, 질문지 버전을 올려도 이전 행은 남는다(이전 버전 보존)
-임베딩 묶음 (docs/data_contract.md 13.4절, 2026-11-20 결정):
+- gold_inference_log     대상·작업·버전·입력당 한 행. (subject_type, subject_key, task, version, input_hash) 로 upsert
+- gold_model_request_log 모델 요청 한 번이 한 행. append 만, dt(요청 UTC 날짜) 파티션
+임베딩 묶음 (docs/data_contract.md 13.4절, 2026-11-21 결정: 처리·요청 기록도 태깅과 따로 둔다):
 - gold_image_embedding   사진(sha256) 1장 × 모델 × 전처리 버전이 한 행. 같은 사진을 쓰는 공고·칸은 이 한 행을 같이 쓴다
 - gold_text_embedding    공고 글 카드 1개 × 모델 × 템플릿 버전 × 카드 해시가 한 행. 가린 카드 본문(input_text)도 남긴다
 - gold_embedding_canary  모델 변화 확인(canary) 1번이 한 행
-두 묶음 공용:
-- gold_inference_log     대상·작업·버전·입력당 한 행. (subject_type, subject_key, task, version, input_hash) 로 upsert.
-                         detail 은 판정 근거 JSON (임베딩 빈 사진의 회색조 표준편차 등)
-- gold_model_request_log 모델 요청 기록. append 만, dt(요청 UTC 날짜) 파티션. 보통 요청 한 번이 한 행이고,
-                         여러 대상을 한 요청으로 보내면(임베딩 사진 최대 6장) 대상마다 한 행에 같은 request_id 를 쓰고
-                         batch_size = 대상 수, cost_usd·토큰은 나눠 넣어 request_id 로 더하면 실제 값이 된다
+- gold_embedding_inference_log  태깅 처리 기록과 같은 칸 + detail(판정 근거 JSON, 빈 사진의 회색조 표준편차 등)
+- gold_embedding_request_log    태깅 요청 기록과 같은 칸 + batch_size. 여러 대상을 한 요청으로 보내면(사진 최대 6장)
+                                대상마다 한 행에 같은 request_id, batch_size = 대상 수, cost_usd·토큰은 나눠 넣어
+                                request_id 로 더하면 실제 값이 된다
+두 묶음의 기록 표는 같은 칸 이름·타입이라 Athena 에서 UNION ALL 로 합쳐 볼 수 있다.
 
 테이블 만들기·칸 추가(create_tables)는 클라우드 리소스를 바꾸는 일이라 사람이 PC 관리자 프로필로 직접 실행한다:
   python -m rebom.common.gold_catalog --env test --create --profile rebom
-  python -m rebom.common.gold_catalog --env prod --create --group embedding --profile rebom   (임베딩 묶음 + 공용 표만)
+  python -m rebom.common.gold_catalog --env prod --create --group embedding --profile rebom   (임베딩 묶음만)
 키 칸이 바뀐 옛 test 테이블은 --recreate 로 지우고 다시 만든다(test 만 허용, 사람이 실행). 노드 역할에는 glue:CreateTable 이
 없어 파드에서는 만들 수 없다(읽기·쓰기만).
 """
@@ -65,12 +66,14 @@ REQUEST_LOG_TABLE = "gold_model_request_log"
 IMAGE_EMBEDDING_TABLE = "gold_image_embedding"
 TEXT_EMBEDDING_TABLE = "gold_text_embedding"
 EMBEDDING_CANARY_TABLE = "gold_embedding_canary"
+EMBEDDING_INFERENCE_LOG_TABLE = "gold_embedding_inference_log"
+EMBEDDING_REQUEST_LOG_TABLE = "gold_embedding_request_log"
 
-# --group: 한 묶음의 표만 만들 때. 공용 기록 표는 두 묶음 모두에 들어간다
+# --group: 한 묶음의 표만 만들 때. 묶음마다 결과·처리 기록·요청 기록 표를 따로 가진다
 GROUPS = {
     "tagging": (TAG_TABLE, INFERENCE_LOG_TABLE, REQUEST_LOG_TABLE),
     "embedding": (IMAGE_EMBEDDING_TABLE, TEXT_EMBEDDING_TABLE, EMBEDDING_CANARY_TABLE,
-                  INFERENCE_LOG_TABLE, REQUEST_LOG_TABLE),
+                  EMBEDDING_INFERENCE_LOG_TABLE, EMBEDDING_REQUEST_LOG_TABLE),
 }
 
 INFERENCE_LOG_KEYS = ("subject_type", "subject_key", "task", "version", "input_hash")
@@ -137,7 +140,6 @@ def schemas():
         f(9, "last_error", StringType()),
         f(10, "gold_run_id", StringType()),
         f(11, "gold_updated_at", TimestamptzType()),
-        f(12, "detail", StringType()),  # 판정 근거 JSON. 임베딩 BLANK: {"gray_std": 1.2, "blank_std": 4.0}
         identifier_field_ids=[1, 2, 3, 4, 5],
     )
     request = Schema(
@@ -168,7 +170,16 @@ def schemas():
         f(25, "reasoning_effort", StringType()),
         f(26, "finish_reason", StringType()),
         f(27, "native_finish_reason", StringType()),
-        f(28, "batch_size", IntegerType()),  # 한 요청에 같이 보낸 대상 수. 비우면 1. cost_usd·토큰은 이 수로 나눈 몫
+    )
+    # 임베딩 기록 표: 태깅 기록 표와 같은 칸(UNION ALL 가능) 뒤에 임베딩에만 필요한 칸을 더한다
+    embedding_inference = Schema(
+        *inference.fields,
+        f(12, "detail", StringType()),  # 판정 근거 JSON. BLANK: {"gray_std": 1.2, "blank_std": 4.0}
+        identifier_field_ids=list(inference.identifier_field_ids),
+    )
+    embedding_request = Schema(
+        *request.fields,
+        f(28, "batch_size", IntegerType()),  # 한 요청에 같이 보낸 대상 수. cost_usd·토큰은 이 수로 나눈 몫
     )
 
     def vector(i):
@@ -228,6 +239,8 @@ def schemas():
         IMAGE_EMBEDDING_TABLE: (image_embedding, model_spec),
         TEXT_EMBEDDING_TABLE: (text_embedding, model_spec),
         EMBEDDING_CANARY_TABLE: (canary, PartitionSpec()),
+        EMBEDDING_INFERENCE_LOG_TABLE: (embedding_inference, PartitionSpec()),
+        EMBEDDING_REQUEST_LOG_TABLE: (embedding_request, request_spec),
     }
 
 
@@ -289,7 +302,7 @@ def main() -> None:
     ap.add_argument("--recreate", action="store_true",
                     help="--create 와 함께: 키 칸이 없는 옛 test 테이블을 지우고 다시 만든다 (옛 행은 버림, test 만)")
     ap.add_argument("--group", default=None, choices=sorted(GROUPS),
-                    help="한 묶음의 표만 확인·생성 (공용 기록 표 포함). 비우면 전부")
+                    help="한 묶음(결과·처리 기록·요청 기록)의 표만 확인·생성. 비우면 전부")
     ap.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드에서는 비운다")
     args = ap.parse_args()
 
