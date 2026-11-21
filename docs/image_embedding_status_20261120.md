@@ -121,8 +121,8 @@ AWS `rebom` 프로필로 S3·Glue를 읽기만 했습니다. 쓰기·호출은 �
 | 작업 | 상태 |
 |---|---|
 | 임베딩 `--source bronze\|silver` 옵션 (기본 bronze), 대조 명령 `compare-sources` | ✅ 11-20 추가 (`src/rebom/embedding/sources.py`) |
-| 결과 키(사진 단위·공고 단위)를 Gold Iceberg 표로 관리 | ✅ 11-20 표 정의(`common/gold_catalog.py`, 공용 처리·요청 기록 사용). 표 만들기·옮기기·쓰기 전환은 11-21 DAG 확인 뒤 (`docs/gold_rules_embedding_review_20261120.md` 7절) |
-| 11-21 DAG 첫 자동 실행 결과 확인 | 11-21 오전 |
+| 결과 키(사진 단위·공고 단위)를 Gold Iceberg 표로 관리 | ✅ 11-20 표 정의, 11-21 기록 표를 태깅과 분리, test·prod 표 만들고 옛 parquet 옮김(검증 차이 0). DAG 쓰기 전환은 다음 작업 (`docs/gold_rules_embedding_review_20261120.md` 7절) |
+| 11-21 DAG 첫 자동 실행 결과 확인 | ✅ 모두 성공: canary 통과, 1,220장 임베딩, RDS 1,509칸 적재. 남은 미임베딩 사진 0 (빈 사진 49칸 제외) |
 
 ---
 

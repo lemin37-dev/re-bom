@@ -1,14 +1,16 @@
-# Gold 공통 규칙 초안 × 임베딩 검토 (v3)
+# Gold 공통 규칙 초안 × 임베딩 검토 (v4)
 
-작성: 2026-11-20 · 대상: Gold 담당(규칙 초안 작성자), 임베딩, 태깅 · 상태: **팀 결정 반영본 (Gold 담당 공유용)**
-기준: Gold 공통 규칙 초안(11-20, 규칙 1~11), PR #51(공용 키 `subject_type`·`subject_key`, 11-20 develop 합침), 11-20 S3 실측
+작성: 2026-11-20, 고침 2026-11-21 · 대상: Gold 담당(규칙 초안 작성자), 임베딩, 태깅 · 상태: **팀 결정 반영본 (Gold 담당 공유용)**
+기준: Gold 공통 규칙 초안(11-20, 규칙 1~11), PR #51(공용 키 `subject_type`·`subject_key`, 11-20 develop 합침), 11-20·11-21 S3 실측
 
 > **한 줄 요약**
-> 임베딩 결과도 규칙 1에 따라 **Iceberg `rebom_gold`**로 옮깁니다. 태깅과는 **다른 결과 표 묶음**이고, **처리 기록·요청 기록은 태깅과 같은 공용 표**를 씁니다(PR #51).
+> 임베딩 결과도 규칙 1에 따라 **Iceberg `rebom_gold`**로 옮깁니다. 태깅(Jev·vLLM)과 임베딩은 **결과·처리 기록·요청 기록 표를 묶음마다 따로** 둡니다(11-21 결정). 대상 키(`subject_type`·`subject_key`)와 칸 이름은 PR #51 태깅 표와 같습니다.
 > 칸 이름은 **이미 돌고 있는 태깅 표 이름**을 따릅니다. DAG 매일 실행은 **prod 표에만** 씁니다.
-> 표 정의는 이번에 `common/gold_catalog.py`에 넣었고, 실제 쓰기 전환은 **11-21 DAG 첫 자동 실행을 확인한 뒤** 합니다.
+> 11-21: 표를 만들고(test·prod) 옛 parquet을 두 곳에 옮겨 검증했습니다. **DAG는 아직 parquet에 씁니다.** DAG 쓰기 전환은 다음 작업입니다(7절 6번).
 
-v2와 달라진 점: PR #51로 공용 처리 기록이 사진 sha256을 대상으로 받게 되어, v2에서 제안한 임베딩 전용 처리 기록 표(`gold_embedding_item_log`)와 실행 표(`gold_embedding_run`)는 **만들지 않습니다.**
+고친 내력:
+- v3(11-20): PR #51에 맞춰 칸 이름을 태깅 표와 같게 하고, 실행 표(`gold_embedding_run`)는 만들지 않기로 함.
+- **v4(11-21): 처리 기록·요청 기록도 임베딩 묶음 안에 따로 둠**(`gold_embedding_inference_log`, `gold_embedding_request_log`). 태깅 기록 표는 PR #51 그대로 두고, v3에서 태깅 표에 더하려던 `detail`·`batch_size`는 임베딩 표로 옮김.
 
 ---
 
@@ -31,15 +33,15 @@ v2와 달라진 점: PR #51로 공용 처리 기록이 사진 sha256을 대상�
 | # | 내용 |
 |---|---|
 | 1 | **Iceberg로 옮김** (규칙 1). 바뀌는 값을 Iceberg merge(upsert)로 관리하고 Glue·Athena로 확인 |
-| 2 | **표 묶음:** 결과 표는 태깅(Jev·비전)과 임베딩을 따로. 처리 기록·요청 기록은 공용(규칙 8, PR #51) |
+| 2 | **표 묶음:** 태깅(Jev·vLLM)과 임베딩은 결과·처리 기록·요청 기록 표를 모두 따로(11-21). 칸 이름·타입은 같게 해서 Athena에서 합쳐 볼 수 있게 함 |
 | 3 | **실행 묶기:** 폴더가 아니라 표 안의 `gold_run_id` 칸 |
 | 4 | **칸 이름:** 태깅 표에서 이미 쓰는 이름을 따름(2절). 규칙 초안의 이름과 다른 곳은 2절 표로 Gold 담당과 공유 |
 | 5 | **사진당 1행** (규칙 2): 같은 사진을 쓰는 칸·공고는 벡터 1행을 같이 씀. 공고별로 볼 때는 현재 사진 정보와 sha256으로 합침 |
 | 6 | **공고·칸 정보는 Gold 밖** (규칙 3): 결과 행에 `desertion_no`·`image_slot` 등을 두지 않음 |
 | 7 | **모델 버전:** `model = "gemini-embedding-2:768"`. 이름의 숫자가 버전이고 `gemini-embedding-3`은 다른 모델. 같은 이름 안의 변화는 canary로 감시 |
 | 8 | **글 카드 본문 남김:** 가린 카드 본문(`input_text`)을 글 임베딩 표에 남김. 글 벡터 성능 평가에 씀 |
-| 9 | **빈 사진 점수 남김:** 공용 처리 기록에 `detail` 칸 추가 |
-| 10 | **여러 사진을 한 요청으로 보낼 때 비용:** 사진마다 1행, 같은 `request_id`, `batch_size` 칸 추가, 비용·토큰은 나눠 넣음. `request_id`로 더하면 실제 값 |
+| 9 | **빈 사진 점수 남김:** 임베딩 처리 기록에 `detail` 칸 |
+| 10 | **여러 사진을 한 요청으로 보낼 때 비용:** 임베딩 요청 기록에 사진마다 1행, 같은 `request_id`, `batch_size` 칸, 비용·토큰은 나눠 넣음. `request_id`로 더하면 실제 값 |
 | 11 | **test·prod 둘 다 만듦.** DAG 매일 실행은 prod에만 씀. test는 확인용 |
 | 12 | **종료 공고:** 종료 뒤 **30일**이 지나면 RDS 벡터 삭제. Bronze도 30일로 맞추자고 수집 담당에게 제안 |
 | 13 | **활성 버전:** 코드 상수 그대로. 바꾸면 PR로 변경 내역을 공유·기록 |
@@ -53,12 +55,14 @@ v2와 달라진 점: PR #51로 공용 처리 기록이 사진 sha256을 대상�
 
 ```
 gold/iceberg/                  (test: gold/_test/iceberg/, 표 이름 뒤 _test)
-├─ gold_animal_tag             태깅 결과
-├─ gold_image_embedding        ┐
-├─ gold_text_embedding         │ 임베딩 결과 (새로 만듦)
-├─ gold_embedding_canary       ┘
-├─ gold_inference_log          ┐ 공용 처리 기록 (+ detail 칸)
-└─ gold_model_request_log      ┘ 공용 요청 기록 (+ batch_size 칸)
+├─ gold_animal_tag                ┐
+├─ gold_inference_log             │ 태깅 묶음 (Jev·vLLM, PR #51 그대로)
+├─ gold_model_request_log         ┘
+├─ gold_image_embedding           ┐
+├─ gold_text_embedding            │
+├─ gold_embedding_canary          │ 임베딩 묶음 (새로 만듦)
+├─ gold_embedding_inference_log   │   태깅 처리 기록과 같은 칸 + detail
+└─ gold_embedding_request_log     ┘   태깅 요청 기록과 같은 칸 + batch_size
 ```
 
 ### 2.2 임베딩 결과 표
@@ -95,24 +99,37 @@ gold/iceberg/                  (test: gold/_test/iceberg/, 표 이름 뒤 _test)
 **`gold_embedding_canary`**: 하루 한 번 고정 사진 6장 확인이 1행.
 `gold_run_id`(`canary-<시각>`, 키), `task`, `model`, `prompt_version`, `checked_at`, `passed`, `threshold`(0.99), `min_cosine`, `photo_count`, `created_reference`, `reference_created_at`, `detail`(사진별 코사인, API 사용량 JSON), `gold_updated_at`.
 
-### 2.3 공용 표에 임베딩이 쓰는 방식
+### 2.3 임베딩 처리 기록·요청 기록
 
-**`gold_inference_log`** (키: `subject_type`, `subject_key`, `task`, `version`, `input_hash`)
+**왜 따로 두나 (11-21 결정)**
+- 결과 표처럼 기록 표도 묶음마다 따로 두면, 한쪽이 칸을 더하거나 표를 다시 만들어도 다른 묶음에 영향이 없습니다.
+- 임베딩만 쓰는 칸(`detail`, `batch_size`)을 태깅 표에 더하지 않아도 됩니다.
+- 임베딩은 요청 1번에 사진 여러 장을 보내 한 요청이 여러 행이 됩니다. 태깅 요청 기록의 "요청 1번 = 1행"이라는 뜻을 바꾸지 않습니다.
+- 표마다 관리할 사람이 분명해집니다(태깅 담당 / 임베딩 담당).
+- 대신 전체 비용처럼 둘을 합쳐 볼 때는 Athena에서 `UNION ALL`이 필요합니다. 그래서 **칸 이름·타입·키는 태깅 기록 표와 똑같이 두고 뒤에 임베딩 칸만 더했습니다**(테스트로 고정).
+
+```sql
+-- 모델 작업 전체 비용 (날짜별)
+SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_model_request_log GROUP BY dt, task
+UNION ALL
+SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP BY dt, task
+```
+
+**`gold_embedding_inference_log`** (키: `subject_type`, `subject_key`, `task`, `version`, `input_hash`. 태깅 `gold_inference_log`와 같음)
 - 사진: `subject_type = photo`, `subject_key = input_hash = sha256`.
 - `version` = `<model>/<prompt_version>`, 예 `gemini-embedding-2:768/exif-rgb-max1024-jpeg90`. 이 표의 키에는 모델 칸이 없어서 모델까지 넣습니다. 이렇게 하지 않으면 모델을 바꿀 때 기록이 겹칩니다.
 - `status`: `OK`, `BLANK`(빈 사진), `SHA_MISMATCH`, `READ_ERROR`(원본 못 읽음), `FAILED`.
 - **새 칸 `detail`** (판정 근거 JSON, 태깅의 `gold_animal_tag.detail`과 같은 방식):
   - 빈 사진은 사진을 회색조 256×256으로 줄여 픽셀 밝기의 **표준편차**를 잽니다. 흰 대체 그림은 거의 한 색이라 0에 가깝고, 실제 사진은 이보다 훨씬 큽니다. 4.0 미만이면 빈 사진으로 봅니다.
   - 이 값을 `{"gray_std": 1.2, "blank_std": 4.0}`처럼 남기면, 나중에 기준을 바꿔도 사진을 다시 받거나 계산하지 않고 기록만 보고 다시 판정할 수 있습니다.
-  - 태깅은 이 칸을 비워 둬도 됩니다(쓰기 코드가 표의 현재 스키마로 행을 만들어 빈 칸은 null).
 
-**`gold_model_request_log`** (append)
+**`gold_embedding_request_log`** (append, `dt` 파티션. 태깅 `gold_model_request_log`와 같은 칸)
 - 사진 임베딩은 요청 1번에 사진을 최대 6장 보냅니다. 요청 1번을 1행으로만 남기면 그 비용이 어느 사진 몫인지 알 수 없습니다.
 - 그래서 **사진마다 1행**을 남기고 같은 `request_id`를 씁니다.
-  - **새 칸 `batch_size`** = 그 요청에 같이 보낸 사진 수. 비우면 1(태깅은 지금처럼 비움).
+  - **칸 `batch_size`** = 그 요청에 같이 보낸 사진 수.
   - `cost_usd`·토큰은 사진 수로 나눈 몫을 넣고, 나머지는 첫 행에 붙입니다. `request_id`로 더하면 OpenRouter가 돌려준 실제 값과 같습니다.
 - canary 요청도 같은 표에 `gold_run_id = canary-<시각>`으로 남겨, 감시 비용도 따로 볼 수 있게 합니다.
-- 실행 하나의 건수·비용은 두 공용 표를 `gold_run_id`로 묶어 봅니다. 그래서 실행 표는 따로 만들지 않습니다.
+- 실행 하나의 건수·비용은 두 기록 표를 `gold_run_id`로 묶어 봅니다. 그래서 실행 표는 따로 만들지 않습니다.
 
 ### 2.4 칸 이름: 규칙 초안과 태깅 표 (Gold 담당 확인)
 
@@ -153,7 +170,7 @@ gold/iceberg/                  (test: gold/_test/iceberg/, 표 이름 뒤 _test)
 
 - 지금 서비스 RDS는 Iceberg 밖의 parquet에서 채워집니다. **전환 뒤 RDS의 원본은 prod 표**입니다.
 - 임베딩 입력은 Bronze manifest라서 Silver prod가 열리기 전에도 Gold prod를 만들 수 있습니다.
-- prod는 `--group embedding`으로 만들어 **임베딩 표와 공용 기록 표만** 만듭니다. 태그 표 prod는 태깅 담당이 정할 때 만듭니다.
+- prod는 `--group embedding`으로 만들어 **임베딩 묶음 표 5개만** 만듭니다. 태깅 묶음 prod는 태깅 담당이 정할 때 만듭니다.
 
 ---
 
@@ -190,7 +207,7 @@ gold/iceberg/                  (test: gold/_test/iceberg/, 표 이름 뒤 _test)
 | 5 쌓기 | 🟡 | 같은 키 upsert, 지우지 않음 |
 | 6 원본 출력·점수 | 🟡 | 빈 사진 점수 `detail` |
 | 7 공통 칸 | 🟡 | 2.4절 이름 확인 |
-| 8 실행 기록 공용 | 🟡 | 공용 표에 쓰기 (`version`, `batch_size`) |
+| 8 실행 기록 | 🟡 | 묶음별 기록 표(11-21), 칸은 태깅과 같게. 규칙 문구를 "공용 표" → "같은 칸 구성, 묶음별 표"로 고치자고 제안 |
 | 9 활성 버전 한 곳 | ✅ | 코드 상수, 바꾸면 PR |
 | 10 RDS 동기화 | ⏳ | 30일 뒤 삭제, 승인 뒤 |
 | 11 칸 삭제 | ⏳ | 10과 같이 |
@@ -201,12 +218,12 @@ gold/iceberg/                  (test: gold/_test/iceberg/, 표 이름 뒤 _test)
 
 | 순서 | 작업 | 누가 | 상태 |
 |---|---|---|---|
-| 1 | 표 정의: 임베딩 표 3개, 공용 표 `detail`·`batch_size` (`common/gold_catalog.py`) | 임베딩 | ✅ 11-20, 로컬 Iceberg 테스트 통과 |
-| 2 | 11-21 03:00 DAG 첫 자동 실행 확인 (canary, 809장, RDS 적재 건수) | 임베딩 | 11-21 오전 |
-| 3 | 표 만들기 | **사람** | `--env test --create`, `--env prod --create --group embedding` (아래) |
-| 4 | 기존 parquet → test 표로 옮기고 검증 (Gemini 호출 없음) | 임베딩 | sha256 35,369개, 벡터 비교, Athena 조회 |
-| 5 | parquet → prod 표로 옮기기 | 임베딩 | 4와 같은 검증 |
-| 6 | 코드 전환: embed는 prod 표와 공용 기록에 쓰고, load·canary는 prod 표를 읽음 | 임베딩 | PR 1개. parquet은 보관 |
+| 1 | 표 정의: 임베딩 묶음 표 5개 (`common/gold_catalog.py`) | 임베딩 | ✅ 11-20, 11-21 기록 표 분리. 로컬 Iceberg 테스트 통과 |
+| 2 | 11-21 03:00 DAG 첫 자동 실행 확인 | 임베딩 | ✅ 11-21: canary 통과, 1,220장 임베딩, RDS 1,509칸 적재 |
+| 3 | 표 만들기 | **사람** | ✅ 11-21 test·prod 임베딩 묶음 5개씩. test 태깅 표 3개는 그대로 |
+| 4 | 기존 parquet → test 표로 옮기고 검증 (Gemini 호출 없음, `cli gold-migrate --gold-env test --write`) | 임베딩 | ✅ 11-21: 44,336행 → 사진 36,589행, 처리 기록 36,592행(빈 사진 3), canary 2행. 다시 읽어 벡터·키 대조 차이 0, Athena 조회 확인 |
+| 5 | parquet → prod 표로 옮기기 | 임베딩 | ✅ 11-21: test와 같은 결과, Athena에서 prod·test 벡터 36,589행 모두 같음. **전환 직전에 한 번 더 실행**해 그 사이 매일 실행분을 넣음(다시 해도 결과 같음) |
+| 6 | 코드 전환: embed는 prod 임베딩 묶음 표(결과·처리 기록·요청 기록)에 쓰고, load·canary는 prod 표를 읽음 | 임베딩 | PR 1개. parquet은 보관 |
 | 7 | 종료 30일 뒤 RDS 삭제를 `load`에 추가 | 임베딩 | 승인 뒤 켬 |
 | 8 | 입력을 Silver 현재 사진으로 | 임베딩 | Silver 사진 DAG 정상 운영 뒤 |
 
@@ -215,8 +232,26 @@ gold/iceberg/                  (test: gold/_test/iceberg/, 표 이름 뒤 _test)
 python -m rebom.common.gold_catalog --env test --create --profile rebom
 python -m rebom.common.gold_catalog --env prod --create --group embedding --profile rebom
 ```
-- test는 이미 있는 태깅 표 3개에 `detail`·`batch_size` 칸을 더하고 임베딩 표 3개를 만듭니다. 태깅 쓰기에는 영향이 없습니다.
+- test는 임베딩 묶음 표 5개만 새로 생깁니다. 이미 있는 태깅 표 3개는 바뀌지 않습니다.
 - 옵션 없이 실행하면 확인만 합니다(있음/없음 출력).
+
+---
+
+### 7.1 11-21 실행 기록
+
+| 시각 | 한 일 | 결과 |
+|---|---|---|
+| 03:00–03:15 | DAG `rescue_ingest` 첫 임베딩 자동 실행 | task 7개 모두 1번에 성공. canary 통과(최소 코사인 1.0), 사진 1,220장 임베딩($0.14), RDS 1,509칸 적재 |
+| 오전 | 표 만들기 (사람) | test·prod 임베딩 묶음 5개씩 |
+| 오전 | test 옮기기 | 검증 `ok: true` (49초) |
+| 오전 | prod 옮기기 | 검증 `ok: true` (29초) |
+
+Athena에서 보기 (결과 위치 `s3://rebom-data-559987919299/rebom-athena-results/`):
+```sql
+SELECT gold_run_id, count(*) FROM rebom_gold.gold_image_embedding GROUP BY gold_run_id;   -- 실행별 사진 수
+SELECT status, count(*) FROM rebom_gold.gold_embedding_inference_log GROUP BY status;   -- OK 36,589 / BLANK 3
+SELECT * FROM rebom_gold.gold_embedding_canary ORDER BY checked_at;                     -- 모델 변화 확인
+```
 
 ---
 
@@ -225,7 +260,7 @@ python -m rebom.common.gold_catalog --env prod --create --group embedding --prof
 | # | 확인할 것 | 누구 |
 |---|---|---|
 | 1 | 2.4절 칸 이름: 규칙 초안을 태깅 표 이름으로 고치는 것 | Gold 담당 |
-| 2 | 공용 표 칸 추가(`detail`, `batch_size`)와 처리 기록 `version` 형식 | Gold 담당, 태깅 |
+| 2 | 기록 표를 묶음별로 나누는 것(규칙 8 문구)과 처리 기록 `version` 형식 | Gold 담당, 태깅 |
 | 3 | 파드(노드 역할)가 `rebom_gold` prod 새 표에 쓸 수 있는지 (test는 태깅이 쓰는 중) | 인프라 |
 | 4 | Bronze 보관 30일 | 수집 |
 
