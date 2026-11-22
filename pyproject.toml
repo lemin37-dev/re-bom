@@ -38,6 +38,7 @@ embed = [
     "psycopg[binary]>=3.2",
     "Pillow>=10",
     "pyarrow>=15",
+    "pyiceberg[glue,pyarrow]==0.12.0",  # Gold 임베딩 묶음 표 읽기·쓰기 (--gold-env, gold_store.py)
 ]
 # 사진 태깅(src/rebom/tagging, OpenRouter 호출·Silver 읽기·Gold 쓰기). 이미지 infra/docker/tag-img.Dockerfile
 tag = [

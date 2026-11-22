@@ -94,6 +94,8 @@ jobs:
               - ".github/workflows/build-images.yml"
             embed:
               - "src/rebom/embedding/**"
+              - "src/rebom/common/**" # Gold 표 정의 (gold_catalog.py)
+              - "src/rebom/storage/silver/aws_catalog.py" # Glue 카탈로그 접속
               - "src/rebom/__init__.py"
               - "pyproject.toml"
               - "infra/docker/embed*"

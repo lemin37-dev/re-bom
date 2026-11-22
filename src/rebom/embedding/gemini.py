@@ -23,6 +23,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -153,6 +154,7 @@ class _Values:
 @dataclass
 class _Result:
     embeddings: list[_Values]
+    meta: dict[str, Any] = field(default_factory=dict)  # 요청 1번의 기록 (Gold 요청 기록 표용, OpenRouter 만)
 
 
 class _OpenRouterModels:
@@ -200,12 +202,16 @@ class _OpenRouterModels:
             code = err.get("code")
             raise OpenRouterError(code if isinstance(code, int) else None, str(err.get("message")))
         data = sorted(out.get("data") or [], key=lambda d: d["index"])
-        self.cost += float((out.get("usage") or {}).get("cost") or 0)
+        usage = out.get("usage") or {}
+        self.cost += float(usage.get("cost") or 0)
         prov = out.get("provider") or "?"
         self.providers[prov] = self.providers.get(prov, 0) + 1
         served = out.get("model") or "?"  # 응답이 알려 주는 실제 모델 이름 (버전 추적용)
         self.served_models[served] = self.served_models.get(served, 0) + 1
-        return _Result([_Values(list(d["embedding"])) for d in data])
+        meta = {"request_id": out.get("id"), "requested_model": body["model"], "response_model": out.get("model"),
+                "provider": out.get("provider"), "prompt_tokens": usage.get("prompt_tokens"),
+                "cost_usd": float(usage["cost"]) if usage.get("cost") is not None else None}
+        return _Result([_Values(list(d["embedding"])) for d in data], meta)
 
 
 class OpenRouterClient:
@@ -291,6 +297,11 @@ class GeminiEmbedder:
         return types.EmbedContentConfig(output_dimensionality=self.dim)
 
     def _call(self, contents: Any) -> list[list[float]]:
+        return self._call_recorded(contents)[0]
+
+    def _call_recorded(self, contents: Any) -> tuple[list[list[float]], dict[str, Any]]:
+        """벡터와 요청 기록(요청 id·제공자·토큰·비용·지연·시도 수·요청 시각). Google 직접 경로는 앞 4개가 없다."""
+        requested_at = datetime.now(timezone.utc)
         for attempt in range(self.max_retries + 1):
             t0 = time.perf_counter()
             try:
@@ -300,8 +311,11 @@ class GeminiEmbedder:
                     self.sleep(min(2 ** attempt, 30))
                     continue
                 raise
-            self.latencies.append(time.perf_counter() - t0)
-            return [list(e.values) for e in result.embeddings]
+            took = time.perf_counter() - t0
+            self.latencies.append(took)
+            meta = {"requested_model": MODEL, **(getattr(result, "meta", None) or {}),
+                    "latency_ms": round(took * 1000), "attempts": attempt + 1, "requested_at": requested_at}
+            return [list(e.values) for e in result.embeddings], meta
         raise RuntimeError("unreachable")
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
@@ -319,9 +333,13 @@ class GeminiEmbedder:
 
     def embed_images(self, images: Sequence[bytes]) -> list[list[float]]:
         """사진 여러 장(최대 IMAGE_BATCH)을 요청 1번에. 사진마다 Content 1개라 벡터도 사진 수만큼 온다."""
+        return self.embed_images_recorded(images)[0]
+
+    def embed_images_recorded(self, images: Sequence[bytes]) -> tuple[list[list[float]], dict[str, Any]]:
+        """embed_images 와 같고, 요청 기록(_call_recorded)을 함께 돌려준다. 여러 스레드가 같이 불러도 섞이지 않는다."""
         if len(images) > IMAGE_BATCH:
             raise ValueError(f"한 번에 {IMAGE_BATCH}장까지")
-        out = self._call([self._image(d) for d in images])
+        out, meta = self._call_recorded([self._image(d) for d in images])
         if len(out) != len(images):
             raise RuntimeError(f"벡터 수가 다름: 사진 {len(images)}, 벡터 {len(out)}")
-        return out
+        return out, meta

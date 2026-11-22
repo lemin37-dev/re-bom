@@ -1,12 +1,13 @@
-# Gold 공통 규칙 초안 × 임베딩 검토 (v4)
+# Gold 공통 규칙 초안 × 임베딩 검토 (v5)
 
-작성: 2026-11-20, 고침 2026-11-21 · 대상: Gold 담당(규칙 초안 작성자), 임베딩, 태깅 · 상태: **팀 결정 반영본 (Gold 담당 공유용)**
+작성: 2026-11-20, 고침 2026-11-23 · 대상: Gold 담당(규칙 초안 작성자), 임베딩, 태깅 · 상태: **팀 결정 반영본 (Gold 담당 공유용)**
 기준: Gold 공통 규칙 초안(11-20, 규칙 1~11), PR #51(공용 키 `subject_type`·`subject_key`, 11-20 develop 합침), 11-20·11-21 S3 실측
 
 > **한 줄 요약**
 > 임베딩 결과도 규칙 1에 따라 **Iceberg `rebom_gold`**로 옮깁니다. 태깅(Jev·vLLM)과 임베딩은 **결과·처리 기록·요청 기록 표를 묶음마다 따로** 둡니다(11-21 결정). 대상 키(`subject_type`·`subject_key`)와 칸 이름은 PR #51 태깅 표와 같습니다.
 > 칸 이름은 **이미 돌고 있는 태깅 표 이름**을 따릅니다. DAG 매일 실행은 **prod 표에만** 씁니다.
-> 11-21: 표를 만들고(test·prod) 옛 parquet을 두 곳에 옮겨 검증했습니다. **DAG는 아직 parquet에 씁니다.** DAG 쓰기 전환은 다음 작업입니다(7절 6번).
+> 11-21: 표를 만들고(test·prod) 옛 parquet을 두 곳에 옮겨 검증했습니다.
+> 11-23: DAG 쓰기 전환 코드를 PR로 올립니다(7절 6번). **PR이 develop에 합쳐지기 전까지 DAG는 parquet에 씁니다.**
 
 고친 내력:
 - v3(11-20): PR #51에 맞춰 칸 이름을 태깅 표와 같게 하고, 실행 표(`gold_embedding_run`)는 만들지 않기로 함.
@@ -200,7 +201,7 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
 
 | 규칙 | 상태 | 남은 일 |
 |---|---|---|
-| 1 Iceberg `rebom_gold` | 🟡 | 표 만들기(사람), 옮기기, 쓰기 전환 |
+| 1 Iceberg `rebom_gold` | 🟡 | 표 만들기·옮기기 끝(11-21). 쓰기 전환은 PR(11-23) |
 | 2 결과 키 | 🟡 | 사진당 1행, 키에 `model`·`prompt_version` |
 | 3 연결은 Gold 밖 | 🟡 | 결과 행에서 공고·칸 칼럼 뺌 |
 | 4 입력 해시 | ✅ | |
@@ -223,7 +224,7 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
 | 3 | 표 만들기 | **사람** | ✅ 11-21 test·prod 임베딩 묶음 5개씩. test 태깅 표 3개는 그대로 |
 | 4 | 기존 parquet → test 표로 옮기고 검증 (Gemini 호출 없음, `cli gold-migrate --gold-env test --write`) | 임베딩 | ✅ 11-21: 44,336행 → 사진 36,589행, 처리 기록 36,592행(빈 사진 3), canary 2행. 다시 읽어 벡터·키 대조 차이 0, Athena 조회 확인 |
 | 5 | parquet → prod 표로 옮기기 | 임베딩 | ✅ 11-21: test와 같은 결과, Athena에서 prod·test 벡터 36,589행 모두 같음. **전환 직전에 한 번 더 실행**해 그 사이 매일 실행분을 넣음(다시 해도 결과 같음) |
-| 6 | 코드 전환: embed는 prod 임베딩 묶음 표(결과·처리 기록·요청 기록)에 쓰고, load·canary는 prod 표를 읽음 | 임베딩 | PR 1개. parquet은 보관 |
+| 6 | 코드 전환: embed는 prod 임베딩 묶음 표(결과·처리 기록·요청 기록)에 쓰고 load는 prod 표를 읽음, canary는 결과를 prod 표에 남김 | 임베딩 | 🟡 11-23 PR(Draft). 합치기 직전에 5번을 한 번 더. 7.2절 |
 | 7 | 종료 30일 뒤 RDS 삭제를 `load`에 추가 | 임베딩 | 승인 뒤 켬 |
 | 8 | 입력을 Silver 현재 사진으로 | 임베딩 | Silver 사진 DAG 정상 운영 뒤 |
 
@@ -251,6 +252,35 @@ Athena에서 보기 (결과 위치 `s3://rebom-data-559987919299/rebom-athena-re
 SELECT gold_run_id, count(*) FROM rebom_gold.gold_image_embedding GROUP BY gold_run_id;   -- 실행별 사진 수
 SELECT status, count(*) FROM rebom_gold.gold_embedding_inference_log GROUP BY status;   -- OK 36,589 / BLANK 3
 SELECT * FROM rebom_gold.gold_embedding_canary ORDER BY checked_at;                     -- 모델 변화 확인
+```
+
+### 7.2 전환 (11-23 PR)
+
+DAG 세 task에 `--gold-env prod`를 붙입니다. 주지 않으면 전과 같이 parquet만 씁니다.
+
+| task | 전환 뒤 |
+|---|---|
+| `check_embedding_drift` (canary) | 기준 사진·벡터는 지금처럼 S3. 결과를 `gold_embedding_canary` 1행, 요청을 `gold_embedding_request_log` 6행으로 남김 |
+| `embed_photos` | 보낼 사진을 **prod 결과 표·처리 기록**과 비교해 고름. 결과 표(사진당 1행), 처리 기록(OK·BLANK·FAILED·READ_ERROR·SHA_MISMATCH), 요청 기록(사진마다 1행, 비용·토큰은 몫, `batch_size`)에 씀. parquet·`summary.json`도 같이 씀(읽지는 않음) |
+| `load_photo_embeddings` | 벡터를 **prod 결과 표**에서 읽어 RDS에 씀. 칸은 지금처럼 Bronze manifest |
+
+- 쓰는 순서: 요청 기록(append) → 결과 표·처리 기록(이 사진들만 교체). 실행이 중간에 끊겨도 이미 받은 벡터는 씁니다.
+- 읽기 실패(READ_ERROR)는 처리 기록의 `attempts`로 연속 실패 수를 이어 셉니다(전에는 `summary.json`). 다음 실행에서 다시 읽고, 성공하면 같은 키가 OK로 바뀝니다.
+- 빈 사진은 `detail`에 판정 점수 `{"gray_std", "blank_std"}`를 남깁니다.
+- `summary.json`에 `"gold": {"env": "prod", "written": {...}}`가 남습니다. 이런 실행이 하나라도 있으면 `gold-migrate`는 멈춥니다(전환 뒤 옮기기를 다시 하면 DAG가 쓴 처리 기록을 덮어쓰기 때문).
+- 임베딩 이미지에 pyiceberg를 넣었습니다(`pyproject.toml` `embed`). 이미지는 develop에 합쳐지면 다시 빌드됩니다.
+- 그대로인 것: `staged`·`smoke`·`canary --reset`은 parquet을 읽습니다. 전환 뒤 parquet에는 같은 사진을 쓰는 새 칸의 복사 행(reuse)이 생기지 않아, `staged`의 coverage가 실제보다 낮게 나옵니다.
+- 되돌리기: PR을 되돌리면(revert) parquet 경로로 돌아갑니다. parquet을 계속 써 두어 빈틈이 없습니다.
+
+합치기 전후 순서:
+1. 합치기 직전: `gold-migrate --gold-env prod --write`로 그 사이 매일 실행분을 prod에 넣고 검증 `ok` 확인(사람 승인 뒤).
+2. develop에 합침 → 임베딩 이미지 빌드가 끝났는지 확인(GitHub Actions `build-images`). 03:00 전에 끝나야 합니다. 옛 이미지로 돌면 `--gold-env` 인자 오류로 canary가 실패하고 embed·load는 돌지 않습니다(데이터는 안전).
+3. 다음 03:00 실행 뒤: Airflow 로그의 `원본: Gold prod 표`·`gold {...}` 줄, Athena 행 수, RDS 적재 수를 확인합니다.
+
+```sql
+SELECT gold_run_id, count(*) FROM rebom_gold.gold_image_embedding WHERE gold_run_id > '20261123' GROUP BY 1;
+SELECT dt, count(DISTINCT request_id) AS requests, sum(cost_usd) AS usd FROM rebom_gold.gold_embedding_request_log GROUP BY dt;
+SELECT status, count(*) FROM rebom_gold.gold_embedding_inference_log GROUP BY status;
 ```
 
 ---

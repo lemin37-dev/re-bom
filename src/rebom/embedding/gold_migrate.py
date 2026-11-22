@@ -11,6 +11,7 @@
 
 다시 실행해도 같은 결과다: 이 모델·전처리 버전의 행을 통째로 바꿔 쓴다(overwrite). 다만 표에 옮기는 실행에 없는
 gold_run_id 가 있으면(전환 뒤 DAG 가 쓴 행) 지우지 않도록 멈춘다.
+전환(embed --gold-env) 뒤에는 쓰지 않는다: 그 표에 직접 쓴 실행이 하나라도 있으면 멈춘다(direct_runs).
 """
 from __future__ import annotations
 
@@ -21,21 +22,10 @@ from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from rebom.embedding import canary, prep, staging
+from rebom.embedding.gold_store import (  # noqa: F401 - 이 모듈 이름으로도 쓴다
+    BLANK, IMAGE_TASK, OK, SUBJECT_PHOTO, log_version, model_id, table_arrow as _table_arrow, vectors_of,
+)
 from rebom.embedding.manifest import Photo, list_keys
-
-IMAGE_TASK = "image_embedding"
-SUBJECT_PHOTO = "photo"
-OK, BLANK = "OK", "BLANK"
-
-
-def model_id(model: str, dim: int) -> str:
-    """Gold `model` 칸 값. 차원이 다르면 다른 벡터 공간이라 같이 둔다 (text_card.MODEL_KEY 와 같은 형식)."""
-    return f"{model}:{dim}"
-
-
-def log_version(model_value: str, prompt_version: str) -> str:
-    """처리 기록의 `version`. 태깅 처리 기록과 같은 키(모델 칸 없음)라 모델을 함께 넣는다."""
-    return f"{model_value}/{prompt_version}"
 
 
 def _ts(text: str | None) -> datetime | None:
@@ -64,6 +54,11 @@ def read_runs(s3, bucket: str, model: str, dim: int) -> list[Run]:
         elif key.endswith(".parquet"):
             run.rows.extend(staging.read_parquet(body))
     return [runs[k] for k in sorted(runs)]
+
+
+def direct_runs(runs: list[Run], env_name: str) -> list[str]:
+    """embed --gold-env 로 이 환경 표에 직접 쓴 실행. 있으면 옮기기를 하지 않는다 (DAG 가 쓴 처리 기록을 덮어씀)."""
+    return [r.run_id for r in runs if (r.summary.get("gold") or {}).get("env") == env_name]
 
 
 @dataclass
@@ -177,30 +172,6 @@ def measure_blanks(s3, bucket: str, runs: list[Run], current: dict[tuple[str, in
 
 # ---- Iceberg 쓰기·검증 -------------------------------------------------------------------------------------------
 
-def _table_arrow(table, rows: list[dict[str, Any]], vector: bool = False):
-    """표의 현재 스키마로 arrow 표를 만든다. 벡터는 파이썬 float 목록을 거치지 않고 float32 버퍼로 바로 만든다
-    (3.6만 × 768 을 파이썬 float 로 만들면 1GB 가까이 쓴다)."""
-    import pyarrow as pa
-
-    schema = table.schema().as_arrow()
-    cols = []
-    for f in schema:
-        if vector and f.name == "embedding":
-            values = array("f")
-            offsets = [0]
-            for r in rows:
-                values.extend(r["embedding"])
-                offsets.append(len(values))
-            flat = pa.Array.from_buffers(pa.float32(), len(values), [None, pa.py_buffer(values.tobytes())])
-            if pa.types.is_large_list(f.type):  # pyiceberg as_arrow 는 large_list 를 준다
-                cols.append(pa.LargeListArray.from_arrays(pa.array(offsets, pa.int64()), flat, type=f.type))
-            else:
-                cols.append(pa.ListArray.from_arrays(pa.array(offsets, pa.int32()), flat, type=f.type))
-        else:
-            cols.append(pa.array([r.get(f.name) for r in rows], type=f.type))
-    return pa.Table.from_arrays(cols, schema=schema)
-
-
 def _foreign_runs(table, row_filter, allowed: set[str]) -> set[str]:
     have = {r["gold_run_id"] for r in table.scan(row_filter=row_filter, selected_fields=("gold_run_id",))
             .to_arrow().to_pylist()}
@@ -248,15 +219,11 @@ def verify(catalog, env, plan: Plan) -> dict[str, Any]:
                  selected_fields=("subject_key", "embedding", "gold_run_id")).to_arrow()
     keys = got.column("subject_key").to_pylist()
     runs = got.column("gold_run_id").to_pylist()
-    emb = got.column("embedding").combine_chunks()
-    flat = emb.flatten()
-    values = array("f")
-    values.frombytes(flat.buffers()[1].to_pybytes()[flat.offset * 4:(flat.offset + len(flat)) * 4])
-    offsets = emb.offsets.to_pylist()
+    vecs = vectors_of(got)
     vec_diff = run_diff = dim_bad = 0
     for i, sha in enumerate(keys):
         want = plan.image.get(sha)
-        v = values[offsets[i]:offsets[i + 1]]
+        v = vecs[i]
         if want is None:
             continue
         if len(v) != len(want["embedding"]):

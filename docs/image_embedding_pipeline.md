@@ -1,5 +1,7 @@
 # 사진 임베딩 파이프라인: Bronze 사진 → S3 parquet → RDS pgvector
 
+> 11-23: 결과 원본을 Gold Iceberg prod 임베딩 묶음 표로 옮기는 PR이 있습니다(`--gold-env prod`, `docs/data_contract.md` 13.4, `docs/gold_rules_embedding_review_20261120.md` 7.2절). 합쳐진 뒤에는 embed·load 가 parquet 대신 그 표를 읽고, parquet 은 되돌릴 때를 위해 같이 써 둡니다. 아래 parquet 설명은 전환 전 방식이자 되돌렸을 때의 방식입니다.
+
 작성: 2026-11-17 · 상태: **시범 운영** (1,461칸 RDS 적재·검증 완료, 전체 백필 진행 중) · 코드: `src/rebom/embedding/`
 
 표기는 `docs/data_contract.md`와 같습니다. 스키마·경로 약속은 그 문서 6절 "사진 임베딩 (pgvector)"이 기준이고, 이 문서는 실행 방법과 근거를 정리합니다.

@@ -103,6 +103,9 @@ class Result:
     check_key: str
     drift_key: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
+    check: dict[str, Any] = field(default_factory=dict)  # checks/ 에 쓴 내용 (Gold canary 표 행의 원본)
+    request: dict[str, Any] = field(default_factory=dict)  # 요청 1번의 기록 (Gold 요청 기록 표용)
+    shas: list[str] = field(default_factory=list)  # 보낸 순서의 기준 사진 sha256
 
     @property
     def min_cosine(self) -> float:
@@ -117,7 +120,11 @@ def run(s3, bucket: str, embedder, model: str, dim: int, threshold: float = THRE
         created = True
     photos = ref["photos"]
     jpegs = [s3.get_object(Bucket=bucket, Key=p["jpeg_key"])["Body"].read() for p in photos]
-    fresh = [prep.l2_normalize(v) for v in embedder.embed_images(jpegs)]
+    if hasattr(embedder, "embed_images_recorded"):
+        raw, request = embedder.embed_images_recorded(jpegs)
+    else:  # 기록을 주지 않는 임베더 (테스트 등)
+        raw, request = embedder.embed_images(jpegs), {}
+    fresh = [prep.l2_normalize(v) for v in raw]
     if len(fresh) != len(photos) or any(len(v) != dim for v in fresh):
         raise RuntimeError(f"벡터 수·차원이 다름: 사진 {len(photos)}, 벡터 {[len(v) for v in fresh]}")
     cosines = {p["sha256"]: round(_cosine(v, p["embedding"]), 6) for p, v in zip(photos, fresh)}
@@ -138,7 +145,7 @@ def run(s3, bucket: str, embedder, model: str, dim: int, threshold: float = THRE
         drift = {**check, "model": model, "dim": dim, "prep_version": prep.PREP_VERSION,
                  "vectors": {p["sha256"]: v for p, v in zip(photos, fresh)}}
         s3.put_object(Bucket=bucket, Key=drift_key, Body=json.dumps(drift, ensure_ascii=False).encode("utf-8"))
-    return Result(ok, cosines, created, check_key, drift_key, usage)
+    return Result(ok, cosines, created, check_key, drift_key, usage, check, request, [p["sha256"] for p in photos])
 
 
 def drift_message(res: Result, bucket: str, model: str, dim: int, threshold: float = THRESHOLD) -> str:
