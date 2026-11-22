@@ -226,11 +226,14 @@ def execute(args):
                 args.apply
                 or state_s3 is None
                 or "Silver preparation failed: STATUS_HISTORY;" not in str(exc)
-                or "previous_not_found" not in str(exc)
+                or not any(
+                    f"'{reason}'" in str(exc)
+                    for reason in ("previous_not_found", "previous_not_protecting")
+                )
             ):
                 raise
 
-            import gzip
+            from rebom.storage.silver.load_silver_events import load_silver_events
             from rebom.storage.silver.dry_run_baseline import (
                 build_dry_run_baseline,
             )
@@ -244,17 +247,12 @@ def execute(args):
                 previous_bronze = fetch_previous_day_bronze(
                     state_s3, args.s3_state_bucket, run_id, previous_dir
                 )
-                event_file = args.event_manifest.parent / "events.jsonl.gz"
-
-                with gzip.open(event_file, "rt", encoding="utf-8") as stream:
-                    event_rows = [
-                        json.loads(line) for line in stream if line.strip()
-                    ]
+                events = load_silver_events(args.event_manifest, run_id)
 
                 baseline = build_dry_run_baseline(
                     notice.scan().to_arrow().to_pylist(),
                     previous_bronze,
-                    event_rows,
+                    events["rows_by_kind"]["events"],
                 )
 
                 prepared, notice_arrow, history_arrow = prepare_new(
