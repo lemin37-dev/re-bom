@@ -19,7 +19,7 @@ type SearchState = {
   setPhoto: (value: string | null) => void
   filters: Filters
   setFilters: (value: Filters) => void
-  /** 고른 사진 태그 코드. 누르면 바로 다시 검색합니다. */
+  /** 고른 사진 태그 코드. 누르면 바로 다시 검색합니다 (문장은 입력 중인 것이 아니라 마지막으로 제출한 것만 씀). */
   tags: string[]
   toggleTag: (code: string) => void
   clearTags: () => void
@@ -132,11 +132,19 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     setSearched(true)
   }
 
+  // 태그는 누르는 즉시 검색하므로, 아직 제출하지 않은 입력 문장이 섞이지 않게 마지막 제출 문장을 그대로 씁니다.
+  function searchTags(nextTags: string[]) {
+    setCenterFilter(null)
+    setTags(nextTags)
+    setSubmitted(prev => ({ ...prev, filters, tags: nextTags, seq: prev.seq + 1 }))
+    setSearched(true)
+  }
+
   const value: SearchState = {
     query, setQuery, photo, setPhoto, filters, setFilters, sort, setSort,
     tags,
-    toggleTag: code => search(undefined, undefined, tags.includes(code) ? tags.filter(t => t !== code) : [...tags, code]),
-    clearTags: () => search(undefined, undefined, []),
+    toggleTag: code => searchTags(tags.includes(code) ? tags.filter(t => t !== code) : [...tags, code]),
+    clearTags: () => searchTags([]),
     availableFirst, toggleAvailableFirst: () => setAvailableFirst(v => !v),
     map, toggleMap: () => setMap(v => !v),
     searched, setSearched, searching, loadingMore, error,
@@ -144,7 +152,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     centerFilter, visible, total, hasMore: items.length < total, loadMore,
     search,
     resetAndSearch: () => search('', allFilters, []),
-    focusCenter: center => { setCenterFilter(center); setFilters(allFilters); setTags([]); setQuery(''); setSearched(true); setMap(false) },
+    focusCenter: center => { setCenterFilter(center); setFilters(allFilters); setTags([]); setQuery(''); setSubmitted(prev => ({ ...prev, query: '' })); setSearched(true); setMap(false) },
     clearCenter: () => { setCenterFilter(null); setFilters(initialFilters); setTags([]); setSearched(false) },
     setCenterFilter,
     filterOpen,
