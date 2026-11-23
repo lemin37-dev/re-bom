@@ -1,6 +1,9 @@
 """OpenRouter Chat Completions 호출 (역할 공용: 사진 태깅, 나중에 임베딩·Jev).
 
-키는 역할마다 다른 환경변수 이름으로 받는다(예: 사진 태깅 OPENROUTER_KEY_TAG_IMG). 환경변수에 없으면
+키는 역할마다 다른 환경변수 이름으로 받는다(예: 사진 태깅 OPENROUTER_KEY_TAG_IMG).
+앱 이름(app_name)과 앱 주소(app_url)도 역할마다 따로 준다. OpenRouter 사용 기록의 앱 구분으로 역할별 호출·비용만
+골라 보기 위해서다. OpenRouter 는 앱을 HTTP-Referer 로 구분하므로 주소도 역할마다 달라야 한다.
+공개 순위에는 나오지 않게 hidden 으로 보낸다(임베딩 rebom-embed 와 같은 방식). 환경변수에 없으면
 레포 루트 .env 를 읽는다(읽기만). 키 값은 로그·예외 메시지에 넣지 않는다.
 
 공급자는 고정한다(provider.order + allow_fallbacks false + require_parameters true). 다른 공급자로
@@ -29,7 +32,7 @@ from typing import Any
 import requests
 
 API_BASE = "https://openrouter.ai/api/v1"
-APP_TITLE = "rebom"  # X-Title. OpenRouter 순위 표시용이며 키 구분과는 상관없다
+REPO_URL = "https://github.com/lemin37-dev/re-bom"
 RETRY_STATUS = {408, 429, 500, 502, 503, 504}
 ACCOUNT_STATUS = {401, 402}
 MAX_BACKOFF_SEC = 60
@@ -168,7 +171,8 @@ class OpenRouterClient:
         max_retries: int = 5,
         sleep: Callable[[float], None] = time.sleep,
         api_base: str = API_BASE,
-        title: str = APP_TITLE,
+        app_name: str,
+        app_url: str = REPO_URL,
     ):
         self._key = key or load_key(key_env)
         self.key_env = key_env
@@ -177,10 +181,17 @@ class OpenRouterClient:
         self.max_retries = max_retries
         self.sleep = sleep
         self.api_base = api_base.rstrip("/")
-        self.title = title
+        self.app_name = app_name
+        self.app_url = app_url
 
     def _headers(self) -> dict:
-        return {"Authorization": f"Bearer {self._key}", "X-Title": self.title}
+        return {
+            "Authorization": f"Bearer {self._key}",
+            "HTTP-Referer": self.app_url,
+            "X-OpenRouter-Title": self.app_name,
+            "X-Title": self.app_name,
+            "X-OpenRouter-App-Visibility": "hidden",
+        }
 
     def chat(self, req: ChatRequest) -> ChatResult:
         """한 번 호출. 429·5xx·네트워크 오류는 max_retries 번 다시 시도한다.
