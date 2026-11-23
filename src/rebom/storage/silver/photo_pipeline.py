@@ -54,6 +54,7 @@ def process_photo_manifest(
     expected_history_location=None,
     *,
     historical_manifest_keys=None,
+    catalog_factory=None,
 ):
     if apply and historical_manifest_keys is not None:
         raise ValueError("PHOTO_BASELINE_DRY_RUN_ONLY")
@@ -92,6 +93,9 @@ def process_photo_manifest(
     snapshot = load_photo_snapshot(s3, bucket, manifest_key, source)
     if snapshot is not None and history_table_name is None:
         raise ValueError("PHOTO_SNAPSHOT_REQUIRES_HISTORY_TABLE")
+
+    if catalog_factory is not None:
+        catalog = catalog_factory()
 
     journal_key = f"{journal_prefix.rstrip('/')}/{run_id}.json"
     existing = load_photo_journal_s3(s3, bucket, journal_key)
@@ -497,6 +501,8 @@ def _process_photo_manifest_versioned(
         "history_insert_count": history_changes["insert_count"],
         "history_update_count": history_changes["update_count"],
         "changed_rows": current_plan["changed_count"],
+        "current_insert_count": current_plan["insert_count"],
+        "current_update_count": current_plan["update_count"],
         "held_slots": held_slots,
     }
 
