@@ -21,8 +21,8 @@ export type ApiAnimal = {
   weightText: string | null
   ageYears: number | null
   ageLabel: string | null
-  /** Silver birth_year */
-  birthYear: number | null
+  /** Silver birth_year. 검색 API에 아직 없을 수 있음 → 없으면 ageText 의 연도를 씀 */
+  birthYear?: number | null
   /** Silver weight_kg: 범위는 큰 값, g→kg, 이상치 null */
   weightKg: number | null
   /** Silver size: 개만. 10kg 미만 small · 25kg 미만 medium · 이상 large */
@@ -119,6 +119,12 @@ const NEUTER = { Y: '중성화 완료', N: '중성화 안 함', U: '중성화 �
 /** Silver size 는 영어 코드로 저장됨 → 화면은 한국어 (Silver 쪽 표기 합의 전까지 여기서 바꿈) */
 const SIZE: Record<string, SizeLabel> = { small: '소형', medium: '중형', large: '대형' }
 
+/** 원문 '2022(년생)' → 2022. 검색 API가 birthYear 를 주기 전까지 쓰는 대체값 */
+function birthYearOf(ageText: string | null) {
+  const m = /^(\d{4})/.exec(ageText?.trim() ?? '')
+  return m ? Number(m[1]) : null
+}
+
 /** 색상 문구로 사진 없는 공고의 일러스트 색을 고릅니다. */
 function artColors(color: string): Pick<Animal, 'coat' | 'ear' | 'bg'> {
   const c = color.replace(/\s/g, '')
@@ -141,7 +147,7 @@ export function toAnimal(a: ApiAnimal): Animal {
     cat: species === 'cat',
     kind: a.breed || a.species || '품종 미상',
     gender: a.sex ? GENDER[a.sex] : '성별 미상',
-    birthYear: a.birthYear ?? null,
+    birthYear: a.birthYear ?? birthYearOf(a.ageText),
     kg: a.weightKg,
     weightLabel: a.weightKg !== null ? `${a.weightKg}kg` : '체중 미상',
     size: SIZE[a.size ?? ''] ?? null,
