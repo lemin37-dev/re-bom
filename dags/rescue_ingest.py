@@ -7,7 +7,7 @@
   generate_ingest_events → python -m rebom.storage.silver.generate_ingest_events             사라짐·복귀 이벤트
   rescue_photos          → python -m rebom.ingestion.rescue_photos --limit 2000               새 사진·재시도 칸
   check_embedding_drift  → python -m rebom.embedding.cli canary --gold-env prod              모델 변화 감시
-  embed_photos           → python -m rebom.embedding.cli embed --limit 5000 --gold-env prod   새·바뀐 사진 → Gold prod 표
+  embed_photos           → python -m rebom.embedding.cli embed --limit 5000 --image-batch 1 --gold-env prod  새·바뀐 사진 → Gold prod 표
   load_photo_embeddings  → python -m rebom.embedding.cli load --max-write 5000 --gold-env prod 변경분만 RDS pgvector
 
 - run_id 는 XCom 으로 넘긴다. 수집이 성공하면 /airflow/xcom/return.json 에 {"run_id", "dt", "manifest"} 를 쓰고
@@ -31,6 +31,8 @@
   - 결과 원본은 Gold Iceberg prod 임베딩 묶음 표다(--gold-env prod, docs/data_contract.md 13.4). DAG 는 test 표에 쓰지 않는다.
     embed 는 결과·처리 기록·요청 기록 표에 쓰고 S3 parquet 도 같이 써 둔다(되돌릴 때용, 읽지 않음). load 는 prod 표를 읽는다.
     canary 는 결과를 canary 표와 요청 기록 표에 남긴다. 파드는 노드 역할의 Glue·S3 권한으로 표에 쓴다.
+    요청 기록은 요청 1번 = 1행(태깅과 같은 뜻)이라, embed·canary 는 사진을 1장씩 보낸다(--image-batch 1, 11-23 결정).
+    비용은 묶어 보낼 때와 같고, 하루 수백 장이라 시간 차이도 몇 분 안이다.
   - embed 는 run_id 를 받지 않는다. 모든 사진 manifest 의 현재 사진과 Gold 결과 표를 sha256 으로 비교해
     새·바뀐 사진만 Gemini 로 보낸다(docs/image_embedding_pipeline.md). 그래서 사진 task 가 일부 실패해도 받은 만큼만 하고,
     빠진 칸은 다음 날 따라잡는다. --limit 5000 은 상한(약 $0.6). 평소 하루 수백 장, 1분 안팎.
@@ -183,7 +185,7 @@ with DAG(
             in_cluster=True,
         )
 
-    # 모델 변화 감시: 고정 사진 6장을 다시 임베딩해 기준과 코사인 0.99 이상이어야 embed·load 로 간다(요청 1번, 약 $0.0007).
+    # 모델 변화 감시: 고정 사진 6장을 다시 임베딩해 기준과 코사인 0.99 이상이어야 embed·load 로 간다(1장씩 요청 6번, 약 $0.0007).
     # 미만이면 종료 코드 3 으로 실패하고, 로그에 대응 방법을 남긴다. 확인 전에는 '성공'으로 표시하지 않는다.
     check_embedding_drift = embed_task(
         task_id="check_embedding_drift",
@@ -193,7 +195,7 @@ with DAG(
     embed_photos = embed_task(
         task_id="embed_photos",
         name="embed-photos",
-        arguments=["embed", "--limit", "5000", "--gold-env", "prod"],  # 상한. 시험할 때는 "--dry-run" 추가
+        arguments=["embed", "--limit", "5000", "--image-batch", "1", "--gold-env", "prod"],  # 상한. 시험할 때는 "--dry-run" 추가
     )
     load_photo_embeddings = embed_task(
         task_id="load_photo_embeddings",

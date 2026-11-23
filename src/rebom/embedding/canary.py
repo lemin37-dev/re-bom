@@ -1,7 +1,8 @@
 """매일 임베딩 전 모델 변화 감시 (고정 사진 6장).
 
 모델 이름(gemini-embedding-2)이 같아도 제공자 쪽에서 내부가 바뀌면 새 벡터와 기존 벡터가 섞여 검색이 망가진다.
-매일 embed 전에 고정 사진 6장을 다시 임베딩해 기준 벡터와 코사인을 비교한다.
+매일 embed 전에 고정 사진 6장을 다시 임베딩해 기준 벡터와 코사인을 비교한다. 매일 embed 와 같게 1장씩 보낸다
+(요청 6번, 비용은 6장 묶음과 같음, 요청 기록 1행 = 사진 1장).
 
 - 모두 THRESHOLD(0.99) 이상: 통과. 결과를 checks/ 에 남기고 DAG 가 그대로 진행한다.
 - 하나라도 미만: 멈춘다(종료 코드 3 → Airflow task 실패 → embed·load 가 돌지 않음).
@@ -22,7 +23,7 @@ from typing import Any
 from rebom.embedding import prep, staging
 from rebom.embedding.manifest import list_keys
 
-CANARY_SIZE = 6  # 요청 1번(IMAGE_BATCH)
+CANARY_SIZE = 6  # 고정 사진 수 (1장씩 요청 6번)
 THRESHOLD = 0.99
 ROOT = "gold/image_embedding_canary/"
 EXIT_DRIFT = 3
@@ -104,7 +105,7 @@ class Result:
     drift_key: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     check: dict[str, Any] = field(default_factory=dict)  # checks/ 에 쓴 내용 (Gold canary 표 행의 원본)
-    request: dict[str, Any] = field(default_factory=dict)  # 요청 1번의 기록 (Gold 요청 기록 표용)
+    requests: list[dict[str, Any]] = field(default_factory=list)  # 사진마다 요청 기록 (Gold 요청 기록 표용)
     shas: list[str] = field(default_factory=list)  # 보낸 순서의 기준 사진 sha256
 
     @property
@@ -120,10 +121,14 @@ def run(s3, bucket: str, embedder, model: str, dim: int, threshold: float = THRE
         created = True
     photos = ref["photos"]
     jpegs = [s3.get_object(Bucket=bucket, Key=p["jpeg_key"])["Body"].read() for p in photos]
-    if hasattr(embedder, "embed_images_recorded"):
-        raw, request = embedder.embed_images_recorded(jpegs)
-    else:  # 기록을 주지 않는 임베더 (테스트 등)
-        raw, request = embedder.embed_images(jpegs), {}
+    raw, requests = [], []
+    for jpeg in jpegs:  # 1장씩 (매일 embed 와 같은 요청 모양)
+        if hasattr(embedder, "embed_images_recorded"):
+            vecs, meta = embedder.embed_images_recorded([jpeg])
+        else:  # 기록을 주지 않는 임베더 (테스트 등)
+            vecs, meta = embedder.embed_images([jpeg]), {}
+        raw += vecs
+        requests.append(meta)
     fresh = [prep.l2_normalize(v) for v in raw]
     if len(fresh) != len(photos) or any(len(v) != dim for v in fresh):
         raise RuntimeError(f"벡터 수·차원이 다름: 사진 {len(photos)}, 벡터 {[len(v) for v in fresh]}")
@@ -145,7 +150,7 @@ def run(s3, bucket: str, embedder, model: str, dim: int, threshold: float = THRE
         drift = {**check, "model": model, "dim": dim, "prep_version": prep.PREP_VERSION,
                  "vectors": {p["sha256"]: v for p, v in zip(photos, fresh)}}
         s3.put_object(Bucket=bucket, Key=drift_key, Body=json.dumps(drift, ensure_ascii=False).encode("utf-8"))
-    return Result(ok, cosines, created, check_key, drift_key, usage, check, request, [p["sha256"] for p in photos])
+    return Result(ok, cosines, created, check_key, drift_key, usage, check, requests, [p["sha256"] for p in photos])
 
 
 def drift_message(res: Result, bucket: str, model: str, dim: int, threshold: float = THRESHOLD) -> str:

@@ -7,12 +7,13 @@ PR 을 되돌리면 parquet 경로가 빈틈 없이 이어진다. staged·smoke�
     python -m rebom.embedding.cli discover [--ping] [--db] [--sha-sample N]
         읽기만 한다. Bronze 사진 수·확장자·용량, manifest 위치·칼럼, manifest↔S3 대조, Silver 테이블,
         Gemini 키(길이만), --ping 은 모델 정보 조회(과금 없음), --db 는 pgvector·테이블 상태.
-    python -m rebom.embedding.cli embed --limit N [--dry-run] [--workers 4] [--gold-env prod]
+    python -m rebom.embedding.cli embed --limit N [--dry-run] [--workers 4] [--image-batch 1] [--gold-env prod]
         manifest 의 칸별 최신 사진 중 S3 결과에 없거나 sha256 이 바뀐 것만, 같은 sha256 은 1번만 보낸다.
         sha256 이 manifest 와 다르거나 빈 사진이면 보내지 않는다. 전처리는 prep.py, 결과는 S3 parquet(staging.py).
         Bronze 파일을 읽지 못하면 그 사진만 건너뛰고 summary 의 read_error_keys 에 남겨 다음 실행에서 다시 읽는다.
-        RDS 에는 쓰지 않는다. --gold-env 면 Gold 결과·처리 기록·요청 기록 표에도 쓴다(요청 1번 = 사진마다 1행,
-        비용·토큰은 사진 수로 나눈 몫, batch_size = 사진 수). 빈 사진은 처리 기록 detail 에 판정 점수를 남긴다.
+        RDS 에는 쓰지 않는다. --gold-env 면 Gold 결과·처리 기록·요청 기록 표에도 쓴다(요청 1번 = 1행).
+        요청 1번에 사진 --image-batch 장(기본 1, 매일 실행). 전체 재임베딩처럼 시간이 중요할 때만 6 까지 묶는다.
+        빈 사진은 처리 기록 detail 에 판정 점수, OK 행 detail 에는 그 벡터를 만든 request_id 를 남긴다.
     python -m rebom.embedding.cli staged [--run-id ID]
         S3 결과 점검 (과금 없음).
     python -m rebom.embedding.cli load [--run-id ID] [--dry-run] [--full] [--gold-env prod]
@@ -248,7 +249,7 @@ def embed(args: argparse.Namespace) -> int:
         "retry_read_errors": len(retry_keys),  # 지난 실행에서 Bronze 파일을 못 읽어 다시 시도하는 사진
         "this_run_sha256": len(order),
         "this_run_photos": sum(len(plan.send[s]) for s in order) + len(plan.reuse),
-        "this_run_requests_max": -(-len(order) // gemini.IMAGE_BATCH),  # 빈 사진은 빠져 실제로는 더 적다
+        "this_run_requests_max": -(-len(order) // args.image_batch),  # 빈 사진은 빠져 실제로는 더 적다
     })
     if args.dry_run:
         for sha in order[:5]:
@@ -272,7 +273,8 @@ def embed(args: argparse.Namespace) -> int:
     version = gold_store.log_version(mid, prep.PREP_VERSION)
     gold_images: list[dict] = []  # Gold 결과 표 (사진당 1행)
     gold_logs: dict[str, dict] = {}  # sha256 → 처리 기록 행
-    gold_requests: list[dict] = []  # 요청 기록 (요청 1번 × 사진)
+    gold_requests: list[dict] = []  # 요청 기록 (요청 1번 = 1행)
+    links: dict[str, dict] = {}  # sha256 → 그 벡터를 만든 요청 (처리 기록 detail)
 
     def row(p, vec, source: str) -> dict:
         return staging.photo_row(p, vec, source, run_id, prep.PREP_VERSION, at)
@@ -347,11 +349,13 @@ def embed(args: argparse.Namespace) -> int:
     next_report = 300
     try:
         with ThreadPoolExecutor(max_workers=args.workers) as ex:
-            futures = [ex.submit(work, b) for b in _chunks(order, gemini.IMAGE_BATCH)]
+            futures = [ex.submit(work, b) for b in _chunks(order, args.image_batch)]
             for f in as_completed(futures):
                 results, request = f.result()
                 if request is not None:
-                    gold_requests.extend(gold_store.request_rows(request[0], request[1], prep.PREP_VERSION, run_id))
+                    shas, meta = request
+                    gold_requests.append(gold_store.request_row(shas, meta, prep.PREP_VERSION, run_id))
+                    links.update({s: gold_store.request_link(meta, len(shas)) for s in shas})
                 for sha, vec, reason in results:
                     done += 1
                     if vec is None:
@@ -370,7 +374,7 @@ def embed(args: argparse.Namespace) -> int:
                     stats["api_sha256"] += 1
                     now = datetime.now(timezone.utc)
                     gold_images.append(gold_store.image_row(sha, vec, mid, prep.PREP_VERSION, run_id, now))
-                    gold_logs[sha] = gold_store.log_row(sha, version, gold_store.OK, run_id, now)
+                    gold_logs[sha] = gold_store.log_row(sha, version, gold_store.OK, run_id, now, detail=links.get(sha))
                     for i, p in enumerate(plan.send[sha]):  # 같은 파일을 쓰는 칸은 벡터를 나눠 쓴다
                         rows.append(row(p, vec, "api" if i == 0 else "dup"))
                         stats["api_rows" if i == 0 else "dup_rows"] += 1
@@ -399,7 +403,7 @@ def embed(args: argparse.Namespace) -> int:
             "run_id": run_id, "model": gemini.MODEL, "dim": args.dim, "prep_version": prep.PREP_VERSION,
             "status": status, "started_at": at, "seconds": round(elapsed, 1), "sha256_done": done,
             "sec_per_sha256": round(elapsed / max(done, 1), 4), "workers": args.workers,
-            "image_batch": gemini.IMAGE_BATCH, "stats": dict(stats), "plan": plan.stats, "parts": parts,
+            "image_batch": args.image_batch, "stats": dict(stats), "plan": plan.stats, "parts": parts,
             "skipped_sha256": skipped, "sha_mismatch_keys": sha_mismatch, "read_error_keys": read_errors,
             "api_usage": embedder.usage(),  # 경로(openrouter/google)·호출 수·OpenRouter 비용(USD)
             "gold": gold_info,  # --gold-env 일 때 쓴 환경과 행 수 (gold-migrate 가 멈추는 표시)
@@ -604,8 +608,8 @@ def canary_cmd(args: argparse.Namespace) -> int:
     })
     if gold is not None:  # 통과·실패 모두 남긴다
         row = gold_migrate.canary_row(res.check_key, res.check, gold_store.model_id(gemini.MODEL, args.dim))
-        requests = (gold_store.request_rows(res.shas, res.request, prep.PREP_VERSION, row["gold_run_id"])
-                    if res.request.get("requested_at") else [])
+        requests = [gold_store.request_row([sha], meta, prep.PREP_VERSION, row["gold_run_id"])
+                    for sha, meta in zip(res.shas, res.requests) if meta.get("requested_at")]
         _print(f"canary → Gold {gold[1].name}", gold_store.write_canary(gold[0], gold[1], row, requests))
     if not res.ok:
         print(canary.drift_message(res, bucket, gemini.MODEL, args.dim, threshold))
@@ -682,7 +686,9 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("embed", help="사진 임베딩 → S3 parquet (+ --gold-env 면 Gold 표). RDS 는 load 로")
     e.add_argument("--limit", type=int, required=True, help="이번 실행에서 Gemini 로 보낼 최대 sha256(고유 사진) 수")
     e.add_argument("--dry-run", action="store_true", help="계획만 출력. 사진 다운로드·API·S3 쓰기 없음")
-    e.add_argument("--workers", type=int, default=4, help="동시에 보내는 요청 수 (요청 1번 = 사진 최대 6장)")
+    e.add_argument("--workers", type=int, default=4, help="동시에 보내는 요청 수")
+    e.add_argument("--image-batch", type=int, default=1, choices=range(1, 7), metavar="1-6",
+                   help="요청 1번에 보내는 사진 수. 기본 1(요청 기록 1행 = 사진 1장). 전체 재임베딩 때만 6"),
     e.add_argument("--part-size", type=int, default=5000, help="parquet 파일 1개당 행 수")
     e.add_argument("--dim", type=int, default=768, help="벡터 차원 (테이블 vector(768) 과 같아야 함)")
     _add_source(e)
@@ -706,7 +712,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_gold(ld)
     ld.set_defaults(func=load)
 
-    c = sub.add_parser("canary", help="매일 embed 전 모델 변화 감시: 고정 사진 6장 재임베딩 → 기준과 코사인 (요청 1번)")
+    c = sub.add_parser("canary", help="매일 embed 전 모델 변화 감시: 고정 사진 6장 재임베딩(1장씩) → 기준과 코사인")
     c.add_argument("--threshold", type=float, default=None, help="통과 기준 코사인 (기본 0.99)")
     c.add_argument("--reset", action="store_true",
                    help="기준을 지금 S3 벡터로 다시 만든다(이전 기준은 보관). 모델 교체·전체 재임베딩 뒤에만")

@@ -42,7 +42,7 @@
 | 7 | **모델 버전:** `model = "gemini-embedding-2:768"`. 이름의 숫자가 버전이고 `gemini-embedding-3`은 다른 모델. 같은 이름 안의 변화는 canary로 감시 |
 | 8 | **글 카드 본문 남김:** 가린 카드 본문(`input_text`)을 글 임베딩 표에 남김. 글 벡터 성능 평가에 씀 |
 | 9 | **빈 사진 점수 남김:** 임베딩 처리 기록에 `detail` 칸 |
-| 10 | **여러 사진을 한 요청으로 보낼 때 비용:** 임베딩 요청 기록에 사진마다 1행, 같은 `request_id`, `batch_size` 칸, 비용·토큰은 나눠 넣음. `request_id`로 더하면 실제 값 |
+| 10 | **요청 기록은 요청 1번 = 1행** (11-23 고침, 태깅과 같은 뜻): 매일 실행은 사진 1장씩 보내 1행 = 사진 1장. 묶어 보내는 전체 재임베딩도 요청 1행(`batch_size` = 장수), 사진은 처리 기록 `detail.request_id`로 이음 |
 | 11 | **test·prod 둘 다 만듦.** DAG 매일 실행은 prod에만 씀. test는 확인용 |
 | 12 | **종료 공고:** 종료 뒤 **30일**이 지나면 RDS 벡터 삭제. Bronze도 30일로 맞추자고 수집 담당에게 제안 |
 | 13 | **활성 버전:** 코드 상수 그대로. 바꾸면 PR로 변경 내역을 공유·기록 |
@@ -105,7 +105,6 @@ gold/iceberg/                  (test: gold/_test/iceberg/, 표 이름 뒤 _test)
 **왜 따로 두나 (11-21 결정)**
 - 결과 표처럼 기록 표도 묶음마다 따로 두면, 한쪽이 칸을 더하거나 표를 다시 만들어도 다른 묶음에 영향이 없습니다.
 - 임베딩만 쓰는 칸(`detail`, `batch_size`)을 태깅 표에 더하지 않아도 됩니다.
-- 임베딩은 요청 1번에 사진 여러 장을 보내 한 요청이 여러 행이 됩니다. 태깅 요청 기록의 "요청 1번 = 1행"이라는 뜻을 바꾸지 않습니다.
 - 표마다 관리할 사람이 분명해집니다(태깅 담당 / 임베딩 담당).
 - 대신 전체 비용처럼 둘을 합쳐 볼 때는 Athena에서 `UNION ALL`이 필요합니다. 그래서 **칸 이름·타입·키는 태깅 기록 표와 똑같이 두고 뒤에 임베딩 칸만 더했습니다**(테스트로 고정).
 
@@ -125,11 +124,12 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
   - 이 값을 `{"gray_std": 1.2, "blank_std": 4.0}`처럼 남기면, 나중에 기준을 바꿔도 사진을 다시 받거나 계산하지 않고 기록만 보고 다시 판정할 수 있습니다.
 
 **`gold_embedding_request_log`** (append, `dt` 파티션. 태깅 `gold_model_request_log`와 같은 칸)
-- 사진 임베딩은 요청 1번에 사진을 최대 6장 보냅니다. 요청 1번을 1행으로만 남기면 그 비용이 어느 사진 몫인지 알 수 없습니다.
-- 그래서 **사진마다 1행**을 남기고 같은 `request_id`를 씁니다.
-  - **칸 `batch_size`** = 그 요청에 같이 보낸 사진 수.
-  - `cost_usd`·토큰은 사진 수로 나눈 몫을 넣고, 나머지는 첫 행에 붙입니다. `request_id`로 더하면 OpenRouter가 돌려준 실제 값과 같습니다.
-- canary 요청도 같은 표에 `gold_run_id = canary-<시각>`으로 남겨, 감시 비용도 따로 볼 수 있게 합니다.
+- **요청 1번 = 1행** (11-23 고침). 태깅 요청 기록과 뜻이 같아 두 표를 같은 방식으로 읽습니다. OpenRouter 생성 기록(generation id = `request_id`)과도 1:1로 맞습니다.
+- 사진을 6장씩 묶은 건 4만 장을 처음 넣을 때 시간을 줄이려던 것이었습니다. 장당 과금이라 비용은 같습니다(11-21 실측 6장 묶음 장당 $0.000116 = 1장 단독 실측값).
+- 그래서 **매일 실행(11-24 03:00부터)은 사진을 1장씩** 보냅니다(`--image-batch 1`). 요청 1행 = 사진 1장이고, `batch_size` = 1, 비용·토큰은 요청 값 그대로입니다. 하루 수백 장이라 늘어나는 시간은 몇 분 안으로 봅니다(첫 실행에서 실측).
+- 전체 재임베딩(모델 교체 등)처럼 시간이 중요할 때만 `--image-batch 6`으로 묶습니다. 그때도 요청 1행이고 `subject_key` = 첫 사진, `batch_size` = 장수, 비용은 요청 전체 값입니다. 어느 사진이 그 요청에서 왔는지는 처리 기록 OK 행의 `detail` `{"request_id", "batch_size"}`로 이어 봅니다(사진별 비용 = `cost_usd / batch_size`).
+- 사진별 요청 행이 꼭 필요한 조회는 없었습니다. 비용 합계·OpenRouter 대조는 요청 단위가 더 편하고, 벡터 이상 추적(어느 요청·제공자에서 왔나)은 처리 기록의 `request_id`로 합니다.
+- canary도 1장씩 6번 보내(비용 같음, 약 $0.0007) 같은 규칙으로 6행을 남기고, `gold_run_id = canary-<시각>`으로 감시 비용을 따로 봅니다.
 - 실행 하나의 건수·비용은 두 기록 표를 `gold_run_id`로 묶어 봅니다. 그래서 실행 표는 따로 만들지 않습니다.
 
 ### 2.4 칸 이름: 규칙 초안과 태깅 표 (Gold 담당 확인)
@@ -260,8 +260,8 @@ DAG 세 task에 `--gold-env prod`를 붙입니다. 주지 않으면 전과 같�
 
 | task | 전환 뒤 |
 |---|---|
-| `check_embedding_drift` (canary) | 기준 사진·벡터는 지금처럼 S3. 결과를 `gold_embedding_canary` 1행, 요청을 `gold_embedding_request_log` 6행으로 남김 |
-| `embed_photos` | 보낼 사진을 **prod 결과 표·처리 기록**과 비교해 고름. 결과 표(사진당 1행), 처리 기록(OK·BLANK·FAILED·READ_ERROR·SHA_MISMATCH), 요청 기록(사진마다 1행, 비용·토큰은 몫, `batch_size`)에 씀. parquet·`summary.json`도 같이 씀(읽지는 않음) |
+| `check_embedding_drift` (canary) | 기준 사진·벡터는 지금처럼 S3. 1장씩 6번 보내, 결과를 `gold_embedding_canary` 1행, 요청을 `gold_embedding_request_log` 6행으로 남김 |
+| `embed_photos` | 보낼 사진을 **prod 결과 표·처리 기록**과 비교해 고름. 결과 표(사진당 1행), 처리 기록(OK·BLANK·FAILED·READ_ERROR·SHA_MISMATCH), 요청 기록(요청 1번 = 1행, 1장씩 보내 = 사진 1장)에 씀. OK 행 `detail`에 `request_id`. parquet·`summary.json`도 같이 씀(읽지는 않음) |
 | `load_photo_embeddings` | 벡터를 **prod 결과 표**에서 읽어 RDS에 씀. 칸은 지금처럼 Bronze manifest |
 
 - 쓰는 순서: 요청 기록(append) → 결과 표·처리 기록(이 사진들만 교체). 실행이 중간에 끊겨도 이미 받은 벡터는 씁니다.

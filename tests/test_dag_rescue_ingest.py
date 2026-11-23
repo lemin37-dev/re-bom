@@ -221,6 +221,8 @@ def test_embedding_tasks_use_gold_prod_only():
     for task, args in ((t, ast.literal_eval(kw["arguments"])) for t, kw in _embed_tasks().items()):
         assert args[args.index("--gold-env") + 1] == "prod", task
         assert "--profile" not in args, task  # 파드는 노드 역할로 접속
+    embed = ast.literal_eval(_embed_tasks()["embed_photos"]["arguments"])
+    assert embed[embed.index("--image-batch") + 1] == "1"  # 요청 기록 1행 = 사진 1장 (11-23 결정)
 
 
 def test_embedding_tasks_label_openrouter_usage():

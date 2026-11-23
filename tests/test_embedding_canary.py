@@ -89,7 +89,7 @@ def test_first_run_builds_reference_and_passes():
     s3, table = seeded_s3()
     emb = FakeEmbedder(table)
     res = canary.run(s3, "b", emb, MODEL, DIM)
-    assert res.ok and res.created_reference and emb.calls == 1  # 요청 1번
+    assert res.ok and res.created_reference and emb.calls == 6  # 1장씩 요청 6번
     assert len(res.cosines) == canary.CANARY_SIZE and res.min_cosine == pytest.approx(1.0)
     ref = canary.load_reference(s3, "b", MODEL, DIM)
     assert [p["sha256"] for p in ref["photos"]] == sorted(p["sha256"] for p in ref["photos"])  # sha256 순, 고정

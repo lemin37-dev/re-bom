@@ -34,18 +34,19 @@ def test_recorded_call_returns_request_meta_with_retries():
     assert meta["attempts"] == 2 and meta["latency_ms"] >= 0 and meta["requested_at"].tzinfo is not None
 
 
-def test_request_rows_split_cost_and_tokens_and_sum_back():
+def test_request_row_is_one_row_per_request_with_full_values():
+    """요청 1번 = 1행 (태깅 요청 기록과 같은 뜻). 묶어 보내도 나누지 않는다."""
     meta = {"request_id": "gen-1", "requested_model": "google/gemini-embedding-2", "provider": "Google",
             "prompt_tokens": 1001, "cost_usd": 0.0007, "latency_ms": 900, "attempts": 1, "requested_at": AT}
-    rows = gs.request_rows(["a", "b", "c", "d"], meta, prep.PREP_VERSION, "run1")
-    assert [r["subject_key"] for r in rows] == ["a", "b", "c", "d"]
-    assert {r["request_id"] for r in rows} == {"gen-1"} and {r["batch_size"] for r in rows} == {4}
-    assert sum(r["prompt_tokens"] for r in rows) == 1001 and rows[0]["prompt_tokens"] == 251  # 나머지는 첫 행
-    assert sum(r["cost_usd"] for r in rows) == pytest.approx(0.0007)
-    assert {r["latency_ms"] for r in rows} == {900}  # 지연은 요청 값 그대로
-    assert rows[0]["dt"] == "2026-11-23" and rows[0]["task"] == "image_embedding" and rows[0]["status"] == "OK"
-    none = gs.request_rows(["a", "b"], {"requested_at": AT}, prep.PREP_VERSION, "run1")  # Google 직접 경로
-    assert none[0]["cost_usd"] is None and none[0]["prompt_tokens"] is None
+    one = gs.request_row(["a"], meta, prep.PREP_VERSION, "run1")
+    assert (one["subject_type"], one["subject_key"], one["batch_size"]) == ("photo", "a", 1)
+    assert one["cost_usd"] == 0.0007 and one["prompt_tokens"] == 1001 and one["latency_ms"] == 900
+    assert one["dt"] == "2026-11-23" and one["task"] == "image_embedding" and one["status"] == "OK"
+    batch = gs.request_row(["a", "b", "c", "d"], meta, prep.PREP_VERSION, "run1")  # 전체 재임베딩 때만
+    assert batch["subject_key"] == "a" and batch["batch_size"] == 4 and batch["cost_usd"] == 0.0007
+    assert gs.request_link(meta, 4) == {"request_id": "gen-1", "batch_size": 4}  # 나머지 사진은 처리 기록에서 이음
+    none = gs.request_row(["a"], {"requested_at": AT}, prep.PREP_VERSION, "run1")  # Google 직접 경로
+    assert none["cost_usd"] is None and none["prompt_tokens"] is None
 
 
 # ---- 읽기 → 계획 모양 ---------------------------------------------------------------------------------------------
@@ -131,15 +132,35 @@ def test_embed_writes_gold_tables_and_parquet(monkeypatch, gold):
     assert {k: v["status"] for k, v in logs.items()} == {**{s: "OK" for s in sent}, blank: "BLANK"}
     assert set(json.loads(logs[blank]["detail"])) == {"gray_std", "blank_std"} and logs[blank]["version"] == VERSION
 
-    reqs = table(gc.EMBEDDING_REQUEST_LOG_TABLE)
-    assert len(reqs) == len(sent) and {x["batch_size"] for x in reqs} == {len(sent)}  # 요청 1번에 2장
-    assert sum(x["cost_usd"] for x in reqs) == pytest.approx(0.000116 * len(sent))
+    reqs = table(gc.EMBEDDING_REQUEST_LOG_TABLE)  # 기본 1장씩: 요청 1행 = 사진 1장
+    assert sorted(x["subject_key"] for x in reqs) == sorted(sent) and {x["batch_size"] for x in reqs} == {1}
+    assert len({x["request_id"] for x in reqs}) == len(sent)
+    assert all(x["cost_usd"] == pytest.approx(0.000116) for x in reqs)
+    by_req = {x["subject_key"]: x["request_id"] for x in reqs}
+    assert all(json.loads(logs[s]["detail"]) == {"request_id": by_req[s], "batch_size": 1} for s in sent)
     assert not table(gc.INFERENCE_LOG_TABLE) and not table(gc.REQUEST_LOG_TABLE)  # 태깅 표에는 안 씀
 
     (summary,) = summaries(s3)
     assert summary["gold"] == {"env": "unit", "written": {"image": 2, "log": 3, "request": 2}}
+    assert summary["image_batch"] == 1 and FakeEmbedder.calls == [1, 1]
     st = staging.load_staged(s3, "test-bucket", gemini.MODEL, 768, prep.PREP_VERSION)
     assert {r["sha256"] for r in st.rows.values()} == sent  # 되돌릴 때를 위한 parquet 도 같이 씀
+
+
+def test_batched_run_is_still_one_request_row_and_links_photos(monkeypatch, gold):
+    """전체 재임베딩처럼 묶어 보내도 요청 기록은 요청 1번 = 1행, 사진은 처리 기록 detail 로 이어진다."""
+    from rebom.common import gold_catalog as gc
+
+    _, _, table = gold
+    s3 = make_world()
+    FakeEmbedder.calls = []
+    embed(monkeypatch, s3, "--image-batch", "6")
+    assert FakeEmbedder.calls == [2]
+    (req,) = table(gc.EMBEDDING_REQUEST_LOG_TABLE)
+    assert req["batch_size"] == 2 and req["cost_usd"] == pytest.approx(0.000116 * 2)
+    ok = [x for x in table(gc.EMBEDDING_INFERENCE_LOG_TABLE) if x["status"] == "OK"]
+    assert len(ok) == 2 and {json.loads(x["detail"])["request_id"] for x in ok} == {req["request_id"]}
+    assert req["subject_key"] in {x["subject_key"] for x in ok}
 
 
 def test_next_run_reads_gold_not_parquet(monkeypatch, gold, capsys):
@@ -149,7 +170,7 @@ def test_next_run_reads_gold_not_parquet(monkeypatch, gold, capsys):
     for k in [k for k in s3.objects if k.startswith(staging.ROOT)]:  # parquet·summary 를 지워도
         del s3.objects[k]
     embed(monkeypatch, s3)
-    assert FakeEmbedder.calls == [2]  # 다시 보내지 않음 (빈 사진도)
+    assert FakeEmbedder.calls == [1, 1]  # 다시 보내지 않음 (빈 사진도)
     out = capsys.readouterr().out
     assert "원본: Gold unit 표" in out and '"skip_known_blank": 1' in out and '"to_send_sha256": 0' in out
 
@@ -207,9 +228,10 @@ def test_canary_writes_gold_row_and_requests(monkeypatch, gold):
     assert cli.main(["canary", "--gold-env", "test"]) == 0
     (row,) = table(gc.EMBEDDING_CANARY_TABLE)
     assert row["passed"] is True and row["photo_count"] == 6 and row["model"] == MID
-    reqs = table(gc.EMBEDDING_REQUEST_LOG_TABLE)
+    reqs = table(gc.EMBEDDING_REQUEST_LOG_TABLE)  # 1장씩 요청 6번 = 6행
     assert len(reqs) == 6 and {r["gold_run_id"] for r in reqs} == {row["gold_run_id"]}
-    assert {r["batch_size"] for r in reqs} == {6} and {r["subject_key"] for r in reqs} == {p["sha256"] for p in photos}
+    assert {r["batch_size"] for r in reqs} == {1} and {r["subject_key"] for r in reqs} == {p["sha256"] for p in photos}
+    assert len({r["request_id"] for r in reqs}) == 6
 
 
 def test_gold_migrate_stops_after_direct_writes(monkeypatch, gold, capsys):

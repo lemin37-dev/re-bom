@@ -7,7 +7,11 @@
   State.staged(current) 가 그 내용을 embed·load 가 쓰던 staging.Staged 모양으로 바꿔 준다(계획 코드는 그대로).
 - 쓰기 (write_run): embed 실행 1번의 결과. 요청 기록 append → 결과 표·처리 기록은 이 사진들만 교체(overwrite).
   같은 실행을 다시 써도 결과가 같다.
-- canary (write_canary): canary 표 1행 + 요청 기록(사진 6장, 요청 1번).
+- canary (write_canary): canary 표 1행 + 요청 기록(사진 1장씩 6번).
+
+요청 기록은 태깅과 같은 뜻으로 **요청 1번 = 1행**이다(11-23 결정). 매일 실행은 사진 1장씩 보내 요청 1행 = 사진 1장이다.
+전체 재임베딩처럼 여러 장을 한 요청에 묶으면(--image-batch) 그 행의 subject_key 는 첫 사진, batch_size 는 장수,
+비용·토큰은 요청 전체 값이고, 사진 → 요청 연결은 처리 기록 OK 행의 detail {"request_id", "batch_size"} 로 한다.
 
 공고–사진 칸 연결은 Gold 에 두지 않는다(13.0). 칸은 지금처럼 Bronze manifest 에서 고른다.
 parquet 은 되돌릴 때를 위해 embed 가 지금처럼 같이 쓴다(이 경로에서는 읽지 않음).
@@ -142,32 +146,26 @@ def log_row(sha: str, version: str, status: str, run_id: str, at: datetime, *, a
             "detail": json.dumps(detail, ensure_ascii=False) if detail is not None else None}
 
 
-def _share(total, n: int, i: int):
-    """요청 1번의 합계를 사진 n장에 나눈 i번째 몫. 나머지는 첫 행에 둬서 request_id 로 더하면 합계와 같다."""
-    if total is None:
-        return None
-    if isinstance(total, int):
-        base = total // n
-        return total - base * (n - 1) if i == 0 else base
-    share = total / n
-    return total - share * (n - 1) if i == 0 else share
-
-
-def request_rows(shas: Sequence[str], meta: dict[str, Any], prep_version: str, run_id: str,
-                 status: str = OK, error_code: str | None = None) -> list[dict]:
-    """요청 1번 → 사진마다 1행. 같은 request_id, batch_size = 사진 수, 비용·토큰은 몫, 지연·시도 수는 요청 값."""
-    n = len(shas)
+def request_row(shas: Sequence[str], meta: dict[str, Any], prep_version: str, run_id: str,
+                status: str = OK, error_code: str | None = None) -> dict:
+    """요청 1번 → 1행 (태깅 요청 기록과 같은 뜻). subject_key 는 첫 사진(1장씩 보내면 그 사진), batch_size = 장수,
+    비용·토큰·지연·시도 수는 요청 값 그대로."""
     at = meta["requested_at"]
-    return [{
-        "request_id": meta.get("request_id"), "subject_type": SUBJECT_PHOTO, "subject_key": sha, "task": IMAGE_TASK,
+    return {
+        "request_id": meta.get("request_id"), "subject_type": SUBJECT_PHOTO, "subject_key": shas[0], "task": IMAGE_TASK,
         "prompt_version": prep_version, "run_no": 1, "requested_model": meta.get("requested_model"),
         "response_model": meta.get("response_model"), "provider": meta.get("provider"), "canonical_slug": None,
-        "media_resolution": None, "prompt_tokens": _share(meta.get("prompt_tokens"), n, i), "completion_tokens": None,
-        "reasoning_tokens": None, "cost_usd": _share(meta.get("cost_usd"), n, i), "latency_ms": meta.get("latency_ms"),
+        "media_resolution": None, "prompt_tokens": meta.get("prompt_tokens"), "completion_tokens": None,
+        "reasoning_tokens": None, "cost_usd": meta.get("cost_usd"), "latency_ms": meta.get("latency_ms"),
         "attempts": meta.get("attempts"), "status": status, "error_code": error_code, "raw_answer": None,
         "requested_at": at, "gold_run_id": run_id, "dt": at.strftime("%Y-%m-%d"), "temperature": None,
-        "reasoning_effort": None, "finish_reason": None, "native_finish_reason": None, "batch_size": n,
-    } for i, sha in enumerate(shas)]
+        "reasoning_effort": None, "finish_reason": None, "native_finish_reason": None, "batch_size": len(shas),
+    }
+
+
+def request_link(meta: dict[str, Any], batch_size: int) -> dict[str, Any]:
+    """처리 기록 OK 행의 detail: 이 사진 벡터를 만든 요청 (묶어 보낸 사진도 요청 기록과 이어진다)."""
+    return {"request_id": meta.get("request_id"), "batch_size": batch_size}
 
 
 # ---- 쓰기 ------------------------------------------------------------------------------------------------------

@@ -13,7 +13,7 @@ Bronze 사진 + manifest (S3, 수집 A가 매일 씀)
   │  manifest: bronze/rescue/image_runs/dt=<날짜>/run_id=<id>/manifest.json
   │  사진:     bronze/rescue/images/<desertionNo>/popfile<N>[_vNNN].<ext>
   ▼
-① embed   보낼 사진 고르기 → 전처리 → Gemini(6장씩, 동시 4요청) → L2 정규화
+① embed   보낼 사진 고르기 → 전처리 → Gemini(1장씩, 동시 4요청. 11-23 전에는 6장씩) → L2 정규화
   ▼
 S3 parquet (원본, 모델·차원·전처리별로 모두 보관)
   │  gold/image_embedding/model=<모델>/dim=<차원>/run_id=<id>/part-*.parquet, summary.json
@@ -85,7 +85,7 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 1. S3에서 원본을 받아 **sha256을 manifest와 대조**. 다르면 보내지 않고 `sha_mismatch_keys`에 기록(일시 문제일 수 있어 다음 실행에서 다시 봄).
 2. **빈 사진 판정**: 회색조 → 256×256 → 픽셀 표준편차 < 4.0이면 `blank`.
 3. **전처리**: EXIF 회전 보정 → RGB → 긴 변 1024 이하로 축소(늘리지 않음) → JPEG 품질 90 → `image/jpeg`. 버전 이름 `exif-rgb-max1024-jpeg90`을 parquet에 남깁니다.
-4. **요청**: 요청 1번에 최대 6장, 사진마다 Content 1개(문자열 목록을 그대로 넘기면 벡터 1개만 옴). 동시 요청 `--workers`(기본 4). 429·5xx는 지수 대기 후 최대 5번 재시도.
+4. **요청**: 요청 1번에 사진 `--image-batch`장(기본 1, 11-23 결정. 요청 기록 1행 = 사진 1장. 전체 재임베딩 때만 최대 6), 사진마다 Content 1개(문자열 목록을 그대로 넘기면 벡터 1개만 옴). 동시 요청 `--workers`(기본 4). 429·5xx는 지수 대기 후 최대 5번 재시도.
 5. **L2 정규화**, 768차원이 아니면 중단.
 
 ### 3.3 S3 결과 (`staging.py`)
