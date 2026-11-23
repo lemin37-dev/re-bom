@@ -18,10 +18,12 @@ from rebom.serving.schemas import (
     Health,
     ShelterList,
     ShelterSummary,
+    TagCatalog,
     shelter_of,
     to_detail,
     to_summary,
 )
+from rebom.serving.tags import catalog, parse_tags, tag_match
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -58,19 +60,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         age_max: int | None = Query(None, ge=0, le=40),
         weight_min: float | None = Query(None, ge=0),
         weight_lt: float | None = Query(None, gt=0),
+        tags: str | None = Query(
+            None, max_length=300,
+            description="사진 태그 코드, 쉼표로 여러 개 (예: ear.drop,fur.fluffy). 거르지 않고 맞는 아이를 앞에 둔다. 털이 반대인 아이만 뺀다",
+        ),
         sort: Literal["latest", "notice_end"] = "latest",
         page: int = Query(1, ge=1),
         size: int = Query(20, ge=1, le=100),
         r: AnimalRepository = Depends(repo),
     ) -> AnimalPage:
         regions = tuple(t.strip() for t in (region or "").split(",") if t.strip())
+        try:
+            tag_groups = parse_tags(tags)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
         query = AnimalQuery(
             species=species, state=state, sex=sex, regions=regions, shelter=shelter, q=q,
             age_min=age_min, age_max=age_max, weight_min=weight_min, weight_lt=weight_lt,
-            sort=sort, page=page, size=size,
+            tags=tag_groups, sort=sort, page=page, size=size,
         )
-        total, rows = r.search(query)
-        return AnimalPage(total=total, page=page, size=size, items=[to_summary(x) for x in rows])
+        result = r.search(query)
+        items = []
+        for x in result.rows:
+            item = to_summary(x, r.tags_of(x["desertionNo"]))
+            if tag_groups:
+                item.tag_match = tag_match(r.tags_of(x["desertionNo"]), tag_groups)
+            items.append(item)
+        return AnimalPage(total=result.total, matched=result.matched, page=page, size=size, items=items)
+
+    @app.get("/tags", response_model=TagCatalog, response_model_by_alias=True)
+    def list_tags(
+        species: Literal["dog", "cat"] = Query("dog", description="태그 세트를 볼 종. 고양이 태그 세트는 준비 중이라 비어 있다"),
+        r: AnimalRepository = Depends(repo),
+    ) -> TagCatalog:
+        return TagCatalog(**catalog(species, r.tag_counts()))
 
     @app.get("/shelters", response_model=ShelterList, response_model_by_alias=True)
     def list_shelters(r: AnimalRepository = Depends(repo)) -> ShelterList:
@@ -84,7 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raw = r.get(desertion_no)
         if raw is None:
             raise HTTPException(status_code=404, detail="해당 구조번호의 동물이 없습니다.")
-        return to_detail(raw)
+        return to_detail(raw, r.tags_of(desertion_no))
 
     return app
 
