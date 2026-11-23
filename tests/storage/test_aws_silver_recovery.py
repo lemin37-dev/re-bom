@@ -38,6 +38,9 @@ class FakeTable:
     def location(self):
         return self._location
 
+    def current_snapshot(self):
+        return None
+
     def schema(self):
         return FakeSchema(self._schema)
 

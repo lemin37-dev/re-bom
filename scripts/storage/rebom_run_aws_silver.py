@@ -19,7 +19,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from rebom.storage.silver.apply_silver_pipeline import prepare_arrow
+from rebom.storage.silver.apply_silver_pipeline import prepare_arrow, upsert_notice
 from rebom.storage.silver.aws_catalog import get_aws_catalog
 from rebom.storage.silver.prepare_silver_pipeline import prepare_silver_pipeline
 from rebom.storage.silver.reconcile_run_journal import reconcile_run
@@ -221,12 +221,7 @@ def execute(args):
         return
 
     if notice_arrow.num_rows and before["stage"] == "PREPARED":
-        result = notice.upsert(
-            notice_arrow,
-            join_cols=list(NOTICE_KEYS),
-            when_matched_update_all=True,
-            when_not_matched_insert_all=True,
-        )
+        result = upsert_notice(notice, notice_arrow)
         print("NOTICE_INSERTED:", result.rows_inserted)
         print("NOTICE_UPDATED:", result.rows_updated)
 
