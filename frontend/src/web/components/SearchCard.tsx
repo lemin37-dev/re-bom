@@ -2,13 +2,14 @@
 
 import { useRef } from 'react'
 import { Icon } from '@/components/icons/Icon'
+import { TagPicker } from '@/components/search/TagPicker'
 import { filterLabels } from '@/data/filters'
 import { useSearch } from '@/providers/SearchProvider'
 import type { FilterKey } from '@/types/filters'
 
-/** 웹 검색 카드: 문장 입력 · 사진 첨부 · 조건 칩 */
+/** 웹 검색 카드: 문장 입력 · 사진 첨부 · 조건 칩 · 사진 태그 */
 export function SearchCard() {
-  const { query, setQuery, photo, setPhoto, filters, openFilters, search, searching } = useSearch()
+  const { query, setQuery, photo, setPhoto, filters, tags, openFilters, search, searching } = useSearch()
   const fileRef = useRef<HTMLInputElement>(null)
   const pickPhoto = () => fileRef.current?.click()
 
@@ -31,7 +32,8 @@ export function SearchCard() {
         {(Object.keys(filters) as FilterKey[]).map(key => <button key={key} className="filter-chip" onClick={openFilters}><span>{filterLabels[key]}</span> {filters[key]}</button>)}
         <button className="add-filter" onClick={openFilters}><Icon name="plus" size={13} />조건 추가</button>
       </div>
-      <div className="search-sources"><span>함께 검색 중</span><b className={`source green ${!query ? 'muted-source' : ''}`}><i />문장</b>{photo && <b className="source peach"><i />사진</b>}<b className="source sage"><i />조건</b></div>
+      <div className="search-sources"><span>함께 검색 중</span><b className={`source green ${!query ? 'muted-source' : ''}`}><i />문장</b>{photo && <b className="source peach"><i />사진</b>}<b className="source sage"><i />조건</b>{tags.length > 0 && <b className="source sage"><i />태그</b>}</div>
     </div>
+    <TagPicker />
   </section>
 }

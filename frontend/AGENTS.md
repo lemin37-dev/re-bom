@@ -59,7 +59,7 @@ src/
 │  ├─ layout/            # ExperienceShell(웹/앱 틀 조립), SiteFooter
 │  ├─ animal/            # AnimalArt, PetCard, Reasons
 │  ├─ mascot/            # MascotArt, HeroMascot, ThemeToggle, MascotState, MascotDialog
-│  ├─ search/            # FilterDialog
+│  ├─ search/            # FilterDialog, TagPicker(사진 태그로 찾기)
 │  ├─ map/               # IllustratedMap
 │  ├─ icons/             # Icon
 │  └─ ui/                # SectionTitle
@@ -68,11 +68,11 @@ src/
 │  ├─ SearchProvider     # 검색어·사진·조건·정렬 등 검색 상태 (모드 전환 시 유지)
 │  ├─ MascotProvider     # 마스코트 테마
 │  └─ ExperienceProvider # 화면 이동, 스크롤 복원, 상세 하단 버튼 포털 자리
-├─ hooks/                # useScrollMemory
+├─ hooks/                # useScrollMemory, useTagCatalog(사진 태그 사전 한 번만 받기)
 ├─ data/                 # 상수·예시 데이터 (filters, shelters(지역 예시), adoption-guide, mascots)
 ├─ lib/                  # api: 검색 API 호출·응답 변환, search: 조건→API 파라미터, animal: 상태·날짜·태그
 ├─ constants/            # routes (경로, 주 메뉴)
-├─ types/                # Animal, Shelter, Filters, ViewMode
+├─ types/                # Animal, Shelter, Filters, ViewMode, TagCatalog
 └─ styles/               # globals.css(진입점), tokens, fonts, 공통 CSS
 ```
 
@@ -98,6 +98,7 @@ src/
 - 화면 이동은 `useExperience().navigate(href)`를 사용하세요. 모드·경로별 스크롤 위치 복원을 함께 처리합니다.
 - 동물·보호센터 정보는 검색 API(레포 루트 `scripts/serve/run_api`, 기본 http://localhost:8000)에서 옵니다. 주소는 `.env.local`의 `NEXT_PUBLIC_API_BASE_URL`로 바꿉니다.
 - 매칭 점수·이유·거리는 아직 API에 없어 화면에서 숨겨집니다(`Animal`의 선택 필드). 문장 검색은 단어 일치, 사진 검색은 미연결입니다.
+- 사진 태그 검색: `TagPicker`가 `/tags`(범주별 상세 태그·추천 태그)를 받아 보여 주고, 고른 태그를 `/animals?tags=`로 보냅니다. 같은 범주 안은 하나라도, 범주끼리는 모두 맞아야 합니다. 태그를 누르면 바로 다시 검색합니다. sample 모드 태그는 `data/sample/photo_tags.json`(실제 태거 결과)이며 `/tags`를 받지 못하면 태그 영역을 숨깁니다.
 
 ## 휴대폰에서 테스트 (같은 Wi-Fi)
 

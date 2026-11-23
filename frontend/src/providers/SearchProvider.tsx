@@ -19,6 +19,10 @@ type SearchState = {
   setPhoto: (value: string | null) => void
   filters: Filters
   setFilters: (value: Filters) => void
+  /** 고른 사진 태그 코드. 누르면 바로 다시 검색합니다. */
+  tags: string[]
+  toggleTag: (code: string) => void
+  clearTags: () => void
   sort: SortOption
   setSort: (value: SortOption) => void
   availableFirst: boolean
@@ -41,8 +45,8 @@ type SearchState = {
   total: number
   hasMore: boolean
   loadMore: () => void
-  /** 검색 실행. text·nextFilters를 넘기면 검색어·조건도 함께 바꿉니다. */
-  search: (text?: string, nextFilters?: Filters) => void
+  /** 검색 실행. text·nextFilters·nextTags를 넘기면 검색어·조건·태그도 함께 바꿉니다. */
+  search: (text?: string, nextFilters?: Filters, nextTags?: string[]) => void
   /** 조건을 모두 풀고 다시 검색 */
   resetAndSearch: () => void
   /** 특정 보호센터의 아이들만 보기 */
@@ -65,13 +69,14 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const [searched, setSearched] = useState(false)
   const [photo, setPhoto] = useState<string | null>(null)
   const [filters, setFilters] = useState<Filters>(initialFilters)
+  const [tags, setTags] = useState<string[]>([])
   const [filterOpen, setFilterOpen] = useState(false)
   const [sort, setSort] = useState<SortOption>('최신 공고 순')
   const [availableFirst, setAvailableFirst] = useState(false)
   const [map, setMap] = useState(false)
   const [centerFilter, setCenterFilter] = useState<CenterFilter | null>(null)
   // 검색 버튼을 누른 시점의 검색어·조건 (입력 중인 값과 구분)
-  const [submitted, setSubmitted] = useState<{ query: string; filters: Filters; seq: number }>({ query: '', filters: initialFilters, seq: 0 })
+  const [submitted, setSubmitted] = useState<{ query: string; filters: Filters; tags: string[]; seq: number }>({ query: '', filters: initialFilters, tags: [], seq: 0 })
 
   // 불러온 결과는 어떤 조건(key)으로 받았는지와 함께 둡니다. key가 지금 조건과 다르면 '불러오는 중'입니다.
   type Result = { key: string; items: Animal[]; total: number; page: number; error: string | null }
@@ -87,7 +92,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     state: 'protect',
     sort: sortToParam(sort),
     size: PAGE_SIZE,
-    ...(centerFilter ? { shelter: centerFilter.regNo } : searched ? { ...filtersToParams(submitted.filters), q: submitted.query } : {}),
+    ...(centerFilter ? { shelter: centerFilter.regNo } : searched ? { ...filtersToParams(submitted.filters), q: submitted.query, tags: submitted.tags } : {}),
   }), [sort, centerFilter, searched, submitted])
   const key = `${JSON.stringify(params)}#${submitted.seq}#${retrySeq}`
   const searching = result.key !== key
@@ -117,26 +122,30 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const error = searching ? null : result.error
   const visible = useMemo(() => availableFirst ? availableFirstOrder(items, isAvailable) : items, [items, availableFirst])
 
-  function search(text?: string, nextFilters?: Filters) {
+  function search(text?: string, nextFilters?: Filters, nextTags?: string[]) {
     setCenterFilter(null)
     const q = text !== undefined ? text : query
     if (text !== undefined) setQuery(text)
     if (nextFilters) setFilters(nextFilters)
-    setSubmitted(prev => ({ query: q, filters: nextFilters ?? filters, seq: prev.seq + 1 }))
+    if (nextTags) setTags(nextTags)
+    setSubmitted(prev => ({ query: q, filters: nextFilters ?? filters, tags: nextTags ?? tags, seq: prev.seq + 1 }))
     setSearched(true)
   }
 
   const value: SearchState = {
     query, setQuery, photo, setPhoto, filters, setFilters, sort, setSort,
+    tags,
+    toggleTag: code => search(undefined, undefined, tags.includes(code) ? tags.filter(t => t !== code) : [...tags, code]),
+    clearTags: () => search(undefined, undefined, []),
     availableFirst, toggleAvailableFirst: () => setAvailableFirst(v => !v),
     map, toggleMap: () => setMap(v => !v),
     searched, setSearched, searching, loadingMore, error,
     retry: () => setRetrySeq(n => n + 1),
     centerFilter, visible, total, hasMore: items.length < total, loadMore,
     search,
-    resetAndSearch: () => search('', allFilters),
-    focusCenter: center => { setCenterFilter(center); setFilters(allFilters); setQuery(''); setSearched(true); setMap(false) },
-    clearCenter: () => { setCenterFilter(null); setFilters(initialFilters); setSearched(false) },
+    resetAndSearch: () => search('', allFilters, []),
+    focusCenter: center => { setCenterFilter(center); setFilters(allFilters); setTags([]); setQuery(''); setSearched(true); setMap(false) },
+    clearCenter: () => { setCenterFilter(null); setFilters(initialFilters); setTags([]); setSearched(false) },
     setCenterFilter,
     filterOpen,
     openFilters: () => setFilterOpen(true),

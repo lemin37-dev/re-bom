@@ -11,12 +11,12 @@ import { ResultMap } from './ResultMap'
 
 /** 웹 검색 결과: 제목·정렬 도구 + 카드 그리드 또는 지도 */
 export function SearchResults() {
-  const { visible, total, hasMore, searched, searching, loadingMore, error, retry, sort, setSort, availableFirst, toggleAvailableFirst, map, toggleMap, loadMore, resetAndSearch, photo } = useSearch()
+  const { visible, total, hasMore, searched, searching, loadingMore, error, retry, sort, setSort, availableFirst, toggleAvailableFirst, map, toggleMap, loadMore, resetAndSearch, photo, tags } = useSearch()
   const { openAnimal } = useExperience()
 
   return <section className="results" aria-live="polite">
     <div className="results-heading">
-      <div className="results-title"><h2>{searched ? <>검색 결과 <em>{total}</em>마리</> : <>새로운 인연을 기다리는 친구들 <em>{total}</em></>}</h2><span>{searched ? '문장의 단어와 생활 조건이 맞는 공고예요' : '작은 관심이, 한 아이의 봄이 될 수 있어요'}</span></div>
+      <div className="results-title"><h2>{searched ? <>검색 결과 <em>{total}</em>마리</> : <>새로운 인연을 기다리는 친구들 <em>{total}</em></>}</h2><span>{searched ? `문장의 단어${tags.length ? '·사진 태그' : ''}와 생활 조건이 맞는 공고예요` : '작은 관심이, 한 아이의 봄이 될 수 있어요'}</span></div>
       <div className="result-tools">
         <button className={`available-toggle ${availableFirst ? 'on' : ''}`} onClick={toggleAvailableFirst} aria-pressed={availableFirst}><span className="checkbox">{availableFirst && <Icon name="check" size={12} />}</span>입양 가능 먼저</button>
         <select value={sort} onChange={e => setSort(e.target.value as SortOption)} aria-label="결과 정렬">{sortOptions.map(option => <option key={option}>{option}</option>)}</select>

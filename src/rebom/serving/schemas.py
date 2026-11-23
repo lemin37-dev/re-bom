@@ -83,6 +83,23 @@ class ShelterList(_Model):
     items: list[ShelterSummary]
 
 
+class TagOption(_Model):
+    code: str  # 예: ear.drop
+    label: str  # 예: 늘어진 귀
+    count: int  # 이 태그가 붙은 보호중 동물 수
+
+
+class TagCategory(_Model):
+    key: str  # fur / ear / eye
+    label: str
+    tags: list[TagOption]
+
+
+class TagCatalog(_Model):
+    categories: list[TagCategory]
+    recommended: list[str]  # 추천 태그 코드 (보호중 동물이 많은 순)
+
+
 class Health(_Model):
     status: str
     data_mode: str

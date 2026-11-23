@@ -1,4 +1,5 @@
 import type { Animal, AnimalShelter, ShelterSummary, SizeLabel, Species } from '@/types/animal'
+import type { TagCatalog } from '@/types/tags'
 
 /**
  * 검색 API 주소. 기본은 같은 주소의 /api (k3s·CloudFront 배포: /api 를 검색 API 로 넘김).
@@ -59,6 +60,8 @@ export type AnimalSearchParams = {
   q?: string
   weightMin?: number
   weightLt?: number
+  /** 사진 태그 코드 (예: ['ear.drop', 'fur.fluffy']). 같은 범주 안은 하나라도, 범주끼리는 모두 맞아야 함 */
+  tags?: string[]
   sort?: 'latest' | 'notice_end'
   page?: number
   size?: number
@@ -93,6 +96,7 @@ function toQuery(p: AnimalSearchParams) {
   set('q', p.q?.trim())
   set('weight_min', p.weightMin)
   set('weight_lt', p.weightLt)
+  set('tags', p.tags?.join(','))
   set('sort', p.sort)
   set('page', p.page)
   set('size', p.size)
@@ -106,6 +110,10 @@ export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSig
 
 export async function fetchAnimal(id: string, signal?: AbortSignal) {
   return toAnimal(await getJson<ApiAnimal>(`/animals/${encodeURIComponent(id)}`, signal))
+}
+
+export async function fetchTagCatalog(signal?: AbortSignal) {
+  return getJson<TagCatalog>('/tags', signal)
 }
 
 export async function fetchShelters(signal?: AbortSignal) {
