@@ -209,3 +209,68 @@ def build_notice_snapshot_evidence(
         "notice_table": notice_table,
         "notice_snapshot_id": notice_snapshot_id,
     }
+
+
+
+def find_run_final_snapshot_id(table, bronze_run_id):
+    """Find a run's final snapshot in a contiguous Iceberg snapshot chain."""
+    if not isinstance(bronze_run_id, str) or not bronze_run_id.strip():
+        raise ValueError("INVALID_BRONZE_RUN_ID")
+
+    snapshots = table.metadata.snapshots or []
+    by_id = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
+    current = table.current_snapshot()
+    if current is None:
+        raise RuntimeError("NOTICE_SNAPSHOT_NOT_FOUND")
+
+    chain = []
+    seen = set()
+    snapshot = current
+
+    while snapshot is not None:
+        if snapshot.snapshot_id in seen:
+            raise RuntimeError("SNAPSHOT_LINEAGE_CYCLE")
+        seen.add(snapshot.snapshot_id)
+        chain.append(snapshot)
+
+        parent_id = snapshot.parent_snapshot_id
+        if parent_id is None:
+            break
+        if parent_id not in by_id:
+            raise RuntimeError("SNAPSHOT_LINEAGE_INCOMPLETE")
+        snapshot = by_id[parent_id]
+
+    matches = [
+        index for index, snapshot in enumerate(chain)
+        if snapshot.summary is not None
+        and snapshot.summary.additional_properties.get(
+            "bronze_run_id"
+        ) == bronze_run_id
+    ]
+
+    if not matches:
+        raise RuntimeError("NOTICE_RUN_SNAPSHOT_NOT_FOUND")
+
+    if matches != list(range(matches[0], matches[-1] + 1)):
+        raise RuntimeError("NOTICE_RUN_SNAPSHOTS_NOT_CONTIGUOUS")
+
+    return chain[matches[0]].snapshot_id
+
+
+
+def find_completed_notice_snapshot_id(
+    s3, bucket, notice_prefix, bronze_run_id, notice_table,
+):
+    """Recover a notice snapshot only for a completed Silver run."""
+    from rebom.storage.silver.s3_run_journal import read_stage
+
+    completed = read_stage(
+        s3, bucket, notice_prefix, bronze_run_id, "COMPLETED"
+    )
+
+    if completed is None:
+        raise RuntimeError("NOTICE_RUN_NOT_COMPLETED")
+
+    return find_run_final_snapshot_id(
+        notice_table, bronze_run_id
+    )
