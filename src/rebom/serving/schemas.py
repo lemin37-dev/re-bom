@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 from rebom.serving.derive import age_label, age_years, sido, sigungu, weight_kg
-from rebom.serving.tags import chips
+from rebom.serving.tags import TagMatch, chips
 
 PHOTO_KEYS = tuple(f"popfile{i}" for i in range(1, 9))
 
@@ -68,6 +68,7 @@ class AnimalSummary(_Model):
     shelter: Shelter
     updated_at: str | None = None
     photo_tags: list[PhotoTag] = []  # 대표 사진을 보고 모델이 붙인 태그 (serving/tags.py)
+    tag_match: TagMatch | None = None  # 태그를 골랐을 때만: all · some · unknown · other
 
 
 class AnimalDetail(AnimalSummary):
@@ -81,6 +82,7 @@ class AnimalDetail(AnimalSummary):
 
 class AnimalPage(_Model):
     total: int
+    matched: int | None = None  # 태그를 골랐을 때 고른 범주가 모두 맞는 아이 수 (이 아이들이 맨 앞)
     page: int
     size: int
     items: list[AnimalSummary]

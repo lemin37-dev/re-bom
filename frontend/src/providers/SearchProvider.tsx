@@ -43,6 +43,8 @@ type SearchState = {
   visible: Animal[]
   /** 조건에 맞는 전체 수 */
   total: number
+  /** 태그로 검색했을 때 고른 범주가 모두 맞는 아이 수 (목록 맨 앞). 태그 없이 검색하면 null */
+  matched: number | null
   hasMore: boolean
   loadMore: () => void
   /** 검색 실행. text·nextFilters·nextTags를 넘기면 검색어·조건·태그도 함께 바꿉니다. */
@@ -79,8 +81,8 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const [submitted, setSubmitted] = useState<{ query: string; filters: Filters; tags: string[]; seq: number }>({ query: '', filters: initialFilters, tags: [], seq: 0 })
 
   // 불러온 결과는 어떤 조건(key)으로 받았는지와 함께 둡니다. key가 지금 조건과 다르면 '불러오는 중'입니다.
-  type Result = { key: string; items: Animal[]; total: number; page: number; error: string | null }
-  const [result, setResult] = useState<Result>({ key: '', items: [], total: 0, page: 0, error: null })
+  type Result = { key: string; items: Animal[]; total: number; matched: number | null; page: number; error: string | null }
+  const [result, setResult] = useState<Result>({ key: '', items: [], total: 0, matched: null, page: 0, error: null })
   const [retrySeq, setRetrySeq] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const moreAbort = useRef<AbortController | null>(null)
@@ -101,8 +103,8 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController()
     moreAbort.current?.abort()
     fetchAnimals({ ...params, page: 1 }, controller.signal)
-      .then(res => setResult({ key, items: res.items, total: res.total, page: 1, error: null }))
-      .catch(e => { if (!controller.signal.aborted) setResult({ key, items: [], total: 0, page: 0, error: e instanceof ApiError ? e.message : '목록을 불러오지 못했어요.' }) })
+      .then(res => setResult({ key, items: res.items, total: res.total, matched: res.matched, page: 1, error: null }))
+      .catch(e => { if (!controller.signal.aborted) setResult({ key, items: [], total: 0, matched: null, page: 0, error: e instanceof ApiError ? e.message : '목록을 불러오지 못했어요.' }) })
     return () => controller.abort()
   }, [params, key])
 
@@ -149,7 +151,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     map, toggleMap: () => setMap(v => !v),
     searched, setSearched, searching, loadingMore, error,
     retry: () => setRetrySeq(n => n + 1),
-    centerFilter, visible, total, hasMore: items.length < total, loadMore,
+    centerFilter, visible, total, matched: searching ? null : result.matched, hasMore: items.length < total, loadMore,
     search,
     resetAndSearch: () => search('', allFilters, []),
     focusCenter: center => { setCenterFilter(center); setFilters(allFilters); setTags([]); setQuery(''); setSubmitted(prev => ({ ...prev, query: '' })); setSearched(true); setMap(false) },

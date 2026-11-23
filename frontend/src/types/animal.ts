@@ -1,4 +1,4 @@
-import type { PhotoTag } from './tags'
+import type { PhotoTag, TagMatch } from './tags'
 
 /** 매칭 이유 한 줄: [표시 문구, 근거 출처('문장' | '사진' | '조건')] */
 export type MatchReason = [label: string, source: string]
@@ -60,6 +60,8 @@ export type Animal = {
   photos: string[]
   /** 사진 태그 (털 · 귀 모양 · 눈매). 카드에 칩으로 보여 줌 */
   photoTags: PhotoTag[]
+  /** 태그를 골라 검색했을 때 이 아이의 단계. 태그 없이 검색하면 null */
+  tagMatch: TagMatch | null
   // 상세에서만 오는 값
   healthCheck?: string | null
   vaccinationCheck?: string | null

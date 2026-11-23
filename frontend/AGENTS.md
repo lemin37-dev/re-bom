@@ -98,7 +98,7 @@ src/
 - 화면 이동은 `useExperience().navigate(href)`를 사용하세요. 모드·경로별 스크롤 위치 복원을 함께 처리합니다.
 - 동물·보호센터 정보는 검색 API(레포 루트 `scripts/serve/run_api`, 기본 http://localhost:8000)에서 옵니다. 주소는 `.env.local`의 `NEXT_PUBLIC_API_BASE_URL`로 바꿉니다.
 - 매칭 점수·이유·거리는 아직 API에 없어 화면에서 숨겨집니다(`Animal`의 선택 필드). 문장 검색은 단어 일치, 사진 검색은 미연결입니다.
-- 사진 태그 검색: `TagPicker`가 `/tags`(범주별 상세 태그·추천 태그)를 받아 보여 주고, 고른 태그를 `/animals?tags=`로 보냅니다. 같은 범주 안은 하나라도, 범주끼리는 모두 맞아야 합니다. 태그를 누르면 바로 다시 검색합니다. sample 모드 태그는 `data/sample/photo_tags.json`(실제 태거 결과)이며 `/tags`를 받지 못하면 태그 영역을 숨깁니다.
+- 사진 태그 검색: `TagPicker`가 `/tags`(범주별 상세 태그·추천 태그)를 받아 보여 주고, 고른 태그를 `/animals?tags=`로 보냅니다. 태그는 거르지 않고 순서만 정합니다(모두 맞음 → 일부 맞음 → 태그 정보 없음 → 다른 태그, 응답 `tagMatch`·`matched`). 털이 고른 것과 반대인 아이만 빠집니다. 태그를 누르면 마지막으로 제출한 문장으로 바로 다시 검색합니다. sample 모드 태그는 `data/sample/photo_tags.json`(실제 태거 결과)이며 `/tags`를 받지 못하면 태그 영역을 숨깁니다.
 
 ## 휴대폰에서 테스트 (같은 Wi-Fi)
 

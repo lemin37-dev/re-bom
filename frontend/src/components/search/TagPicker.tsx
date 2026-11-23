@@ -55,7 +55,7 @@ export function TagPicker({ compact = false }: { compact?: boolean }) {
 
     {openCategory && <div className="tag-panel" id={panelId} role="group" aria-label={`${openCategory.label} 상세 태그`}>
       <div className="tag-chips">{openCategory.tags.map(chip)}</div>
-      <p>같은 범주에서 여러 개를 고르면 그중 하나라도 맞는 아이를, 다른 범주끼리는 모두 맞는 아이를 찾아요.</p>
+      <p>고른 태그가 맞는 아이부터 보여 드려요. 같은 범주에서 여러 개를 고르면 그중 하나만 맞아도 돼요. 털은 고른 것과 반대인 아이만 빼요.</p>
     </div>}
 
     {tags.length > 0 && <div className="tag-row tag-selected">

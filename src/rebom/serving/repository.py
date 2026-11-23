@@ -10,7 +10,7 @@ from typing import Any, Literal, Protocol
 
 from rebom.common.config import DataMode, Settings
 from rebom.serving.derive import age_years, sido, weight_kg
-from rebom.serving.tags import TagGroups, count_tags, load_sample_tags, matches
+from rebom.serving.tags import MATCH_RANK, TagGroups, count_tags, load_sample_tags, tag_match
 
 # 축종 코드 (docs/rescue_fields.md)
 SPECIES_CODES = {"dog": "417000", "cat": "422400", "etc": "429900"}
@@ -31,14 +31,21 @@ class AnimalQuery:
     age_max: int | None = None  # 이하
     weight_min: float | None = None  # kg, 이상
     weight_lt: float | None = None  # kg, 미만
-    tags: TagGroups = ()  # 사진 태그. 범주 안은 OR, 범주끼리는 AND (serving/tags.py)
+    tags: TagGroups = ()  # 사진 태그. 거르지 않고 맞는 아이를 앞에 둔다 (serving/tags.py)
     sort: SortKey = "latest"
     page: int = 1
     size: int = 20
 
 
+@dataclass(frozen=True)
+class SearchPage:
+    total: int
+    rows: list[dict[str, Any]]
+    matched: int | None = None  # 태그를 골랐을 때 모두 맞는(all) 아이 수
+
+
 class AnimalRepository(Protocol):
-    def search(self, query: AnimalQuery) -> tuple[int, list[dict[str, Any]]]: ...
+    def search(self, query: AnimalQuery) -> SearchPage: ...
 
     def get(self, desertion_no: str) -> dict[str, Any] | None: ...
 
@@ -56,7 +63,7 @@ def _words(q: str | None) -> list[str]:
     return [w for w in (q or "").split() if len(w) >= 2]
 
 
-def _matches(raw: dict[str, Any], query: AnimalQuery, today: date, tags: frozenset[str] = frozenset()) -> bool:
+def _matches(raw: dict[str, Any], query: AnimalQuery, today: date) -> bool:
     if query.species and raw.get("upKindCd") != SPECIES_CODES[query.species]:
         return False
     state = raw.get("processState") or ""
@@ -95,8 +102,6 @@ def _matches(raw: dict[str, Any], query: AnimalQuery, today: date, tags: frozens
         )
         if not any(w in text for w in words):
             return False
-    if query.tags and not matches(tags, query.tags):
-        return False
     return True
 
 
@@ -130,14 +135,20 @@ class SampleRepository:
         self._by_id = {r["desertionNo"]: r for r in self._rows}
         self._tags = load_sample_tags(tags_path or path.with_name("photo_tags.json"))
 
-    def search(self, query: AnimalQuery, today: date | None = None) -> tuple[int, list[dict[str, Any]]]:
+    def search(self, query: AnimalQuery, today: date | None = None) -> SearchPage:
         today = today or date.today()
-        empty: frozenset[str] = frozenset()
-        hits = [r for r in self._rows if _matches(r, query, today, self._tags.get(r["desertionNo"], empty))]
+        hits = [r for r in self._rows if _matches(r, query, today)]
         key, reverse = _sort_key(query.sort, today)
         hits.sort(key=key, reverse=reverse)
+        matched = None
+        if query.tags:
+            ranked = [(r, tag_match(self.tags_of(r["desertionNo"]), query.tags)) for r in hits]
+            ranked = [(r, m) for r, m in ranked if m is not None]
+            ranked.sort(key=lambda x: MATCH_RANK[x[1]])  # 안정 정렬이라 같은 단계 안에서는 고른 정렬이 유지된다
+            hits = [r for r, _ in ranked]
+            matched = sum(1 for _, m in ranked if m == "all")
         start = (query.page - 1) * query.size
-        return len(hits), hits[start : start + query.size]
+        return SearchPage(len(hits), hits[start : start + query.size], matched)
 
     def get(self, desertion_no: str) -> dict[str, Any] | None:
         return self._by_id.get(desertion_no)

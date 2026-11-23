@@ -1,4 +1,4 @@
-"""검색 API 사진 태그: /tags 사전·추천, /animals?tags= 조건(범주 안 OR, 범주끼리 AND). 외부 호출 없음."""
+"""검색 API 사진 태그: /tags 사전·추천, /animals?tags= 순서(맞는 아이 먼저, 털이 반대인 아이만 뺌). 외부 호출 없음."""
 from __future__ import annotations
 
 import json
@@ -55,18 +55,52 @@ def test_recommended_are_most_common_tags_with_results(client):
     assert client.get("/tags").json()["recommended"] == ["fur.fluffy", "ear.drop", "fur.short", "ear.semi"]
 
 
-def test_tags_or_within_category_and_across_categories(client):
-    a, b, c, _ = PROTECTED_DOGS[:4]
-    assert ids(client, tags="ear.drop") == {a, c}
-    assert ids(client, tags="ear.drop,ear.semi") == {a, b, c}
-    assert ids(client, tags="ear.drop,ear.semi,fur.fluffy") == {a, b}
-    assert ids(client, tags="ear.drop,eye.round") == set()
+def ranked(client, **params):
+    """(공고번호, 단계) 를 응답 순서대로, 그리고 matched."""
+    body = client.get("/animals", params={"size": 100, "state": "protect", **params}).json()
+    return [(i["desertionNo"], i["tagMatch"]) for i in body["items"]], body["matched"]
 
 
-def test_tags_combine_with_other_conditions(client):
+def test_tags_rank_matches_first_and_keep_the_rest(client):
+    a, b, c, d = PROTECTED_DOGS[:4]
+    rows, matched = ranked(client, tags="ear.drop")
+    order = [m for _, m in rows]
+    assert dict(rows)[a] == dict(rows)[c] == "all" and matched == 2
+    assert dict(rows)[d] == "unknown"  # 귀 태그가 없음
+    assert dict(rows)[b] == "other"  # 귀 태그가 다름 (빼지 않는다)
+    assert order == sorted(order, key=["all", "some", "unknown", "other"].index)
+    assert len(rows) == client.get("/animals", params={"state": "protect"}).json()["total"]  # 아무도 빠지지 않았다
+
+
+def test_some_categories_match(client):
+    a, b, c, d = PROTECTED_DOGS[:4]
+    rows, matched = ranked(client, tags="ear.drop,eye.round")
+    got = dict(rows)
+    assert matched == 0
+    assert got[a] == got[c] == got[d] == "some" and got[b] == "other"
+
+
+def test_opposite_fur_is_the_only_exclusion(client):
+    a, b, c, d = PROTECTED_DOGS[:4]
+    got = dict(ranked(client, tags="fur.fluffy,ear.drop")[0])
+    assert c not in got  # 짧은 털이라 뺀다
+    assert got[a] == "all" and got[b] == "some" and got[d] == "unknown"
+    got = dict(ranked(client, tags="fur.fluffy,fur.short")[0])  # 털을 둘 다 고르면 아무도 빠지지 않는다
+    assert {got[a], got[b], got[c]} == {"all"}
+
+
+def test_untagged_and_other_species_stay_after_matches(client):
     a, _, c, _ = PROTECTED_DOGS[:4]
-    assert ids(client, tags="ear.drop", species="dog", state="protect") == {a, c}
-    assert ids(client, tags="ear.drop", species="cat") == set()
+    body = client.get("/animals", params={"size": 100, "tags": "ear.drop"}).json()
+    assert [i["desertionNo"] for i in body["items"][:2]] == sorted([a, c], key=[i["desertionNo"] for i in body["items"]].index)
+    assert {i["desertionNo"] for i in body["items"][:2]} == {a, c}
+    cats = client.get("/animals", params={"size": 100, "tags": "ear.drop", "species": "cat"}).json()
+    assert cats["total"] > 0 and {i["tagMatch"] for i in cats["items"]} == {"unknown"} and cats["matched"] == 0
+
+
+def test_without_tags_no_match_fields(client):
+    body = client.get("/animals", params={"size": 3}).json()
+    assert body["matched"] is None and {i["tagMatch"] for i in body["items"]} == {None}
 
 
 def test_unknown_or_hidden_tag_is_rejected(client):
@@ -80,8 +114,8 @@ def test_without_tag_file_search_still_works(tmp_path):
     client = TestClient(create_app(Settings(data_mode=DataMode.SAMPLE, sample_path=tmp_path / DEFAULT_SAMPLE_PATH.name,
                                             _env_file=None)))
     assert client.get("/tags").json()["recommended"] == []
-    assert client.get("/animals", params={"tags": "ear.drop"}).json()["total"] == 0
-    assert client.get("/animals").json()["total"] > 0
+    body = client.get("/animals", params={"tags": "ear.drop"}).json()
+    assert body["matched"] == 0 and body["total"] == client.get("/animals").json()["total"] > 0
 
 
 def test_real_sample_tags_match_catalog_counts():
@@ -91,8 +125,8 @@ def test_real_sample_tags_match_catalog_counts():
     for tag in (t for c in body["categories"] for t in c["tags"]):
         expected = sum(1 for i in items if tag["code"] in i["tags"])
         assert tag["count"] == expected
-        total = client.get("/animals", params={"tags": tag["code"], "state": "protect"}).json()["total"]
-        assert total == expected
+        matched = client.get("/animals", params={"tags": tag["code"], "state": "protect"}).json()["matched"]
+        assert matched == expected
     assert len(body["recommended"]) == 4
 
 

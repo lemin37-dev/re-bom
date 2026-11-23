@@ -1,3 +1,10 @@
+/**
+ * 고른 태그에 대한 공고의 단계 (검색 API `tagMatch`). 이 순서대로 앞에 옵니다.
+ * all 모두 맞음 · some 일부 맞음 · unknown 고른 범주의 태그 정보 없음 · other 다른 태그
+ */
+export type TagMatch = 'all' | 'some' | 'unknown' | 'other'
+export const TAG_MATCH_ORDER: TagMatch[] = ['all', 'some', 'unknown', 'other']
+
 /** 공고에 붙은 사진 태그 (검색 API `photoTags`) */
 export type PhotoTag = { code: string; label: string }
 

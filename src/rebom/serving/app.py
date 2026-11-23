@@ -23,7 +23,7 @@ from rebom.serving.schemas import (
     to_detail,
     to_summary,
 )
-from rebom.serving.tags import catalog, parse_tags
+from rebom.serving.tags import catalog, parse_tags, tag_match
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -61,7 +61,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         weight_min: float | None = Query(None, ge=0),
         weight_lt: float | None = Query(None, gt=0),
         tags: str | None = Query(
-            None, max_length=300, description="사진 태그 코드, 쉼표로 여러 개 (예: ear.drop,fur.fluffy). 범주 안은 OR, 범주끼리는 AND"
+            None, max_length=300,
+            description="사진 태그 코드, 쉼표로 여러 개 (예: ear.drop,fur.fluffy). 거르지 않고 맞는 아이를 앞에 둔다. 털이 반대인 아이만 뺀다",
         ),
         sort: Literal["latest", "notice_end"] = "latest",
         page: int = Query(1, ge=1),
@@ -78,8 +79,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             age_min=age_min, age_max=age_max, weight_min=weight_min, weight_lt=weight_lt,
             tags=tag_groups, sort=sort, page=page, size=size,
         )
-        total, rows = r.search(query)
-        return AnimalPage(total=total, page=page, size=size, items=[to_summary(x, r.tags_of(x["desertionNo"])) for x in rows])
+        result = r.search(query)
+        items = []
+        for x in result.rows:
+            item = to_summary(x, r.tags_of(x["desertionNo"]))
+            if tag_groups:
+                item.tag_match = tag_match(r.tags_of(x["desertionNo"]), tag_groups)
+            items.append(item)
+        return AnimalPage(total=result.total, matched=result.matched, page=page, size=size, items=items)
 
     @app.get("/tags", response_model=TagCatalog, response_model_by_alias=True)
     def list_tags(r: AnimalRepository = Depends(repo)) -> TagCatalog:

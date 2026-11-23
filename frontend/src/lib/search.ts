@@ -1,6 +1,7 @@
 import type { AnimalSearchParams } from '@/lib/api'
 import type { Animal } from '@/types/animal'
 import type { Filters, SortOption } from '@/types/filters'
+import { TAG_MATCH_ORDER } from '@/types/tags'
 
 /** 화면의 지역 묶음 → 시·도 이름에 들어가는 단어 */
 const REGION_WORDS: Record<string, string[]> = {
@@ -32,7 +33,9 @@ export function sortToParam(sort: SortOption): AnimalSearchParams['sort'] {
   return sort === '공고 종료 임박 순' ? 'notice_end' : 'latest'
 }
 
-/** '입양 가능 먼저'를 켰을 때 이미 불러온 목록 안에서 입양 가능한 아이를 앞으로 (순서는 유지) */
+/** '입양 가능 먼저'를 켰을 때 이미 불러온 목록 안에서 입양 가능한 아이를 앞으로 (순서는 유지).
+ * 태그로 검색했으면 태그 단계(모두 맞음 → 일부 → 정보 없음 → 다름) 안에서만 올립니다. */
 export function availableFirstOrder(list: Animal[], isAvailable: (a: Animal) => boolean) {
-  return [...list].sort((a, b) => Number(isAvailable(b)) - Number(isAvailable(a)))
+  const rank = (a: Animal) => (a.tagMatch ? TAG_MATCH_ORDER.indexOf(a.tagMatch) : 0)
+  return [...list].sort((a, b) => rank(a) - rank(b) || Number(isAvailable(b)) - Number(isAvailable(a)))
 }

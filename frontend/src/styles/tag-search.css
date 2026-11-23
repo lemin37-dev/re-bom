@@ -36,3 +36,6 @@
 .photo-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
 .photo-tags > span { padding: 3px 8px; border-radius: 20px; font-size: 9px; line-height: 1.5; color: #6f7d5f; background: #f1f3ea; border: 1px solid #e4e8da; }
 .photo-tags > span.matched { color: #fffdf6; background: var(--color-forest); border-color: var(--color-forest); }
+.photo-tags > span.none { color: #a5ad97; background: transparent; border-style: dashed; }
+.tag-match-note { margin: 0 0 12px; font-size: 10px; color: var(--color-muted); }
+.tag-match-note b { color: var(--color-forest); font-weight: 700; }
