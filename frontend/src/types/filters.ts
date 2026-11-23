@@ -1,7 +1,6 @@
 export type Filters = {
   region: string
   type: string
-  age: string
   size: string
   gender: string
 }

@@ -1,4 +1,4 @@
-import type { Animal, AnimalShelter, ShelterSummary, Species } from '@/types/animal'
+import type { Animal, AnimalShelter, ShelterSummary, SizeLabel, Species } from '@/types/animal'
 
 /**
  * 검색 API 주소. 기본은 같은 주소의 /api (k3s·CloudFront 배포: /api 를 검색 API 로 넘김).
@@ -21,7 +21,12 @@ export type ApiAnimal = {
   weightText: string | null
   ageYears: number | null
   ageLabel: string | null
+  /** Silver birth_year. 검색 API에 아직 없을 수 있음 → 없으면 ageText 의 연도를 씀 */
+  birthYear?: number | null
+  /** Silver weight_kg: 범위는 큰 값, g→kg, 이상치 null */
   weightKg: number | null
+  /** Silver size: 개만. 10kg 미만 small · 25kg 미만 medium · 이상 large */
+  size: 'small' | 'medium' | 'large' | null
   state: string | null
   isProtected: boolean
   specialMark: string | null
@@ -52,8 +57,6 @@ export type AnimalSearchParams = {
   /** 보호소 등록번호 */
   shelter?: string
   q?: string
-  ageMin?: number
-  ageMax?: number
   weightMin?: number
   weightLt?: number
   sort?: 'latest' | 'notice_end'
@@ -88,8 +91,6 @@ function toQuery(p: AnimalSearchParams) {
   set('region', p.region?.join(','))
   set('shelter', p.shelter)
   set('q', p.q?.trim())
-  set('age_min', p.ageMin)
-  set('age_max', p.ageMax)
   set('weight_min', p.weightMin)
   set('weight_lt', p.weightLt)
   set('sort', p.sort)
@@ -115,6 +116,14 @@ export async function fetchShelters(signal?: AbortSignal) {
 const SPECIES: Record<string, Species> = { '417000': 'dog', '422400': 'cat', '429900': 'etc' }
 const GENDER = { M: '수컷', F: '암컷', Q: '성별 미상' } as const
 const NEUTER = { Y: '중성화 완료', N: '중성화 안 함', U: '중성화 확인 필요' } as const
+/** Silver size 는 영어 코드로 저장됨 → 화면은 한국어 (Silver 쪽 표기 합의 전까지 여기서 바꿈) */
+const SIZE: Record<string, SizeLabel> = { small: '소형', medium: '중형', large: '대형' }
+
+/** 원문 '2022(년생)' → 2022. 검색 API가 birthYear 를 주기 전까지 쓰는 대체값 */
+function birthYearOf(ageText: string | null) {
+  const m = /^(\d{4})/.exec(ageText?.trim() ?? '')
+  return m ? Number(m[1]) : null
+}
 
 /** 색상 문구로 사진 없는 공고의 일러스트 색을 고릅니다. */
 function artColors(color: string): Pick<Animal, 'coat' | 'ear' | 'bg'> {
@@ -138,10 +147,10 @@ export function toAnimal(a: ApiAnimal): Animal {
     cat: species === 'cat',
     kind: a.breed || a.species || '품종 미상',
     gender: a.sex ? GENDER[a.sex] : '성별 미상',
-    age: a.ageYears,
-    ageLabel: a.ageLabel ?? '나이 미상',
+    birthYear: a.birthYear ?? birthYearOf(a.ageText),
     kg: a.weightKg,
     weightLabel: a.weightKg !== null ? `${a.weightKg}kg` : '체중 미상',
+    size: SIZE[a.size ?? ''] ?? null,
     color,
     care: a.neutered ? NEUTER[a.neutered] : NEUTER.U,
     state: a.state ?? '',

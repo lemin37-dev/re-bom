@@ -75,16 +75,16 @@ export function behaviorTags(a: Animal) {
   return rules.filter(([re]) => re.test(text)).map(([, tag]) => tag)
 }
 
-/** 체중으로 나눈 크기 */
-export function sizeLabel(a: Animal) {
-  if (a.kg === null) return null
-  return a.kg < 8 ? '소형' : a.kg < 15 ? '중형' : '대형'
+/** 몸무게와 크기를 함께: '9kg, 소형'. 크기는 Silver size 값만 씀 (화면에서 계산하지 않음) */
+export function weightSizeLabel(a: Animal) {
+  return a.size ? `${a.weightLabel}, ${a.size}` : a.weightLabel
 }
 
+/** 카드·상세 제목. 나이는 쓰지 않음 (출생 연도는 상세 공고 정보에만) */
 export function animalTitle(a: Animal) {
-  return `${a.kind} · ${a.gender} · ${a.ageLabel}`
+  return `${a.kind} · ${a.gender}`
 }
 
 export function animalMeta(a: Animal) {
-  return `${a.weightLabel} · ${a.color} · ${a.care}`
+  return `${weightSizeLabel(a)} · ${a.color} · ${a.care}`
 }
