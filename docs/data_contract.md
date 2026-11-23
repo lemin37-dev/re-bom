@@ -251,15 +251,26 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 | `eye.sharp` | 날카로운 눈매 | 눈이 가늘고 눈꼬리가 길거나 올라감. 2회 모두 '날카로움' | O | O |
 | `breed.<품종>` | 닮은 품종 | 두 회차 모두 Top3 에 든 품종을 한 행씩 둡니다(`rank`, `similarity` = 두 회차 평균). 평균 유사도 90 이상(강 신호)만 검색에 씁니다 | 강 신호만 | X |
 
-품종 이름은 3년치 공고 빈도로 고른 62종 표준 이름(`src/rebom/tagging/data/breed_candidates_3y.json`)으로 맞춥니다. 화면에는 보이지 않고 자연어 검색·챗봇에만 씁니다(11/17 결정).
+품종은 모델이 세계의 모든 품종 중에서 자기 지식으로 고릅니다(특징표 없음, 11/17 결정). 3년치 공고 빈도로 고른 62종(`src/rebom/tagging/data/breed_candidates_3y.json`)은 질문지의 참고 목록이고, 모델이 같은 품종을 다르게 쓴 이름(진돗개 → 진도견, 토이푸들 → 푸들 등)을 한 표기로 맞추는 데만 씁니다. 목록 밖 품종은 모델이 쓴 이름 그대로 태그가 됩니다. 같은 품종 안의 크기·계통 차이(푸들·닥스훈트 크기, 저먼 셰퍼드 독 → 셰퍼드 등)만 하나로 묶고, 테리어처럼 품종 그룹으로는 묶지 않습니다. 모델이 쓴 원래 이름은 `detail` 의 `raw_breed` 에 남습니다.
+
+품종 태그는 강 신호(믹스견 포함)라도 화면에 보이지 않고(`displayable = false`) 자연어 검색·챗봇에만 씁니다(11/17 결정). 화면의 품종은 보호소가 공고에 적은 `kindNm` 이며 태깅 결과가 아닙니다.
 
 ### 13.3 테이블
 
 | 테이블 (test 는 이름 뒤 `_test`) | 한 행 | 쓰는 방식 |
 |---|---|---|
 | `gold_animal_tag` | 대상 × 작업 × 질문지 버전 × 태그 | 같은 대상·같은 질문지 버전으로 다시 태깅했을 때만 (`subject_type`, `subject_key`, `task`, `prompt_version`) 범위의 행을 교체. 사진이 바뀌면 새 sha256 이 새 행이 되고, 질문지 버전을 올려도 이전 행은 남음(이전 버전 보존). 실패한 작업은 교체하지 않음 |
-| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error` |
+| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error`. `status`·`tag_count` 뜻은 아래 표 |
 | `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분) |
+
+`gold_inference_log` 의 `status`·`tag_count` 뜻(OK·NO_RESULT 는 둘 다 끝난 것으로 보고 다시 부르지 않습니다):
+
+| 작업 | OK | NO_RESULT | `tag_count` |
+|---|---|---|---|
+| `photo_trait` | 태그 행이 하나 이상 | 2회 답이 맞는 요소가 하나도 없음(태그 행 없음) | 태그 행 수(모두 검색용) |
+| `photo_breed` | 강 신호(평균 유사도 90 이상) 품종이 하나 이상 | 강 신호 없음. 두 회차 모두 Top3 에 든 품종이 있으면 검색에 안 쓰는 품종 행(`searchable = false`)은 남아 있음 | 강 신호(검색용) 행 수 |
+
+그 밖에 `FAILED`(호출·답 형식 오류, 3번까지 다시 시도), `NO_PHOTO`(사진 없는 공고, `subject_type = animal`)가 있습니다.
 
 `gold_animal_tag` 칸: `subject_type`, `subject_key`, `tag_code`, `source`(photo), `tagger_version`, `task`, `model`, `prompt_version`, `source_hash`(입력 해시, 사진은 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
 
