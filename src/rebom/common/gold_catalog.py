@@ -68,9 +68,11 @@ TEXT_EMBEDDING_TABLE = "gold_text_embedding"
 EMBEDDING_CANARY_TABLE = "gold_embedding_canary"
 EMBEDDING_INFERENCE_LOG_TABLE = "gold_embedding_inference_log"
 EMBEDDING_REQUEST_LOG_TABLE = "gold_embedding_request_log"
+VERSION_REGISTRY_TABLE = "gold_version_registry"
 
 # --group: 한 묶음의 표만 만들 때. 묶음마다 결과·처리 기록·요청 기록 표를 따로 가진다
 GROUPS = {
+    "registry": (VERSION_REGISTRY_TABLE,),
     "tagging": (TAG_TABLE, INFERENCE_LOG_TABLE, REQUEST_LOG_TABLE),
     "embedding": (IMAGE_EMBEDDING_TABLE, TEXT_EMBEDDING_TABLE, EMBEDDING_CANARY_TABLE,
                   EMBEDDING_INFERENCE_LOG_TABLE, EMBEDDING_REQUEST_LOG_TABLE),
@@ -232,7 +234,16 @@ def schemas():
     request_spec = PartitionSpec(PartitionField(source_id=23, field_id=1000, transform=IdentityTransform(), name="dt"))
     # 모델을 바꿔 새로 백필하면 파일이 모델별로 나뉜다
     model_spec = PartitionSpec(PartitionField(source_id=4, field_id=1000, transform=IdentityTransform(), name="model"))
+    version_registry = Schema(
+        f(1, "task", StringType(), True),
+        f(2, "version", StringType(), True),
+        f(3, "config_json", StringType(), True),
+        f(4, "config_hash", StringType(), True),
+        f(5, "registered_at", TimestamptzType(), True),
+        identifier_field_ids=[1, 2],
+    )
     return {
+        VERSION_REGISTRY_TABLE: (version_registry, PartitionSpec()),
         TAG_TABLE: (tag, PartitionSpec()),
         INFERENCE_LOG_TABLE: (inference, PartitionSpec()),
         REQUEST_LOG_TABLE: (request, request_spec),
