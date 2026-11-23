@@ -1,17 +1,19 @@
-# Gold 공통 규칙 초안 × 임베딩 검토 (v5)
+# Gold 공통 규칙 초안 × 임베딩 검토 (v5, 최종)
 
-작성: 2026-11-20, 고침 2026-11-23 · 대상: Gold 담당(규칙 초안 작성자), 임베딩, 태깅 · 상태: **팀 결정 반영본 (Gold 담당 공유용)**
-기준: Gold 공통 규칙 초안(11-20, 규칙 1~11), PR #51(공용 키 `subject_type`·`subject_key`, 11-20 develop 합침), 11-20·11-21 S3 실측
+작성: 2026-11-20, 고침 2026-11-23 · 대상: Gold 담당(규칙 초안 작성자), 임베딩, 태깅 · 상태: **최종본. 전환 코드 develop 합침(PR #55, 11-23)**
+기준: Gold 공통 규칙 초안(11-20, 규칙 1~11), PR #51(공용 키 `subject_type`·`subject_key`, 11-20 develop 합침), PR #55(임베딩 Gold 전환, 11-23 develop 합침), 11-20~11-23 S3·Athena 실측
 
 > **한 줄 요약**
 > 임베딩 결과도 규칙 1에 따라 **Iceberg `rebom_gold`**로 옮깁니다. 태깅(Jev·vLLM)과 임베딩은 **결과·처리 기록·요청 기록 표를 묶음마다 따로** 둡니다(11-21 결정). 대상 키(`subject_type`·`subject_key`)와 칸 이름은 PR #51 태깅 표와 같습니다.
 > 칸 이름은 **이미 돌고 있는 태깅 표 이름**을 따릅니다. DAG 매일 실행은 **prod 표에만** 씁니다.
 > 11-21: 표를 만들고(test·prod) 옛 parquet을 두 곳에 옮겨 검증했습니다.
-> 11-23: DAG 쓰기 전환 코드를 PR로 올립니다(7절 6번). **PR이 develop에 합쳐지기 전까지 DAG는 parquet에 씁니다.**
+> 11-23: 전환 코드(PR #55)를 develop에 합치고 이미지 빌드까지 끝냈습니다. **11-24 03:00 실행부터 DAG가 prod 임베딩 묶음 표에 씁니다.**
+> 기록 단위: **사진 1장 = API 호출 1번 = 요청 기록 1행**. 벡터와 처리 상태도 사진마다 1행입니다(2.3절, 11-23 결정).
 
 고친 내력:
 - v3(11-20): PR #51에 맞춰 칸 이름을 태깅 표와 같게 하고, 실행 표(`gold_embedding_run`)는 만들지 않기로 함.
 - **v4(11-21): 처리 기록·요청 기록도 임베딩 묶음 안에 따로 둠**(`gold_embedding_inference_log`, `gold_embedding_request_log`). 태깅 기록 표는 PR #51 그대로 두고, v3에서 태깅 표에 더하려던 `detail`·`batch_size`는 임베딩 표로 옮김.
+- **v5(11-23, 최종): 매일 실행은 사진 1장씩 보내 요청 기록 1행 = 호출 1번 = 사진 1장**(사진별 몫 나누기 없앰). 전환 코드 PR #55 합침, 합치기 전 prod 옮기기 다시(검증 차이 0), 이미지 빌드 확인.
 
 ---
 
@@ -42,7 +44,7 @@
 | 7 | **모델 버전:** `model = "gemini-embedding-2:768"`. 이름의 숫자가 버전이고 `gemini-embedding-3`은 다른 모델. 같은 이름 안의 변화는 canary로 감시 |
 | 8 | **글 카드 본문 남김:** 가린 카드 본문(`input_text`)을 글 임베딩 표에 남김. 글 벡터 성능 평가에 씀 |
 | 9 | **빈 사진 점수 남김:** 임베딩 처리 기록에 `detail` 칸 |
-| 10 | **요청 기록은 요청 1번 = 1행** (11-23 고침, 태깅과 같은 뜻): 매일 실행은 사진 1장씩 보내 1행 = 사진 1장. 묶어 보내는 전체 재임베딩도 요청 1행(`batch_size` = 장수), 사진은 처리 기록 `detail.request_id`로 이음 |
+| 10 | **사진 1장 = 호출 1번 = 요청 기록 1행** (11-23 결정): 비용은 같고 매일 증분은 시간 차이가 작아, 사진별로 벡터·요청·처리 상태를 남기는 쪽으로 정함(2.3절). 전체 재임베딩 때만 6장 묶음(그때도 요청 1행, `batch_size` = 장수) |
 | 11 | **test·prod 둘 다 만듦.** DAG 매일 실행은 prod에만 씀. test는 확인용 |
 | 12 | **종료 공고:** 종료 뒤 **30일**이 지나면 RDS 벡터 삭제. Bronze도 30일로 맞추자고 수집 담당에게 제안 |
 | 13 | **활성 버전:** 코드 상수 그대로. 바꾸면 PR로 변경 내역을 공유·기록 |
@@ -124,12 +126,39 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
   - 이 값을 `{"gray_std": 1.2, "blank_std": 4.0}`처럼 남기면, 나중에 기준을 바꿔도 사진을 다시 받거나 계산하지 않고 기록만 보고 다시 판정할 수 있습니다.
 
 **`gold_embedding_request_log`** (append, `dt` 파티션. 태깅 `gold_model_request_log`와 같은 칸)
-- **요청 1번 = 1행** (11-23 고침). 태깅 요청 기록과 뜻이 같아 두 표를 같은 방식으로 읽습니다. OpenRouter 생성 기록(generation id = `request_id`)과도 1:1로 맞습니다.
-- 사진을 6장씩 묶은 건 4만 장을 처음 넣을 때 시간을 줄이려던 것이었습니다. 장당 과금이라 비용은 같습니다(11-21 실측 6장 묶음 장당 $0.000116 = 1장 단독 실측값).
-- 그래서 **매일 실행(11-24 03:00부터)은 사진을 1장씩** 보냅니다(`--image-batch 1`). 요청 1행 = 사진 1장이고, `batch_size` = 1, 비용·토큰은 요청 값 그대로입니다. 하루 수백 장이라 늘어나는 시간은 몇 분 안으로 봅니다(첫 실행에서 실측).
-- 전체 재임베딩(모델 교체 등)처럼 시간이 중요할 때만 `--image-batch 6`으로 묶습니다. 그때도 요청 1행이고 `subject_key` = 첫 사진, `batch_size` = 장수, 비용은 요청 전체 값입니다. 어느 사진이 그 요청에서 왔는지는 처리 기록 OK 행의 `detail` `{"request_id", "batch_size"}`로 이어 봅니다(사진별 비용 = `cost_usd / batch_size`).
-- 사진별 요청 행이 꼭 필요한 조회는 없었습니다. 비용 합계·OpenRouter 대조는 요청 단위가 더 편하고, 벡터 이상 추적(어느 요청·제공자에서 왔나)은 처리 기록의 `request_id`로 합니다.
-- canary도 1장씩 6번 보내(비용 같음, 약 $0.0007) 같은 규칙으로 6행을 남기고, `gold_run_id = canary-<시각>`으로 감시 비용을 따로 봅니다.
+**결정 (11-23): 사진 1장 = API 호출 1번 = 요청 기록 1행**
+
+| 사진 6장을 처리하면 | 6장 묶음 (11-23까지) | 1장씩 (11-24 03:00부터) |
+|---|---|---|
+| API 호출 | 1번 | 6번 |
+| 요청 기록 | 1행 (`batch_size` = 6) | **6행** (`batch_size` = 1) |
+| 벡터 (결과 표) | 6행 | 6행 |
+| 처리 상태 (처리 기록) | 6행 | 6행 |
+| 비용 | 같음 | 같음 |
+
+- **왜 1장씩인가**
+  - 6장 묶음은 4만 장을 처음 넣을 때 시간을 줄이려던 것이었습니다.
+  - 장당 과금이라 묶어도 비용이 같습니다. 11-21 실측으로 6장 묶음의 장당 비용은 $0.000116이고, 1장 단독 실측값과 같습니다.
+  - 매일은 증분만 처리합니다(11-22 130장, 11-23 60장). 1장씩 보내도 1~2분이 5~10분 안팎으로 늘어나는 정도라 운영에 영향이 없습니다(11-24 첫 실행에서 실측).
+  - 사진마다 벡터·요청·처리 상태가 1행씩 1:1로 남아 기록하고 관리하기 쉽습니다. 사진 한 장의 비용·제공자·응답 모델·지연·재시도를 그 사진의 요청 행에서 바로 봅니다.
+- **요청 기록 칸**
+  - 태깅 요청 기록과 같은 뜻(요청 1번 = 1행)이고, OpenRouter 생성 기록(generation id = `request_id`)과도 1:1입니다.
+  - `subject_key` = 그 사진 sha256, `batch_size` = 1, `cost_usd`·`prompt_tokens`·`latency_ms`·`attempts`는 그 요청 값 그대로입니다.
+  - 처리 기록 OK 행의 `detail` `{"request_id", "batch_size"}`로 요청 기록과 이어집니다.
+- **전체 재임베딩(모델 교체 등)만 6장 묶음**: `--image-batch 6`. 시간이 중요할 때만 씁니다.
+  - 그때도 요청 1행입니다. `subject_key` = 첫 사진, `batch_size` = 장수, 비용은 요청 전체 값입니다.
+  - 나머지 사진은 처리 기록 `detail.request_id`로 이어 보고, 사진별 비용은 `cost_usd / batch_size`로 계산합니다.
+- **canary**: 1장씩 6번 보내 요청 기록 6행을 남깁니다(비용 같음, 약 $0.0007). `gold_run_id = canary-<시각>`으로 감시 비용을 따로 봅니다.
+- 11-23까지의 6장 묶음 결과는 벡터·처리 상태만 Gold에 옮겼습니다. 옛 실행에는 요청 단위 기록이 없어 요청 기록은 **11-24 실행부터** 쌓입니다(실행 합계는 각 `summary.json`).
+
+```sql
+-- 사진 1장의 벡터·처리 상태·요청 (sha256 으로)
+SELECT l.status, l.detail, r.request_id, r.provider, r.response_model, r.cost_usd, r.latency_ms, r.attempts
+FROM rebom_gold.gold_embedding_inference_log l
+LEFT JOIN rebom_gold.gold_embedding_request_log r
+  ON r.request_id = json_extract_scalar(l.detail, '$.request_id')
+WHERE l.subject_key = '<sha256>';
+```
 - 실행 하나의 건수·비용은 두 기록 표를 `gold_run_id`로 묶어 봅니다. 그래서 실행 표는 따로 만들지 않습니다.
 
 ### 2.4 칸 이름: 규칙 초안과 태깅 표 (Gold 담당 확인)
@@ -169,7 +198,7 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
 | 누가 씀 | 사람이 확인할 때만 (옮기기 시험, Athena 조회, 벡터 저장 확인) | **DAG 매일 실행** (embed가 쓰고, load·canary가 읽음) |
 | 지워도 되나 | 됨 (`--recreate`는 test만) | 안 됨 |
 
-- 지금 서비스 RDS는 Iceberg 밖의 parquet에서 채워집니다. **전환 뒤 RDS의 원본은 prod 표**입니다.
+- 11-23 실행까지 서비스 RDS는 Iceberg 밖의 parquet에서 채워졌습니다. **11-24 실행부터 RDS의 원본은 prod 표**입니다.
 - 임베딩 입력은 Bronze manifest라서 Silver prod가 열리기 전에도 Gold prod를 만들 수 있습니다.
 - prod는 `--group embedding`으로 만들어 **임베딩 묶음 표 5개만** 만듭니다. 태깅 묶음 prod는 태깅 담당이 정할 때 만듭니다.
 
@@ -197,18 +226,18 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
 
 ## 6. 규칙별 상태
 
-표시: ✅ 지킴 · 🟡 표 정의 끝, 쓰기 전환 남음 · ⏳ 나중
+표시: ✅ 지킴(코드 합침, 11-24 실행부터 적용) · 🟡 Gold 담당 확인 남음 · ⏳ 나중
 
 | 규칙 | 상태 | 남은 일 |
 |---|---|---|
-| 1 Iceberg `rebom_gold` | 🟡 | 표 만들기·옮기기 끝(11-21). 쓰기 전환은 PR(11-23) |
-| 2 결과 키 | 🟡 | 사진당 1행, 키에 `model`·`prompt_version` |
-| 3 연결은 Gold 밖 | 🟡 | 결과 행에서 공고·칸 칼럼 뺌 |
+| 1 Iceberg `rebom_gold` | ✅ | 표 만들기·옮기기(11-21·11-23), 쓰기 전환 PR #55 합침(11-23) |
+| 2 결과 키 | ✅ | 사진당 1행, 키에 `model`·`prompt_version` |
+| 3 연결은 Gold 밖 | ✅ | 결과 행에 공고·칸 칼럼 없음 |
 | 4 입력 해시 | ✅ | |
-| 5 쌓기 | 🟡 | 같은 키 upsert, 지우지 않음 |
-| 6 원본 출력·점수 | 🟡 | 빈 사진 점수 `detail` |
+| 5 쌓기 | ✅ | 같은 키는 그 사진 범위만 교체, 다른 행은 지우지 않음 |
+| 6 원본 출력·점수 | ✅ | 빈 사진 점수, 요청 연결 `detail` |
 | 7 공통 칸 | 🟡 | 2.4절 이름 확인 |
-| 8 실행 기록 | 🟡 | 묶음별 기록 표(11-21), 칸은 태깅과 같게. 규칙 문구를 "공용 표" → "같은 칸 구성, 묶음별 표"로 고치자고 제안 |
+| 8 실행 기록 | 🟡 | 묶음별 기록 표(11-21), 사진 1장 = 요청 1행(11-23). 규칙 문구를 "공용 표" → "같은 칸 구성, 묶음별 표"로 고치자고 제안 |
 | 9 활성 버전 한 곳 | ✅ | 코드 상수, 바꾸면 PR |
 | 10 RDS 동기화 | ⏳ | 30일 뒤 삭제, 승인 뒤 |
 | 11 칸 삭제 | ⏳ | 10과 같이 |
@@ -224,9 +253,10 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
 | 3 | 표 만들기 | **사람** | ✅ 11-21 test·prod 임베딩 묶음 5개씩. test 태깅 표 3개는 그대로 |
 | 4 | 기존 parquet → test 표로 옮기고 검증 (Gemini 호출 없음, `cli gold-migrate --gold-env test --write`) | 임베딩 | ✅ 11-21: 44,336행 → 사진 36,589행, 처리 기록 36,592행(빈 사진 3), canary 2행. 다시 읽어 벡터·키 대조 차이 0, Athena 조회 확인 |
 | 5 | parquet → prod 표로 옮기기 | 임베딩 | ✅ 11-21: test와 같은 결과, Athena에서 prod·test 벡터 36,589행 모두 같음. **전환 직전에 한 번 더 실행**해 그 사이 매일 실행분을 넣음(다시 해도 결과 같음). ✅ 11-23 다시 실행: 36,779행(11-22 130 + 11-23 60 추가), 검증 차이 0 |
-| 6 | 코드 전환: embed는 prod 임베딩 묶음 표(결과·처리 기록·요청 기록)에 쓰고 load는 prod 표를 읽음, canary는 결과를 prod 표에 남김 | 임베딩 | 🟡 11-23 PR(Draft). 합치기 직전에 5번을 한 번 더. 7.2절 |
-| 7 | 종료 30일 뒤 RDS 삭제를 `load`에 추가 | 임베딩 | 승인 뒤 켬 |
-| 8 | 입력을 Silver 현재 사진으로 | 임베딩 | Silver 사진 DAG 정상 운영 뒤 |
+| 6 | 코드 전환: embed는 prod 임베딩 묶음 표(결과·처리 기록·요청 기록)에 쓰고 load는 prod 표를 읽음, canary는 결과를 prod 표에 남김. 사진 1장씩(요청 1행 = 사진 1장) | 임베딩 | ✅ 11-23 09:40 KST PR #55 합침, 09:42 이미지 빌드 성공. 7.2·7.3절 |
+| 7 | 11-24 03:00 첫 Gold 실행 확인 (로그, 요청 기록 1행 = 사진 1장, RDS 적재 수, 걸린 시간) | 임베딩 | 남음 |
+| 8 | 종료 30일 뒤 RDS 삭제를 `load`에 추가 | 임베딩 | 승인 뒤 켬 |
+| 9 | 입력을 Silver 현재 사진으로 | 임베딩 | Silver 사진 DAG 정상 운영 뒤 |
 
 표 만들기 명령 (PC 관리자 프로필, 사람이 실행):
 ```
@@ -254,9 +284,9 @@ SELECT status, count(*) FROM rebom_gold.gold_embedding_inference_log GROUP BY st
 SELECT * FROM rebom_gold.gold_embedding_canary ORDER BY checked_at;                     -- 모델 변화 확인
 ```
 
-### 7.2 전환 (11-23 PR)
+### 7.2 전환 (PR #55, 11-23 합침)
 
-DAG 세 task에 `--gold-env prod`를 붙입니다. 주지 않으면 전과 같이 parquet만 씁니다.
+DAG 세 task에 `--gold-env prod`, embed에 `--image-batch 1`을 붙였습니다. `--gold-env`를 주지 않으면 전과 같이 parquet만 씁니다.
 
 | task | 전환 뒤 |
 |---|---|
@@ -274,8 +304,8 @@ DAG 세 task에 `--gold-env prod`를 붙입니다. 주지 않으면 전과 같�
 
 합치기 전후 순서:
 1. 합치기 직전: `gold-migrate --gold-env prod --write`로 그 사이 매일 실행분을 prod에 넣고 검증 `ok` 확인(사람 승인 뒤). ✅ 11-23 09:38 KST, 7.3절.
-2. develop에 합침 → 임베딩 이미지 빌드가 끝났는지 확인(GitHub Actions `build-images`). 03:00 전에 끝나야 합니다. 옛 이미지로 돌면 `--gold-env` 인자 오류로 canary가 실패하고 embed·load는 돌지 않습니다(데이터는 안전).
-3. 다음 03:00 실행 뒤: Airflow 로그의 `원본: Gold prod 표`·`gold {...}` 줄, Athena 행 수, RDS 적재 수를 확인합니다.
+2. develop에 합침 → 임베딩 이미지 빌드가 끝났는지 확인(GitHub Actions `build-images`). 03:00 전에 끝나야 합니다. 옛 이미지로 돌면 `--gold-env` 인자 오류로 canary가 실패하고 embed·load는 돌지 않습니다(데이터는 안전). ✅ 11-23 09:42 KST.
+3. 다음 03:00 실행 뒤: Airflow 로그의 `원본: Gold prod 표`·`gold {...}` 줄, Athena 행 수(요청 기록 행 수 = 보낸 사진 수), RDS 적재 수, 걸린 시간을 확인합니다. (11-24 아침)
 
 ```sql
 SELECT gold_run_id, count(*) FROM rebom_gold.gold_image_embedding WHERE gold_run_id > '20261123' GROUP BY 1;
@@ -292,6 +322,9 @@ SELECT status, count(*) FROM rebom_gold.gold_embedding_inference_log GROUP BY st
 | 09:38 | prod 옮기기 다시 (`gold-migrate --gold-env prod --write`, 승인 뒤) | 25초, 검증 `ok: true`. 사진 36,779행, 처리 기록 36,782행(OK 36,779 / BLANK 3), canary 4행, 벡터·키·실행 id 차이 0 |
 | 09:39 | Athena 조회 | 11-22 실행 130행, 11-23 실행 60행, 전체 36,779행. canary 4행(11-19·20·21·22 UTC). 요청 기록 0행(전환 뒤부터 씀) |
 | 09:39 | 다시 prod 표 읽기 (쓰기 없음) | 이미 있음 44,569칸, 빈 사진 49칸 건너뜀, **보낼 사진 0장** → 첫 Gold 실행은 그날 새 사진만 보냄 |
+| 09:40 | PR #55 develop 합침 (사람) | 합침 커밋 `0a1cae0` |
+| 09:40–09:42 | 이미지 빌드 (`build-images`) | 6개 모두 성공(api·web·ingest·storage·embed·tag-img, `pyproject.toml`이 바뀌어 전부 빌드). ECR `rebom/embed:develop` = `sha-0a1cae0`(09:41) |
+| 오전 | 기록 단위 결정 | 사진 1장 = 호출 1번 = 요청 기록 1행으로 확정(2.3절). 비용 같음, 매일 증분 시간 증가 작음 |
 
 ---
 
@@ -301,8 +334,9 @@ SELECT status, count(*) FROM rebom_gold.gold_embedding_inference_log GROUP BY st
 |---|---|---|
 | 1 | 2.4절 칸 이름: 규칙 초안을 태깅 표 이름으로 고치는 것 | Gold 담당 |
 | 2 | 기록 표를 묶음별로 나누는 것(규칙 8 문구)과 처리 기록 `version` 형식 | Gold 담당, 태깅 |
-| 3 | 파드(노드 역할)가 `rebom_gold` prod 새 표에 쓸 수 있는지 (test는 태깅이 쓰는 중) | 인프라 |
+| 3 | 파드(노드 역할)가 `rebom_gold` prod 새 표에 쓸 수 있는지 | 인프라 · 11-22 정책 확인(S3 Get·Put, Glue Get·UpdateTable). 실제 쓰기는 11-24 첫 실행에서 확인 |
 | 4 | Bronze 보관 30일 | 수집 |
+| 5 | 11-24 첫 Gold 실행 결과 공유 (요청 기록 1행 = 사진 1장, 걸린 시간) | 임베딩 |
 
 ---
 
