@@ -232,7 +232,7 @@ def main():
     print("AWS_ACCOUNT_VALIDATION: PASS")
 
     s3 = session.client("s3")
-    catalog = get_aws_catalog(
+    catalog_factory = lambda: get_aws_catalog(
         profile=config["profile"],
         region=config["region"],
     )
@@ -306,7 +306,8 @@ def main():
 
         result = process_photo_manifest(
             s3=s3,
-            catalog=catalog,
+            catalog=None,
+            catalog_factory=catalog_factory,
             bucket=config["bucket"],
             manifest_key=key,
             table_name=config["table_name"],

@@ -492,3 +492,49 @@ def test_bronze_protect_list_and_checksum_are_used_for_coverage(run):
     with pytest.raises(ValueError, match="PHOTO_SNAPSHOT_BRONZE_CHECKSUM"):
         run.execute(key)
     run.assert_no_writes()
+
+
+def test_catalog_factory_after_snapshot_validation(run, monkeypatch):
+    from rebom.storage.silver import photo_pipeline
+
+    key = run.store_manifest("2026-11-20", "factory-order")
+    run.store_snapshot(key, [photo("FACTORY")])
+
+    calls = []
+    original = photo_pipeline.load_photo_snapshot
+
+    def tracked_snapshot(*args):
+        result = original(*args)
+        calls.append("snapshot_verified")
+        return result
+
+    def catalog_factory():
+        calls.append("catalog_created")
+        return run.catalog
+
+    monkeypatch.setattr(
+        photo_pipeline, "load_photo_snapshot", tracked_snapshot
+    )
+
+    result = run.execute(key, catalog_factory=catalog_factory)
+
+    assert result["result"] == "DRY_RUN_PASS"
+    assert calls == ["snapshot_verified", "catalog_created"]
+    run.assert_no_writes()
+
+
+def test_catalog_factory_not_called_on_invalid_snapshot(run):
+    key = run.store_manifest("2026-11-20", "factory-invalid")
+    run.store_snapshot(key, [photo("INVALID")], checksum="invalid")
+
+    calls = []
+
+    def catalog_factory():
+        calls.append("catalog_created")
+        return run.catalog
+
+    with pytest.raises(ValueError):
+        run.execute(key, catalog_factory=catalog_factory)
+
+    assert calls == []
+    run.assert_no_writes()
