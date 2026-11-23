@@ -155,6 +155,48 @@ with DAG(
 
     # 사진이 끝난 표시. 사진 task 가 실패해도 끝나기만 하면 성공으로 넘어간다(all_done).
     # Silver 는 기본 규칙(모두 성공)을 그대로 둬서, 이벤트가 실패하면 돌지 않고 사진 실패로는 막히지 않는다.
+    silver_photo_apply = KubernetesPodOperator(
+        task_id="silver_photo_apply",
+        name="silver-photo-apply",
+        namespace="rebom-storage",
+        service_account_name="rebom-storage",
+        image="559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/storage:develop",
+        image_pull_policy="Always",
+        cmds=["python", "scripts/storage/rebom_auto_process_photo_manifests.py"],
+        arguments=[
+            "--bronze-run-id", BRONZE_RUN_ID,
+            "--defer-missing-manifest",
+            "--apply",
+        ],
+        env_vars={
+            "REBOM_S3_BUCKET": DATA_BUCKET,
+            "AWS_DEFAULT_REGION": "ap-northeast-2",
+            "REBOM_PHOTO_ICEBERG_TABLE": "rebom_silver.silver_animal_image_auto_b_test",
+            "REBOM_PHOTO_ICEBERG_LOCATION": (
+                f"s3://{DATA_BUCKET}/bench_tmp/b-storage-test/"
+                "iceberg/silver_animal_image_auto_b_test"
+            ),
+            "REBOM_PHOTO_HISTORY_TABLE": (
+                "rebom_silver.silver_animal_image_version_history_auto_b_test"
+            ),
+            "REBOM_PHOTO_HISTORY_LOCATION": (
+                f"s3://{DATA_BUCKET}/bench_tmp/b-storage-test/"
+                "iceberg/silver_animal_image_version_history_auto_b_test"
+            ),
+            "REBOM_PHOTO_JOURNAL_PREFIX": (
+                "bench_tmp/b-storage-test/journals/photo_auto_runs"
+            ),
+        },
+        node_selector={"rebom/pool": "main"},
+        container_resources=k8s.V1ResourceRequirements(
+            requests={"cpu": "100m", "memory": "256Mi"},
+            limits={"memory": "1Gi"},
+        ),
+        get_logs=True,
+        on_finish_action="delete_pod",
+        in_cluster=True,
+    )
+
     photos_done = EmptyOperator(task_id="photos_done", trigger_rule="all_done")
 
     def embed_task(task_id: str, name: str, arguments: list[str]):
@@ -206,4 +248,5 @@ with DAG(
     rescue_incremental >> [generate_ingest_events, rescue_photos]
     rescue_photos >> photos_done
     [generate_ingest_events, photos_done] >> silver_dry_run
+    silver_dry_run >> silver_photo_apply
     photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings
