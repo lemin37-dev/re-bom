@@ -19,7 +19,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from rebom.storage.silver.apply_silver_pipeline import prepare_arrow
+from rebom.storage.silver.apply_silver_pipeline import prepare_arrow, upsert_notice
 from rebom.storage.silver.aws_catalog import get_aws_catalog
 from rebom.storage.silver.environment_config import get_silver_environment
 from rebom.storage.silver.prepare_silver_pipeline import prepare_silver_pipeline
@@ -226,11 +226,14 @@ def execute(args):
                 args.apply
                 or state_s3 is None
                 or "Silver preparation failed: STATUS_HISTORY;" not in str(exc)
-                or "previous_not_found" not in str(exc)
+                or not any(
+                    f"'{reason}'" in str(exc)
+                    for reason in ("previous_not_found", "previous_not_protecting")
+                )
             ):
                 raise
 
-            import gzip
+            from rebom.storage.silver.load_silver_events import load_silver_events
             from rebom.storage.silver.dry_run_baseline import (
                 build_dry_run_baseline,
             )
@@ -244,17 +247,12 @@ def execute(args):
                 previous_bronze = fetch_previous_day_bronze(
                     state_s3, args.s3_state_bucket, run_id, previous_dir
                 )
-                event_file = args.event_manifest.parent / "events.jsonl.gz"
-
-                with gzip.open(event_file, "rt", encoding="utf-8") as stream:
-                    event_rows = [
-                        json.loads(line) for line in stream if line.strip()
-                    ]
+                events = load_silver_events(args.event_manifest, run_id)
 
                 baseline = build_dry_run_baseline(
                     notice.scan().to_arrow().to_pylist(),
                     previous_bronze,
-                    event_rows,
+                    events["rows_by_kind"]["events"],
                 )
 
                 prepared, notice_arrow, history_arrow = prepare_new(
@@ -337,12 +335,7 @@ def execute(args):
         return
 
     if notice_arrow.num_rows and before["stage"] == "PREPARED":
-        result = notice.upsert(
-            notice_arrow,
-            join_cols=list(NOTICE_KEYS),
-            when_matched_update_all=True,
-            when_not_matched_insert_all=True,
-        )
+        result = upsert_notice(notice, notice_arrow)
         print("NOTICE_INSERTED:", result.rows_inserted)
         print("NOTICE_UPDATED:", result.rows_updated)
 

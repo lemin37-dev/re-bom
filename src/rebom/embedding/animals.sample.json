@@ -1,0 +1,313 @@
+{
+  "_note": "화면 자리 확인용 가짜 데이터 4마리 (v3). 사용자 예시 2마리를 바탕으로 함. 전화번호는 가짜(000-0000-0000), 발견 장소는 읍·면·동/구까지. 나이는 출생 연도만. API 응답 모양(지금 /api/animals/{id})에 Silver·태그 자리를 더한 형태",
+  "items": [
+    {
+      "desertionNo": "SAMPLE-0001",
+      "_case": "믹스견 · 중성화 미확인 · Jev 성격 태그(부정 포함) · 비전 특징 · 접종 기록 있음 · 사진 정상",
+      "noticeNo": "충남-당진-2026-00542",
+      "species": "개",
+      "speciesCode": "417000",
+      "breed": "믹스견",
+      "breedKey": null,
+      "sex": "F",
+      "neutered": "U",
+      "birthYear": 2024,
+      "weightText": "9.00(Kg)",
+      "weightKg": 9.0,
+      "size": "소형",
+      "breedTypicalSize": null,
+      "color": "검정&갈색",
+      "colorFamilies": [
+        "검정",
+        "갈색"
+      ],
+      "pattern": [
+        "얼룩"
+      ],
+      "state": "보호중",
+      "isProtected": true,
+      "noticeStart": "20261111",
+      "noticeEnd": "20261123",
+      "happenPlace": "당진시 용연동",
+      "orgName": "충청남도 당진시",
+      "shelter": {
+        "name": "당진시동물보호소",
+        "tel": "000-0000-0000",
+        "lat": null,
+        "lng": null
+      },
+      "specialMark": "경계심 심함, 입질 심함",
+      "sociality": "경계심 심함, 입질 심함",
+      "socialTags": [
+        {
+          "tag": "겁이 많음",
+          "negative": true
+        },
+        {
+          "tag": "사나움",
+          "negative": true
+        }
+      ],
+      "socialSoft": null,
+      "vaccinationCheck": "광견병 백신, 종합백신 완료 (11/10)",
+      "healthCheck": null,
+      "healthNote": null,
+      "healthTags": null,
+      "imageFeatures": [
+        {
+          "label": "귀",
+          "value": "섬"
+        },
+        {
+          "label": "털 길이",
+          "value": "단모"
+        }
+      ],
+      "breedTypicalFeatures": null,
+      "photos": [
+        {
+          "url": "https://example.invalid/sample-0001-1.jpg",
+          "slot": 1,
+          "sha256": null
+        }
+      ],
+      "summary": null,
+      "breedInfo": null,
+      "tagVersions": {
+        "jev": "sample",
+        "vision": "sample"
+      }
+    },
+    {
+      "desertionNo": "SAMPLE-0002",
+      "_case": "품종견 · 품종 정보·품종 대표 값 · 중성화 X · 건강 기록 없음",
+      "noticeNo": "충북-음성-2026-00444",
+      "species": "개",
+      "speciesCode": "417000",
+      "breed": "웰시 코기 카디건",
+      "breedKey": "cardigan_welsh_corgi",
+      "sex": "M",
+      "neutered": "N",
+      "birthYear": 2021,
+      "weightText": "9.00(KG)",
+      "weightKg": 9.0,
+      "size": "소형",
+      "breedTypicalSize": "중형 (표준 체중 수컷 13.6~17.2kg · 암컷 11.3~15.4kg)",
+      "color": "갈색&흰색",
+      "colorFamilies": [
+        "갈색",
+        "흰색"
+      ],
+      "pattern": [],
+      "state": "보호중",
+      "isProtected": true,
+      "noticeStart": "20261112",
+      "noticeEnd": "20261123",
+      "happenPlace": "음성군 삼성면",
+      "orgName": "충청북도 음성군",
+      "shelter": {
+        "name": "음성군 동물보호센터",
+        "tel": "000-0000-0000",
+        "lat": null,
+        "lng": null
+      },
+      "specialMark": "온순한 편",
+      "sociality": "온순한 편",
+      "socialTags": [
+        {
+          "tag": "순함",
+          "negative": false
+        }
+      ],
+      "socialSoft": null,
+      "vaccinationCheck": null,
+      "healthCheck": null,
+      "healthNote": null,
+      "healthTags": null,
+      "imageFeatures": [
+        {
+          "label": "귀",
+          "value": "섬"
+        },
+        {
+          "label": "털 길이",
+          "value": "단모"
+        }
+      ],
+      "breedTypicalFeatures": [
+        {
+          "label": "털 길이",
+          "value": "짧거나 중간 (FCI: Short or medium)"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://example.invalid/sample-0002-1.jpg",
+          "slot": 1,
+          "sha256": null
+        }
+      ],
+      "summary": null,
+      "breedInfo": {
+        "name": "웰시 코기 카디건",
+        "size": "중형 (표준 체중 수컷 13.6~17.2kg · 암컷 11.3~15.4kg)",
+        "coat": "짧거나 중간 길이 (FCI: Short or medium)",
+        "origin": null,
+        "links": [
+          {
+            "label": "FCI 표준",
+            "url": "https://fci.be/Nomenclature/Standards/038g01-en.pdf"
+          }
+        ],
+        "sources": [
+          "FCI-Standard N° 38",
+          "품종 표준 체중 30~38 lb / 25~34 lb"
+        ]
+      },
+      "tagVersions": {
+        "jev": "sample",
+        "vision": "sample"
+      }
+    },
+    {
+      "desertionNo": "SAMPLE-0003",
+      "_case": "고양이 · 태그·특징 아직 없음(pending) · 크기 없음(개만) · 사진 점검 전(null)",
+      "noticeNo": "대구-서구-2026-00613",
+      "species": "고양이",
+      "speciesCode": "422400",
+      "breed": "한국 고양이",
+      "breedKey": null,
+      "sex": "M",
+      "neutered": "N",
+      "birthYear": 2026,
+      "weightText": "0.52(Kg)",
+      "weightKg": 0.52,
+      "size": null,
+      "breedTypicalSize": null,
+      "color": "레몬색&흰색",
+      "colorFamilies": [
+        "노랑",
+        "흰색"
+      ],
+      "pattern": [],
+      "state": "보호중",
+      "isProtected": true,
+      "noticeStart": "20261030",
+      "noticeEnd": "20261109",
+      "happenPlace": "대구 서구",
+      "orgName": "대구광역시 서구",
+      "shelter": {
+        "name": "대구수의사회(아이펫)",
+        "tel": "000-0000-0000",
+        "lat": null,
+        "lng": null
+      },
+      "specialMark": "온순",
+      "sociality": null,
+      "socialTags": null,
+      "socialSoft": null,
+      "vaccinationCheck": null,
+      "healthCheck": null,
+      "healthNote": null,
+      "healthTags": null,
+      "imageFeatures": null,
+      "breedTypicalFeatures": null,
+      "photos": [
+        {
+          "url": "https://example.invalid/sample-0003-1.jpg",
+          "slot": 1,
+          "sha256": null
+        }
+      ],
+      "summary": null,
+      "breedInfo": null
+    },
+    {
+      "desertionNo": "SAMPLE-0004",
+      "_case": "사진이 없는 공고 → '사진 없음' 그림 · 성별·중성화 미확인 · 크기 중형(12kg)",
+      "noticeNo": "경기-안성-2026-00609",
+      "species": "개",
+      "speciesCode": "417000",
+      "breed": "믹스견",
+      "breedKey": null,
+      "sex": "Q",
+      "neutered": "U",
+      "birthYear": 2025,
+      "weightText": "12(Kg)",
+      "weightKg": 12.0,
+      "size": "중형",
+      "breedTypicalSize": null,
+      "color": "흰색",
+      "colorFamilies": [
+        "흰색"
+      ],
+      "pattern": [],
+      "state": "보호중",
+      "isProtected": true,
+      "noticeStart": "20261027",
+      "noticeEnd": "20261106",
+      "happenPlace": "안성시 미양면",
+      "orgName": "경기도 안성시",
+      "shelter": {
+        "name": "안성시동물보호센터",
+        "tel": "000-0000-0000",
+        "lat": null,
+        "lng": null
+      },
+      "specialMark": "사람을 잘 따름",
+      "sociality": null,
+      "socialTags": null,
+      "socialSoft": null,
+      "vaccinationCheck": null,
+      "healthCheck": null,
+      "healthNote": null,
+      "healthTags": null,
+      "imageFeatures": null,
+      "breedTypicalFeatures": null,
+      "photos": [],
+      "summary": null,
+      "breedInfo": null
+    }
+  ],
+  "searchStates": {
+    "_note": "결과 화면 상태 확인용 (백엔드가 없을 때)",
+    "normal": {
+      "items": [
+        "SAMPLE-0001",
+        "SAMPLE-0002"
+      ],
+      "unknownTier": [],
+      "exhausted": false,
+      "fallback": false
+    },
+    "withUnknown": {
+      "items": [
+        "SAMPLE-0002"
+      ],
+      "unknownTier": [
+        {
+          "id": "SAMPLE-0001",
+          "missing": [
+            "neuter"
+          ]
+        }
+      ],
+      "exhausted": false,
+      "fallback": false
+    },
+    "exhausted": {
+      "items": [],
+      "unknownTier": [],
+      "exhausted": true,
+      "fallback": false
+    },
+    "fallback": {
+      "items": [
+        "SAMPLE-0002"
+      ],
+      "unknownTier": [],
+      "exhausted": false,
+      "fallback": true
+    }
+  }
+}

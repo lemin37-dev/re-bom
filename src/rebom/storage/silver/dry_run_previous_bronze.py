@@ -52,6 +52,8 @@ def fetch_previous_day_bronze(s3, bucket, current_run_id, destination):
         raise RuntimeError("INVALID_PREVIOUS_BRONZE_PATH")
 
     previous_run_id = match.group(1)
+    if previous_run_id[:8] != previous_date.replace("-", ""):
+        raise RuntimeError("PREVIOUS_BRONZE_RUN_DATE_MISMATCH")
     source_prefix = manifest_key.rsplit("/", 1)[0]
 
     directory = Path(destination)

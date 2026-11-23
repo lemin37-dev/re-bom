@@ -33,6 +33,10 @@ def transform_notice(raw, source_type=None):
         "notice_no": raw.get("noticeNo"),
         "care_reg_no": raw.get("careRegNo"),
         "special_mark": raw.get("specialMark"),
+        "sfe_soci": raw.get("sfeSoci"),
+        "sfe_health": raw.get("sfeHealth"),
+        "health_chk": raw.get("healthChk"),
+        "vaccination_chk": raw.get("vaccinationChk"),
         "info_text": " ".join(
             str(raw[key]).strip()
             for key in ("sfeSoci", "sfeHealth", "specialMark")

@@ -274,7 +274,11 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 남아 있는 태그: `gold_animal_tag` 는 이전 사진·이전 버전·보호가 끝난 공고의 사진 태그를 지우지 않습니다. 위 조건으로 걸러서 씁니다.
 
 
+<<<<<<< HEAD
 ### 13.4 임베딩 묶음 [2026-11-20 결정, 11-21 기록 표 분리 · test·prod 표 만들고 옛 parquet 옮김. DAG 는 아직 parquet 에 씀]
+=======
+### 13.4 임베딩 묶음 [2026-11-20 결정, 11-21 기록 표 분리 · test·prod 표 만들고 옛 parquet 옮김, 11-23 DAG 쓰기 전환 PR]
+>>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
 
 사진·글 임베딩 결과도 Iceberg `rebom_gold` 로 옮깁니다. 태깅(Jev·vLLM)과는 다른 표 묶음이고, **처리 기록·요청 기록도 임베딩 묶음 안에 따로** 둡니다(11-21 결정). 칸 이름은 태깅 표를 따릅니다. 표 정의는 `src/rebom/common/gold_catalog.py`, 검토 문서는 `docs/gold_rules_embedding_review_20261120.md`.
 
@@ -284,7 +288,11 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 | `gold_text_embedding` | 공고 글 카드 × 모델 × 템플릿 버전 × 카드 해시 | `subject_type`(animal), `subject_key`(공고번호), `task`(text_embedding), `model`, `prompt_version`, `source_hash` |
 | `gold_embedding_canary` | 모델 변화 확인(canary) 1번 | `gold_run_id`(`canary-<시각>`) |
 | `gold_embedding_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | `gold_inference_log` 와 같은 칸·키 + `detail` |
+<<<<<<< HEAD
 | `gold_embedding_request_log` | 요청 1번 × 대상 | `gold_model_request_log` 와 같은 칸(append, `dt` 파티션) + `batch_size` |
+=======
+| `gold_embedding_request_log` | 요청 1번 (매일 실행은 사진 1장씩이라 = 사진 1장) | `gold_model_request_log` 와 같은 칸(append, `dt` 파티션) + `batch_size` |
+>>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
 
 - `model` = 모델 이름과 차원, 예 `gemini-embedding-2:768`(코드의 `MODEL_KEY`). 이름의 숫자가 모델 버전이고, 새 버전(`gemini-embedding-3`)은 다른 모델이라 따로 백필·검증·전환합니다. 같은 이름 안의 변화는 canary 로 봅니다. 파티션은 `model`.
 - `prompt_version`: 사진은 전처리 버전(`exif-rgb-max1024-jpeg90`), 글은 템플릿 버전(`A2`).
@@ -292,9 +300,16 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 글은 모델에 넣은 가린 카드 본문을 `input_text` 로 남깁니다(글 벡터 성능 평가에 씀). 카드를 만든 Silver 행의 `source_updated_at_raw` 를 `source_update_dt` 로 둡니다. 카드가 바뀌면 새 행이 생기고 이전 행은 남습니다.
 - 벡터는 `embedding list<float>`(768개, float32).
 - 공고–사진 연결(`desertion_no`, `image_slot`)은 Gold 에 두지 않습니다(13.0). 지금은 Bronze 사진 manifest, Silver 운영 뒤에는 Silver 현재 사진 테이블에서 합니다. RDS `image_embedding` 은 지금처럼 칸당 1행입니다.
+<<<<<<< HEAD
 - 기록 표를 나눈 이유: 임베딩만 쓰는 칸(`detail`, `batch_size`)과 요청 한 번에 여러 행을 쓰는 방식이 태깅 표의 뜻(요청 한 번 = 한 행)을 바꾸지 않게 하고, 묶음마다 표를 따로 만들고 고칠 수 있게 하기 위해서입니다. 칸 이름·타입은 태깅 기록 표와 같아서, 전체 비용 등은 Athena 에서 두 표를 `UNION ALL` 로 합쳐 봅니다.
 - 처리 기록(`gold_embedding_inference_log`): `version` = `<model>/<prompt_version>`(태깅 처리 기록과 같은 키라 모델 칸이 없어서 모델을 함께 넣음). `status` = OK·BLANK·SHA_MISMATCH·READ_ERROR·FAILED. 빈 사진은 `detail` 에 판정 점수 `{"gray_std": …, "blank_std": 4.0}` 를 남겨, 기준을 바꿔도 사진을 다시 받지 않고 다시 판정할 수 있게 합니다.
 - 요청 기록(`gold_embedding_request_log`): 사진 임베딩은 요청 1번에 사진을 최대 6장 보냅니다. 사진마다 1행, 같은 `request_id`, `batch_size` = 사진 수, `cost_usd`·토큰은 사진 수로 나눈 몫을 넣습니다(나머지는 첫 행). `request_id` 로 더하면 OpenRouter 가 돌려준 실제 값과 같습니다. canary 요청도 `gold_run_id = canary-<시각>` 으로 남깁니다.
+=======
+- 기록 표를 나눈 이유: 임베딩만 쓰는 칸(`detail`, `batch_size`)을 태깅 표에 더하지 않고, 묶음마다 표를 따로 만들고 고칠 수 있게 하기 위해서입니다. 칸 이름·타입은 태깅 기록 표와 같아서, 전체 비용 등은 Athena 에서 두 표를 `UNION ALL` 로 합쳐 봅니다.
+- 처리 기록(`gold_embedding_inference_log`): `version` = `<model>/<prompt_version>`(태깅 처리 기록과 같은 키라 모델 칸이 없어서 모델을 함께 넣음). `status` = OK·BLANK·SHA_MISMATCH·READ_ERROR·FAILED. 빈 사진은 `detail` 에 판정 점수 `{"gray_std": …, "blank_std": 4.0}` 를 남겨, 기준을 바꿔도 사진을 다시 받지 않고 다시 판정할 수 있게 합니다.
+- 요청 기록(`gold_embedding_request_log`) [11-23 결정]: 태깅 요청 기록과 같은 뜻으로 **요청 1번 = 1행**입니다. 매일 실행(11-24 03:00부터)은 사진을 1장씩 보내 요청 1행 = 사진 1장이고, `batch_size` = 1, 비용·토큰은 요청 값 그대로입니다(장당 과금이라 묶어도 비용은 같음, 11-21 실측 장당 $0.000116). 전체 재임베딩처럼 시간이 중요할 때만 `--image-batch 6` 으로 묶고, 그때도 요청 1행(`subject_key` = 첫 사진, `batch_size` = 장수, 비용은 요청 전체)이며 사진 → 요청 연결은 처리 기록 OK 행의 `detail` `{"request_id", "batch_size"}` 로 합니다. canary 도 1장씩 6번 보내 6행입니다(`gold_run_id = canary-<시각>`).
+- 쓰는 곳(11-23 전환): `embed --gold-env prod` 가 결과·처리 기록·요청 기록 표에 쓰고, `load --gold-env prod` 가 결과 표를 읽어 RDS 에 넣고, `canary --gold-env prod` 가 canary 표와 요청 기록 표에 남깁니다(`src/rebom/embedding/gold_store.py`). embed 는 되돌릴 때를 위해 S3 parquet 도 같이 씁니다(읽지 않음). 처리 기록의 `READ_ERROR` 는 `detail` 에 Bronze 키를 두고 `attempts` 로 연속 실패 수를 셉니다.
+>>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
 - 환경: DAG 매일 실행은 **prod 에만** 씁니다. test 는 표 구조·옮기기·조회 확인용이고 DAG 가 쓰지 않습니다. 임베딩 입력은 Bronze manifest 라 Silver prod 와 관계없이 Gold prod 를 만들 수 있습니다.
 - 표 만들기(사람이 실행): test `python -m rebom.common.gold_catalog --env test --create --profile rebom`, prod `python -m rebom.common.gold_catalog --env prod --create --group embedding --profile rebom`(임베딩 묶음 표 5개만. 태깅 표는 만들거나 바꾸지 않음).
 - 종료 공고(11-20 결정): 종료 뒤 **30일**이 지나면 `load` 가 RDS 벡터를 지웁니다. Bronze·Gold 에는 남아 있어 복귀하면 Gemini 를 다시 부르지 않고 다시 넣습니다. RDS 쓰기라 승인 뒤에 켭니다.

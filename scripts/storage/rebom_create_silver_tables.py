@@ -65,6 +65,10 @@ notice_fields = [
     ("breed_full_name_raw", S),
     ("is_mix", B),
     ("u60_at_notice", B),
+    ("sfe_soci", S),
+    ("sfe_health", S),
+    ("health_chk", S),
+    ("vaccination_chk", S),
 ]
 
 image_fields = [

@@ -440,8 +440,9 @@ def apply_photo_current_updates(
     *,
     hold_missing_previous=False,
     dry_run_baseline=None,
+    snapshot=None,
 ):
-    """버전 이력을 기준으로 현재 사진을 Iceberg에 반영한다."""
+    """스냅샷 또는 레거시 버전 이력으로 현재 사진을 계획하고 반영한다."""
     if apply and dry_run_baseline is not None:
         raise ValueError("PHOTO_BASELINE_DRY_RUN_ONLY")
 
@@ -457,19 +458,25 @@ def apply_photo_current_updates(
     schema = table.schema().as_arrow()
     before_rows = table.scan().to_arrow().to_pylist()
 
-    comparison_current = before_rows
-    comparison_history = history_rows
-    if dry_run_baseline is not None:
-        from rebom.storage.silver.photo_dry_run_baseline import photo_comparison_rows
+    if snapshot is not None:
+        from rebom.storage.silver.photo_snapshot import plan_photo_snapshot
 
-        comparison_current, comparison_history = photo_comparison_rows(
-            before_rows, history_rows, dry_run_baseline
+        plan = plan_photo_snapshot(before_rows, snapshot)
+    else:
+        comparison_current = before_rows
+        comparison_history = history_rows
+        if dry_run_baseline is not None:
+            from rebom.storage.silver.photo_dry_run_baseline import photo_comparison_rows
+
+            comparison_current, comparison_history = photo_comparison_rows(
+                before_rows, history_rows, dry_run_baseline
+            )
+
+        plan = plan_photo_current_updates(
+            comparison_current, comparison_history,
+            hold_missing_previous=hold_missing_previous,
         )
 
-    plan = plan_photo_current_updates(
-        comparison_current, comparison_history,
-        hold_missing_previous=hold_missing_previous,
-    )
     updates = plan["updates"]
     inserts = plan["inserts"]
 
@@ -526,12 +533,8 @@ def apply_photo_current_updates(
     for row in updates + inserts:
         expected[(row["desertion_no"], row["image_slot"])] = row
 
-    after_rows = (
-        catalog.load_table(table_name)
-        .scan()
-        .to_arrow()
-        .to_pylist()
-    )
+    verified_table = catalog.load_table(table_name)
+    after_rows = verified_table.scan().to_arrow().to_pylist()
 
     actual = {
         (row["desertion_no"], row["image_slot"]): row
@@ -540,6 +543,10 @@ def apply_photo_current_updates(
 
     if actual != expected:
         raise RuntimeError("현재 사진 Iceberg 반영 검증 실패")
+
+    if snapshot is not None:
+        committed = verified_table.current_snapshot()
+        result["current_snapshot_id"] = committed.snapshot_id if committed is not None else None
 
     result["verified_rows"] = len(after_rows)
     result["result"] = "APPLIED_AND_VERIFIED"

@@ -212,8 +212,17 @@ def test_drift_check_runs_canary_before_embed():
     """임베딩 전 모델 변화 감시: canary 가 실패하면(기본 all_success) embed·load 는 돌지 않는다."""
     tasks = _embed_tasks()
     kw = tasks["check_embedding_drift"]
-    assert ast.literal_eval(kw["arguments"]) == ["canary"]
+    assert ast.literal_eval(kw["arguments"]) == ["canary", "--gold-env", "prod"]
     assert "trigger_rule" not in tasks["embed_photos"] and "trigger_rule" not in kw
+
+
+def test_embedding_tasks_use_gold_prod_only():
+    """임베딩 결과 원본은 Gold prod 표. DAG 는 test 표에 쓰지 않는다(docs/data_contract.md 13.4)."""
+    for task, args in ((t, ast.literal_eval(kw["arguments"])) for t, kw in _embed_tasks().items()):
+        assert args[args.index("--gold-env") + 1] == "prod", task
+        assert "--profile" not in args, task  # 파드는 노드 역할로 접속
+    embed = ast.literal_eval(_embed_tasks()["embed_photos"]["arguments"])
+    assert embed[embed.index("--image-batch") + 1] == "1"  # 요청 기록 1행 = 사진 1장 (11-23 결정)
 
 
 def test_embedding_tasks_label_openrouter_usage():

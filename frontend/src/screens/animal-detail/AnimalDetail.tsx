@@ -6,6 +6,7 @@ import { PetCard } from '@/components/animal/PetCard'
 import { Icon } from '@/components/icons/Icon'
 import { SectionTitle } from '@/components/ui/SectionTitle'
 import { behaviorTags, isAvailable, noticePeriod } from '@/lib/animal'
+import { breedSizeOf } from '@/lib/breed-size'
 import type { Animal } from '@/types/animal'
 import { SupportCards } from '../common/SupportCards'
 import { DetailInformation } from './DetailInformation'
@@ -33,6 +34,7 @@ function protectionLabel(a: Animal) {
 }
 
 export function AnimalDetail({ animal: a, similar, onBack, onGuide, onOpen, compact = false, actionTarget }: Props) {
+  const breedSize = breedSizeOf(a.kind)
   const [gallery, setGallery] = useState(0)
   const [modal, setModal] = useState<DetailModalKind | null>(null)
   const [checked, setChecked] = useState<string[]>([])
@@ -69,6 +71,11 @@ export function AnimalDetail({ animal: a, similar, onBack, onGuide, onOpen, comp
     <DetailInformation compact={compact} id="pet-section-1" number="02" title="외형 정보" sub="생김새는 참고만, 가족이 될 이유는 일상에서 찾아요.">
       <div className="breed-fixed">공고상 품종: <strong>{a.kind}</strong></div>
       <div className="appearance-tags">{[a.size, a.weightLabel, a.color].filter(Boolean).map(tag => <span key={tag}>{tag}</span>)}</div>
+      {breedSize && <div className="breed-size">
+        <span className="breed-size-title">품종 정보(크기)</span>
+        <ul>{breedSize.lines.map(l => <li key={l.name}>{breedSize.showNames && <b>{l.name}</b>}{l.label}</li>)}</ul>
+        <small>품종의 대표 몸무게예요. 이 아이의 크기는 위 공고 체중 기준이에요 · 출처 {breedSize.sources.join(' · ')}</small>
+      </div>}
       <p className="info-note"><Icon name="leaf" size={16} />공고에 적힌 체중·색상이에요. 사진으로 털 길이·귀 모양 등을 정리하는 기능은 준비 중이에요.</p>
     </DetailInformation>
 
