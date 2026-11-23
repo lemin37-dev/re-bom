@@ -59,13 +59,14 @@ def test_overwrite_scope_and_upsert(sink):
           "requested_model": "m", "response_model": "m2", "provider": "p", "canonical_slug": "c",
           "media_resolution": "MEDIA_RESOLUTION_MEDIUM", "prompt_tokens": 1294, "completion_tokens": 1, "reasoning_tokens": 0,
           "cost_usd": 0.0007, "latency_ms": 1, "attempts": 1, "status": "OK", "error_code": None, "raw_answer": "{}",
-          "requested_at": ts, "gold_run_id": "r2", "dt": "2026-11-20"}],
+          "requested_at": ts, "gold_run_id": "r2", "dt": "2026-11-20", "request_scope": "single", "item_count": 1}],
     )
     tags = {(r["subject_key"], r["tag_code"]) for r in sink.tag.scan().to_arrow().to_pylist()}
     assert tags == {("h1", "breed.진도견"), ("h2", "ear.drop")}
     logs = sink.read_inference_log()
     assert len(logs) == 1 and logs[0]["status"] == "NO_RESULT" and logs[0]["attempts"] == 2
-    assert sink.requests.scan().to_arrow().to_pylist()[0]["subject_key"] == "h1"
+    req = sink.requests.scan().to_arrow().to_pylist()[0]
+    assert (req["subject_key"], req["request_scope"], req["item_count"]) == ("h1", "single", 1)
 
 
 def test_new_photo_or_version_keeps_previous_rows(sink):
@@ -151,3 +152,22 @@ def test_create_tables_adds_missing_columns_to_existing_table(tmp_path):
     assert {"temperature", "finish_reason", "native_finish_reason"} <= fields
     assert gc.create_tables(env, catalog) == []
     assert isinstance(catalog.load_table(name).schema(), Schema)
+
+
+def test_create_tables_adds_request_scope_columns_to_old_request_log(tmp_path):
+    """11-23 노션 결정: 요청 기록에 request_scope·item_count 를 nullable 로 더한다. 옛 행은 null 로 남는다."""
+    from pyiceberg.catalog.sql import SqlCatalog
+
+    catalog = SqlCatalog("t", uri=f"sqlite:///{tmp_path}/c.db", warehouse=f"file://{tmp_path}/wh")
+    env = gc.GoldEnvironment("unit", "rebom_gold", "_unit", f"file://{tmp_path}/wh/gold")
+    gc.create_tables(env, catalog)
+    name = env.table(gc.REQUEST_LOG_TABLE)
+    with catalog.load_table(name).update_schema() as update:
+        update.delete_column("item_count")
+        update.delete_column("request_scope")
+
+    assert gc.create_tables(env, catalog) == [f"칸 추가 {name}: request_scope, item_count"]
+    fields = {f.name: f for f in catalog.load_table(name).schema().fields}
+    assert not fields["request_scope"].required and not fields["item_count"].required
+    emb = {f.name for f in catalog.load_table(env.table(gc.EMBEDDING_REQUEST_LOG_TABLE)).schema().fields}
+    assert "request_scope" not in emb and "batch_size" in emb  # 임베딩 표는 그대로

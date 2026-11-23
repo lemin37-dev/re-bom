@@ -101,8 +101,12 @@ def test_embedding_logs_are_separate_and_union_compatible(world):
     inf, einf = cols(gc.INFERENCE_LOG_TABLE), cols(gc.EMBEDDING_INFERENCE_LOG_TABLE)
     req, ereq = cols(gc.REQUEST_LOG_TABLE), cols(gc.EMBEDDING_REQUEST_LOG_TABLE)
     assert einf[:len(inf)] == inf and [n for n, _ in einf[len(inf):]] == ["detail"]
-    assert ereq[:len(req)] == req and [n for n, _ in ereq[len(req):]] == ["batch_size"]
-    # 태깅 기록 표는 PR #51 그대로 (임베딩 칸이 없다)
+    # 요청 기록 공통 칸 27개는 같고, 뒤에 묶음별 칸만 다르다 (태깅 request_scope·item_count 11-23, 임베딩 batch_size)
+    tag_extra = ["request_scope", "item_count"]
+    common = req[:len(req) - len(tag_extra)]
+    assert [n for n, _ in req[len(common):]] == tag_extra
+    assert ereq[:len(common)] == common and [n for n, _ in ereq[len(common):]] == ["batch_size"]
+    # 태깅 기록 표에는 임베딩 칸이 없다
     assert "detail" not in dict(inf) and "batch_size" not in dict(req)
     assert tables[gc.EMBEDDING_INFERENCE_LOG_TABLE].schema().identifier_field_names() == set(gc.INFERENCE_LOG_KEYS)
     assert [f.name for f in tables[gc.EMBEDDING_REQUEST_LOG_TABLE].spec().fields] == ["dt"]
