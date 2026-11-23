@@ -80,6 +80,77 @@ def test_new_photo_or_version_keeps_previous_rows(sink):
     assert rows == {("h1", "v", "ear.prick"), ("h1", "v2", "ear.semi"), ("h2", "v", "fur.short")}
 
 
+def test_registered_tag_versions_and_legacy_replacement_are_isolated(sink):
+    ts = datetime.now(UTC)
+    task = rpt.trait_tags.TASK
+    v1, v2 = f"{task}@1", f"{task}@2"
+    sink.write([("h1", task, "v")], [tag("h1", "ear.prick", task, ts)], [], [])
+
+    sink.registered = True
+    for version in (v1, v2):
+        sink.write(
+            [("h1", task, version)],
+            [tag("h1", "ear.semi", task, ts) | {"version": version}],
+            [log("h1", task, "OK", 1, ts) | {"version": version}],
+            [{"task": task, "version": version, "requested_at": ts, "dt": ts.date().isoformat()}],
+        )
+    sink.write([("h1", task, v2)], [], [log("h1", task, "NO_RESULT", 2, ts) | {"version": v2}], [])
+    sink.registered = False
+    sink.write([("h1", task, "v")], [tag("h1", "ear.drop", task, ts)], [], [])
+
+    assert {(row["version"], row["tag_code"]) for row in sink.tag.scan().to_arrow().to_pylist()} == {
+        (None, "ear.drop"), (v1, "ear.semi"),
+    }
+    assert {row["version"]: row["status"] for row in sink.read_inference_log()} == {v1: "OK", v2: "NO_RESULT"}
+    assert {row["version"] for row in sink.requests.scan().to_arrow().to_pylist()} == {v1, v2}
+
+
+def test_select_and_run_pin_registered_tag_version(sink, monkeypatch):
+    from types import SimpleNamespace
+
+    from rebom.common.gold_version_registry import register_version
+
+    catalog = sink.tag.catalog
+    env = gc.GoldEnvironment("unit", "rebom_gold", "_unit", "")
+    task = rpt.trait_tags.TASK
+    version = f"{task}@1"
+    assert register_version(catalog, env, task, version, {
+        "model_id": rpt.MODEL, "prompt_version": rpt.VERSIONS[task], "provider": rpt.PROVIDER,
+        "preprocess_version": "exif-jpeg92-v1", "media_resolution": rpt.MEDIA_RESOLUTION,
+        "reasoning_effort": rpt.REASONING, "temperature": rpt.TEMPERATURE,
+    })
+    sha = "a" * 64
+    image = {"desertion_no": "1", "image_slot": 1, "sha256": sha, "original_s3_key": "pic"}
+    target_file = {}
+    monkeypatch.setattr(gc, "get_gold_environment", lambda name: env)
+    monkeypatch.setattr(rpt, "_clients", lambda args: (catalog, object()))
+    monkeypatch.setattr(rpt, "read_silver", lambda *args: (["1"], [image]))
+    monkeypatch.setattr(rpt, "_write_json", lambda path, value, s3: target_file.update(value))
+    monkeypatch.setattr(rpt, "_read_json", lambda *args: target_file)
+    monkeypatch.setattr(rpt, "fetch_image", lambda *args: b"sample")
+    monkeypatch.setattr(rpt, "OpenRouterClient", lambda key: SimpleNamespace(canonical_slug=lambda model: None))
+
+    def tag_once(items, client, config):
+        [(target, _image)] = items
+        assert target.tasks == (task,)
+        ts = datetime.now(UTC)
+        outcome = rpt.TaskOutcome(task, rpt.OK, [tag(sha, "ear.prick", task, ts, rpt.VERSIONS[task])])
+        request = {"task": task, "requested_at": ts, "dt": ts.date().isoformat(), "cost_usd": 0}
+        return [rpt.PhotoOutcome(target, {task: outcome}, [request])], None
+
+    monkeypatch.setattr(rpt, "tag_photos", tag_once)
+    args = ["--targets", "target.json", "--run-id", "test"]
+    assert rpt.main(["select", *args, "--version", version]) == 0
+    assert target_file["versions"] == {task: version}
+    with pytest.raises(ValueError, match="must match the target list"):
+        rpt.main(["run", *args, "--version", f"{task}@2"])
+    assert rpt.main(["run", *args]) == 0
+    assert rpt.main(["run", *args]) == 0
+    for base in (gc.TAG_TABLE, gc.INFERENCE_LOG_TABLE, gc.REQUEST_LOG_TABLE):
+        [row] = catalog.load_table(env.table(base)).scan().to_arrow().to_pylist()
+        assert row["version"] == version
+
+
 def test_old_schema_table_is_not_patched(tmp_path):
     """desertion_no 키의 옛 테이블은 칸 추가로 맞추지 않고 멈춘다. test 는 recreate 로 다시 만든다, prod 는 거부."""
     from pyiceberg.catalog.sql import SqlCatalog

@@ -128,6 +128,7 @@ def schemas():
         f(14, "detail", StringType()),
         f(15, "gold_run_id", StringType()),
         f(16, "gold_updated_at", TimestamptzType()),
+        f(17, "version", StringType()),
         identifier_field_ids=[1, 2, 6, 8, 3],
     )
     inference = Schema(
@@ -172,6 +173,7 @@ def schemas():
         f(25, "reasoning_effort", StringType()),
         f(26, "finish_reason", StringType()),
         f(27, "native_finish_reason", StringType()),
+        f(29, "version", StringType()),  # 28은 임베딩 요청 로그의 batch_size
     )
     # 임베딩 기록 표: 태깅 기록 표와 같은 칸(UNION ALL 가능) 뒤에 임베딩에만 필요한 칸을 더한다
     embedding_inference = Schema(
@@ -198,6 +200,7 @@ def schemas():
         vector(7),
         f(8, "gold_run_id", StringType()),
         f(9, "gold_updated_at", TimestamptzType()),
+        f(10, "version", StringType()),
         identifier_field_ids=[1, 2, 3, 4, 5],
     )
     text_embedding = Schema(

@@ -147,6 +147,34 @@ def test_embed_writes_gold_tables_and_parquet(monkeypatch, gold):
     assert {r["sha256"] for r in st.rows.values()} == sent  # 되돌릴 때를 위한 parquet 도 같이 씀
 
 
+def test_registered_embedding_versions_do_not_change_legacy_reads(monkeypatch, gold):
+    from rebom.common import gold_catalog as gc
+    from rebom.common.gold_version_registry import register_version
+    from rebom.embedding.gold_store import read_state
+
+    catalog, env, table = gold
+    s3 = make_world()
+    config = {"model_id": gemini.MODEL, "dim": 768, "preprocess_version": prep.PREP_VERSION, "blank_std": prep.BLANK_STD}
+    for version in ("image_embedding@1", "image_embedding@2"):
+        assert register_version(catalog, env, "image_embedding", version, config)
+        assert embed(monkeypatch, s3, "--version", version) == 0
+
+    assert not read_state(catalog, env, gemini.MODEL, 768, prep.PREP_VERSION).vectors
+    assert not staging.load_staged(s3, "test-bucket", gemini.MODEL, 768, prep.PREP_VERSION).rows
+    assert embed(monkeypatch, s3) == 0
+    assert embed(monkeypatch, s3, "--version", "image_embedding@2") == 0
+    for version in ("image_embedding@1", "image_embedding@2", None):
+        assert len(read_state(catalog, env, gemini.MODEL, 768, prep.PREP_VERSION, version=version).vectors) == 2
+    assert len(table(gc.IMAGE_EMBEDDING_TABLE)) == 6
+    assert len(table(gc.EMBEDDING_INFERENCE_LOG_TABLE)) == 9
+    assert len(table(gc.EMBEDDING_REQUEST_LOG_TABLE)) == 6
+    assert {row["version"] for row in table(gc.EMBEDDING_REQUEST_LOG_TABLE)} == {
+        "image_embedding@1", "image_embedding@2", None,
+    }
+    with pytest.raises(ValueError, match="does not match"):
+        embed(monkeypatch, s3, "--version", "image_embedding@1", "--dim", "32")
+
+
 def test_batched_run_is_still_one_request_row_and_links_photos(monkeypatch, gold):
     """전체 재임베딩처럼 묶어 보내도 요청 기록은 요청 1번 = 1행, 사진은 처리 기록 detail 로 이어진다."""
     from rebom.common import gold_catalog as gc

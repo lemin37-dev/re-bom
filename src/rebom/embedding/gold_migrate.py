@@ -23,7 +23,7 @@ from typing import Any, Iterable
 
 from rebom.embedding import canary, prep, staging
 from rebom.embedding.gold_store import (  # noqa: F401 - 이 모듈 이름으로도 쓴다
-    BLANK, IMAGE_TASK, OK, SUBJECT_PHOTO, log_version, model_id, table_arrow as _table_arrow, vectors_of,
+    BLANK, IMAGE_TASK, OK, SUBJECT_PHOTO, image_version_filter, log_version, model_id, table_arrow as _table_arrow, vectors_of,
 )
 from rebom.embedding.manifest import Photo, list_keys
 
@@ -191,7 +191,7 @@ def write(catalog, env, plan: Plan) -> dict[str, int]:
     image_t = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))
     log_t = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE))
     canary_t = catalog.load_table(env.table(gc.EMBEDDING_CANARY_TABLE))
-    image_f = And(EqualTo("model", mid), EqualTo("prompt_version", pv))
+    image_f = image_version_filter(image_t, mid, pv, None)
     log_f = And(EqualTo("task", IMAGE_TASK), EqualTo("version", plan.stats["log_version"]))
     canary_f = And(EqualTo("task", IMAGE_TASK), EqualTo("model", mid))
     runs = {r["gold_run_id"] for r in plan.logs} | set(plan.stats["runs"])
@@ -215,7 +215,7 @@ def verify(catalog, env, plan: Plan) -> dict[str, Any]:
 
     mid, pv = plan.stats["model"], plan.stats["prompt_version"]
     t = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))
-    got = t.scan(row_filter=And(EqualTo("model", mid), EqualTo("prompt_version", pv)),
+    got = t.scan(row_filter=image_version_filter(t, mid, pv, None),
                  selected_fields=("subject_key", "embedding", "gold_run_id")).to_arrow()
     keys = got.column("subject_key").to_pylist()
     runs = got.column("gold_run_id").to_pylist()

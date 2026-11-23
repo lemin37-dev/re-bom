@@ -52,6 +52,18 @@ def resolve_version(catalog, env, task: str, version: str) -> dict:
     return config
 
 
+def verify_runtime_config(catalog, env, task: str, version: str, runtime_config: dict) -> None:
+    """Reject a candidate if the running code cannot reproduce its registered settings."""
+    registered = resolve_version(catalog, env, task, version)
+    if canonical_config(registered)[1] != canonical_config(runtime_config)[1]:
+        raise ValueError(f"Gold version does not match the runtime config: {version}")
+
+
+def require_version_column(table) -> None:
+    if not any(field.name == "version" for field in table.schema().fields):
+        raise ValueError("Gold version column is missing. Apply the Gold catalog schema before running a candidate.")
+
+
 def register_version(catalog, env, task: str, version: str, config: dict) -> bool:
     """Append a version. Repeating the same registration is a no-op."""
     import pyarrow as pa
