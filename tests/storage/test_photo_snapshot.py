@@ -538,3 +538,125 @@ def test_catalog_factory_not_called_on_invalid_snapshot(run):
 
     assert calls == []
     run.assert_no_writes()
+def test_snapshot_recovers_after_partial_update_batches(run):
+    originals = [photo(f"A{i:03d}") for i in range(101)]
+    run.current.seed(*(silver_photo(row) for row in originals))
+    run.history.seed(*(silver_history(row) for row in originals))
+
+    changed = [photo(f"A{i:03d}", emptied=True) for i in range(101)]
+    key = run.store_manifest("2026-11-20", "partial-batch")
+    run.store_snapshot(key, changed)
+
+    original_write = run.current.write
+    calls = {"count": 0}
+
+    def fail_second_batch(arrow, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise RuntimeError("SIMULATED_SECOND_BATCH_FAILURE")
+        return original_write(arrow)
+
+    run.current.overwrite.side_effect = fail_second_batch
+
+    with pytest.raises(RuntimeError, match="SIMULATED_SECOND_BATCH_FAILURE"):
+        run.execute(key, apply=True)
+
+    assert calls["count"] == 2
+    assert run.current.overwrite.call_count == 2
+    assert run.s3.put_object.call_count == 0
+
+    run.current.overwrite.side_effect = (
+        lambda arrow, **kwargs: original_write(arrow)
+    )
+
+    recovered = run.execute(key, apply=True)
+
+    assert recovered["result"] == "APPLIED_AND_VERIFIED"
+    assert recovered["current_changed"] == 1
+    assert len(run.current.rows) == 101
+    assert all(
+        run.current.rows[(row["desertion_no"], 1)] == silver_photo(row)
+        for row in changed
+    )
+    assert run.execute(key)["result"] == "ALREADY_PROCESSED"
+
+def test_snapshot_recovers_after_insert_failure(run):
+    original = photo("A")
+    added = photo("B")
+    changed = photo("A", emptied=True)
+
+    run.current.seed(silver_photo(original))
+    run.history.seed(silver_history(original))
+
+    key = run.store_manifest(
+        "2026-11-20", "insert-failure",
+        files=[added],
+    )
+    run.store_snapshot(key, [changed, added])
+
+    run.current.append.side_effect = RuntimeError(
+        "SIMULATED_INSERT_FAILURE"
+    )
+
+    with pytest.raises(RuntimeError, match="SIMULATED_INSERT_FAILURE"):
+        run.execute(key, apply=True)
+
+    assert run.current.rows[("A", 1)] == silver_photo(changed)
+    assert ("B", 1) not in run.current.rows
+    assert ("B", 1, 1) in run.history.rows
+    assert run.s3.put_object.call_count == 0
+
+    run.current.append.side_effect = run.current.write
+
+    recovered = run.execute(key, apply=True)
+
+    assert recovered["result"] == "APPLIED_AND_VERIFIED"
+    assert recovered["history_inserted"] == 0
+    assert recovered["current_changed"] == 1
+    assert len(run.current.rows) == 2
+    assert run.current.rows[("A", 1)] == silver_photo(changed)
+    assert run.current.rows[("B", 1)] == silver_photo(added)
+
+    assert run.execute(key)["result"] == "ALREADY_PROCESSED"
+
+def test_snapshot_recovers_after_journal_failure(run):
+    original = photo("A")
+    added = photo("B")
+    changed = photo("A", emptied=True)
+
+    run.current.seed(silver_photo(original))
+    run.history.seed(silver_history(original))
+
+    key = run.store_manifest(
+        "2026-11-20", "journal-failure", files=[added]
+    )
+    run.store_snapshot(key, [changed, added])
+
+    run.s3.put_object.side_effect = RuntimeError(
+        "SIMULATED_JOURNAL_FAILURE"
+    )
+
+    with pytest.raises(RuntimeError, match="SIMULATED_JOURNAL_FAILURE"):
+        run.execute(key, apply=True)
+
+    assert run.current.rows[("A", 1)] == silver_photo(changed)
+    assert run.current.rows[("B", 1)] == silver_photo(added)
+    assert ("B", 1, 1) in run.history.rows
+
+    committed_snapshot = run.current.current_snapshot().snapshot_id
+    assert not any(k.startswith("journal/") for k in run.objects)
+
+    run.s3.put_object.side_effect = (
+        lambda Bucket, Key, Body, **kwargs:
+        run.objects.__setitem__(Key, Body)
+    )
+
+    recovered = run.execute(key, apply=True)
+
+    assert recovered["result"] == "APPLIED_AND_VERIFIED"
+    assert recovered["history_inserted"] == 0
+    assert recovered["current_changed"] == 0
+    assert run.current.current_snapshot().snapshot_id == committed_snapshot
+    assert len(run.current.rows) == 2
+
+    assert run.execute(key)["result"] == "ALREADY_PROCESSED"
