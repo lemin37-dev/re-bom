@@ -690,9 +690,24 @@ def gold_migrate_cmd(args: argparse.Namespace) -> int:
     return 0 if result["ok"] else 2
 
 
+def embed_text(args: argparse.Namespace) -> int:
+    from rebom.embedding import text_batch
+
+    return text_batch.command(args)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m rebom.embedding.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    text_parser = sub.add_parser("embed-text", help="A2 카드의 새 글 벡터를 Gold에 적재")
+    text_parser.add_argument("--silver-env", choices=("test", "prod"), default="test")
+    text_parser.add_argument("--gold-env", choices=("test", "prod"), default="test")
+    text_parser.add_argument("--profile")
+    text_parser.add_argument("--version", required=True)
+    text_parser.add_argument("--limit", type=int, required=True)
+    text_parser.add_argument("--write", action="store_true", help="임베딩 API를 호출하고 Gold에 저장")
+    text_parser.set_defaults(func=embed_text)
 
     d = sub.add_parser("discover", help="읽기만 하는 환경 점검")
     d.add_argument("--ping", action="store_true", help="Gemini 모델 정보 조회 (과금 없음)")

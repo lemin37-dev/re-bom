@@ -333,7 +333,9 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 
 같은 설정으로 등록을 반복하면 기존 행을 유지합니다. 설정이 바뀌면 새 버전을 등록합니다. 읽을 때는 저장된 해시를 검증합니다. 먼저 관리자가 `gold_catalog --create --group registry`로 테이블을 만들고, `python -m rebom.common.gold_version_registry --env test --task image_embedding --version image_embedding@1 --config config.json`으로 등록합니다. `--config`를 생략하면 등록값을 조회합니다.
 
-사진 태깅·사진 임베딩은 등록 버전을 명시하면 결과와 처리·요청 로그에 해당 버전을 기록합니다. 사진 입력의 식별값은 이번 연결에서 기존과 같이 검증한 원본 SHA-256입니다. 전처리 변경은 등록 버전으로 구분합니다. 태그의 논리 키는 `(subject_type, subject_key, task, version, tag_code)`, 사진 벡터는 `(subject_type, subject_key, task, version)`입니다. 태그가 0개면 해당 버전의 기존 태그를 지우고 처리 기록을 남깁니다. 글 임베딩은 기존 경로를 사용합니다.
+사진 태깅·사진 임베딩은 등록 버전을 명시하면 결과와 처리·요청 로그에 해당 버전을 기록합니다. 사진 입력의 식별값은 이번 연결에서 기존과 같이 검증한 원본 SHA-256입니다. 전처리 변경은 등록 버전으로 구분합니다. 사진 태그의 논리 키는 `(subject_type, subject_key, task, version, tag_code)`, 사진 벡터는 `(subject_type, subject_key, task, version)`입니다. 태그가 0개면 해당 버전의 기존 태그를 지우고 처리 기록을 남깁니다.
+
+글 임베딩의 후보 실행은 `gold_text_embedding.version`과 카드 본문 `source_hash`로 동일 공고의 기존 벡터를 찾습니다. `prompt_version`은 카드 템플릿, `tag_versions`는 카드 생성에 사용한 작업별 태그 버전의 JSON입니다. 같은 버전·같은 본문이면 재호출하지 않습니다. Jev가 태깅한 입력 글의 해시와 A2 카드 전체 본문의 해시는 각각 별개입니다.
 
 기존 결과의 새 `version` 컬럼은 null로 두고, 기존 질문지 또는 모델·차원·전처리 키로 계속 읽습니다. 이전 행을 새 버전으로 이관하려면 실제 설정을 확인해야 합니다. 필드가 추가된 테이블을 먼저 적용하고 초기 버전을 등록한 후 후보 실행을 사용합니다. Silver `publish_id` 연결과 RDS `active_version` 전환은 별도 구현입니다.
 

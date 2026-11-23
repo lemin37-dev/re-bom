@@ -331,6 +331,12 @@ class GeminiEmbedder:
         """사진 1장 → 벡터 1개."""
         return self._call([self._image(data)])[0]
 
+    def embed_texts_recorded(self, texts: Sequence[str]) -> tuple[list[list[float]], dict[str, Any]]:
+        """Embed one batch of prepared texts and return its request metadata."""
+        if not 0 < len(texts) <= TEXT_BATCH:
+            raise ValueError(f"한 번에 문장 1~{TEXT_BATCH}건")
+        return self._call_recorded(self._texts(texts))
+
     def embed_images(self, images: Sequence[bytes]) -> list[list[float]]:
         """사진 여러 장(최대 IMAGE_BATCH)을 요청 1번에. 사진마다 Content 1개라 벡터도 사진 수만큼 온다."""
         return self.embed_images_recorded(images)[0]

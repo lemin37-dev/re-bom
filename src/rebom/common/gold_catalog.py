@@ -215,6 +215,8 @@ def schemas():
         vector(9),
         f(10, "gold_run_id", StringType()),
         f(11, "gold_updated_at", TimestamptzType()),
+        f(12, "version", StringType()),
+        f(13, "tag_versions", StringType()),
         identifier_field_ids=[1, 2, 3, 4, 5, 6],
     )
     canary = Schema(
