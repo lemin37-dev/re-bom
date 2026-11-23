@@ -2,19 +2,26 @@
 
 import { useEffect, useState } from 'react'
 import { fetchTagCatalog } from '@/lib/api'
-import type { TagCatalog } from '@/types/tags'
+import { TAG_SPECIES, type TagCatalog, type TagSpecies } from '@/types/tags'
 
-// 웹/앱 모드를 오가며 화면이 다시 그려져도 한 번만 받도록 모듈에 둡니다. 실패하면 다음에 다시 시도합니다.
-let cached: Promise<TagCatalog> | null = null
+type Catalogs = Record<TagSpecies, TagCatalog>
 
-/** 사진 태그 사전. 불러오기 전이거나 실패하면 null (태그 영역을 숨김) */
-export function useTagCatalog() {
-  const [catalog, setCatalog] = useState<TagCatalog | null>(null)
+// 강아지·고양이 태그 세트를 한 번에 받아 둡니다. 탭을 바꿔도 다시 받지 않고, 웹/앱 모드를 오가도 한 번만 받습니다.
+let cached: Promise<Catalogs> | null = null
+
+function load(): Promise<Catalogs> {
+  return Promise.all(TAG_SPECIES.map(s => fetchTagCatalog(s.key)))
+    .then(list => Object.fromEntries(list.map(c => [c.species, c])) as Catalogs)
+}
+
+/** 종별 사진 태그 사전. 불러오기 전이거나 실패하면 null (태그 영역을 숨김) */
+export function useTagCatalogs() {
+  const [catalogs, setCatalogs] = useState<Catalogs | null>(null)
   useEffect(() => {
     let alive = true
-    cached ??= fetchTagCatalog().catch(e => { cached = null; throw e })
-    cached.then(c => { if (alive) setCatalog(c) }).catch(() => {})
+    cached ??= load().catch(e => { cached = null; throw e })
+    cached.then(c => { if (alive) setCatalogs(c) }).catch(() => {})
     return () => { alive = false }
   }, [])
-  return catalog
+  return catalogs
 }

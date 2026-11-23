@@ -1,5 +1,5 @@
 import type { Animal, AnimalShelter, ShelterSummary, SizeLabel, Species } from '@/types/animal'
-import type { PhotoTag, TagCatalog, TagMatch } from '@/types/tags'
+import type { PhotoTag, TagCatalog, TagMatch, TagSpecies } from '@/types/tags'
 
 /**
  * 검색 API 주소. 기본은 같은 주소의 /api (k3s·CloudFront 배포: /api 를 검색 API 로 넘김).
@@ -117,8 +117,8 @@ export async function fetchAnimal(id: string, signal?: AbortSignal) {
   return toAnimal(await getJson<ApiAnimal>(`/animals/${encodeURIComponent(id)}`, signal))
 }
 
-export async function fetchTagCatalog(signal?: AbortSignal) {
-  return getJson<TagCatalog>('/tags', signal)
+export async function fetchTagCatalog(species: TagSpecies, signal?: AbortSignal) {
+  return getJson<TagCatalog>(`/tags?species=${species}`, signal)
 }
 
 export async function fetchShelters(signal?: AbortSignal) {

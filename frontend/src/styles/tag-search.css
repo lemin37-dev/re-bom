@@ -39,3 +39,10 @@
 .photo-tags > span.none { color: #a5ad97; background: transparent; border-style: dashed; }
 .tag-match-note { margin: 0 0 12px; font-size: 10px; color: var(--color-muted); }
 .tag-match-note b { color: var(--color-forest); font-weight: 700; }
+.tag-species { display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 30px; font-size: 10px; border: 1px solid #e4e7da; background: #fffefa; color: #6f7d5f; }
+.tag-species:hover { border-color: var(--color-sage); }
+.tag-species.on { background: var(--color-sage-light); border-color: #b9c6a3; color: var(--color-forest); font-weight: 700; }
+.tag-empty { margin-left: 56px; font-size: 10px; color: var(--color-muted); }
+.tag-picker.compact .tag-species { min-height: 36px; padding: 6px 14px; font-size: 11px; }
+.tag-picker.compact .tag-empty { margin-left: 0; }
+.tag-empty.pick-first { color: var(--color-peach-deep); font-weight: 600; }

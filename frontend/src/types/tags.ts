@@ -14,4 +14,12 @@ export type TagOption = { code: string; label: string; count: number }
 /** 큰 범주 (털 · 귀 모양 · 눈매) 와 그 안의 상세 태그 */
 export type TagCategory = { key: string; label: string; tags: TagOption[] }
 
-export type TagCatalog = { categories: TagCategory[]; recommended: string[] }
+/** 태그 세트를 나누는 종. 생활 조건의 '종류'(개 · 고양이)와 같은 값 */
+export type TagSpecies = 'dog' | 'cat'
+export const TAG_SPECIES: { key: TagSpecies; label: string; filterType: string }[] = [
+  { key: 'dog', label: '강아지', filterType: '개' },
+  { key: 'cat', label: '고양이', filterType: '고양이' },
+]
+
+/** 한 종의 태그 세트. 아직 태그 세트가 없는 종은 categories 가 비어 있음 */
+export type TagCatalog = { species: TagSpecies; categories: TagCategory[]; recommended: string[] }

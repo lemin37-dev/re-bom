@@ -7,6 +7,7 @@ import { ApiError, fetchAnimals, type AnimalSearchParams } from '@/lib/api'
 import { availableFirstOrder, filtersToParams, sortToParam } from '@/lib/search'
 import type { Animal } from '@/types/animal'
 import type { Filters, SortOption } from '@/types/filters'
+import { TAG_SPECIES, type TagSpecies } from '@/types/tags'
 
 /** 보호센터 조건: 등록번호로 찾고, 이름은 화면 표시용 */
 export type CenterFilter = { regNo: string; name: string }
@@ -21,6 +22,11 @@ type SearchState = {
   setFilters: (value: Filters) => void
   /** 고른 사진 태그 코드. 누르면 바로 다시 검색합니다 (문장은 입력 중인 것이 아니라 마지막으로 제출한 것만 씀). */
   tags: string[]
+  /** 태그 세트를 보여 줄 종 (생활 조건의 종류와 같은 값). 종류가 전체면 null 이라 종부터 고르게 합니다. */
+  tagSpecies: TagSpecies | null
+  /** 강아지·고양이 중 고르기. 종류 조건을 맞추고 다른 종의 태그는 지웁니다. */
+  chooseTagSpecies: (species: TagSpecies) => void
+  /** 태그 고르기·빼기 (종을 고른 뒤에만 보임) */
   toggleTag: (code: string) => void
   clearTags: () => void
   sort: SortOption
@@ -135,16 +141,27 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   }
 
   // 태그는 누르는 즉시 검색하므로, 아직 제출하지 않은 입력 문장이 섞이지 않게 마지막 제출 문장을 그대로 씁니다.
-  function searchTags(nextTags: string[]) {
+  function searchTags(nextTags: string[], nextFilters: Filters = filters) {
     setCenterFilter(null)
     setTags(nextTags)
-    setSubmitted(prev => ({ ...prev, filters, tags: nextTags, seq: prev.seq + 1 }))
+    setFilters(nextFilters)
+    setSubmitted(prev => ({ ...prev, filters: nextFilters, tags: nextTags, seq: prev.seq + 1 }))
     setSearched(true)
+  }
+
+  const tagSpecies = TAG_SPECIES.find(s => s.filterType === filters.type)?.key ?? null
+
+  function chooseTagSpecies(species: TagSpecies) {
+    if (species === tagSpecies) return
+    const next = { ...filters, type: TAG_SPECIES.find(s => s.key === species)!.filterType }
+    if (searched || tags.length) searchTags([], next)
+    else { setFilters(next); setTags([]) }
   }
 
   const value: SearchState = {
     query, setQuery, photo, setPhoto, filters, setFilters, sort, setSort,
     tags,
+    tagSpecies, chooseTagSpecies,
     toggleTag: code => searchTags(tags.includes(code) ? tags.filter(t => t !== code) : [...tags, code]),
     clearTags: () => searchTags([]),
     availableFirst, toggleAvailableFirst: () => setAvailableFirst(v => !v),
@@ -160,7 +177,8 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     filterOpen,
     openFilters: () => setFilterOpen(true),
     closeFilters: () => setFilterOpen(false),
-    applyFilters: next => { setFilterOpen(false); if (searched) search(undefined, next); else setFilters(next) },
+    // 종류가 바뀌면 이전 종의 태그는 맞지 않으므로 지웁니다.
+    applyFilters: next => { setFilterOpen(false); const nextTags = next.type === filters.type ? tags : []; if (searched) search(undefined, next, nextTags); else { setFilters(next); setTags(nextTags) } },
   }
   return <SearchContext.Provider value={value}>{children}</SearchContext.Provider>
 }

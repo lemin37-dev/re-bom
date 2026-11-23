@@ -89,8 +89,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return AnimalPage(total=result.total, matched=result.matched, page=page, size=size, items=items)
 
     @app.get("/tags", response_model=TagCatalog, response_model_by_alias=True)
-    def list_tags(r: AnimalRepository = Depends(repo)) -> TagCatalog:
-        return TagCatalog(**catalog(r.tag_counts()))
+    def list_tags(
+        species: Literal["dog", "cat"] = Query("dog", description="태그 세트를 볼 종. 고양이 태그 세트는 준비 중이라 비어 있다"),
+        r: AnimalRepository = Depends(repo),
+    ) -> TagCatalog:
+        return TagCatalog(**catalog(species, r.tag_counts()))
 
     @app.get("/shelters", response_model=ShelterList, response_model_by_alias=True)
     def list_shelters(r: AnimalRepository = Depends(repo)) -> ShelterList:

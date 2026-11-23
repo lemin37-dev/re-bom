@@ -138,3 +138,22 @@ def test_animals_carry_their_photo_tags_as_chips(client):
     untagged = next(i for no, i in items.items() if no not in PROTECTED_DOGS[:4])
     assert untagged["photoTags"] == []
     assert client.get(f"/animals/{a}").json()["photoTags"] == items[a]["photoTags"]
+
+
+def test_tag_sets_use_known_visible_codes_once():
+    from rebom.serving.tags import TAG_SETS
+    from rebom.tagging import tag_codes
+
+    codes = [code for cats in TAG_SETS.values() for c in cats for code in c.codes]
+    assert len(codes) == len(set(codes)), "한 코드는 한 종·한 범주에만"
+    for code in codes:
+        tag = tag_codes.TAGS[code]
+        assert tag.searchable and tag.displayable, code
+
+
+def test_tag_catalog_per_species(client):
+    dog = client.get("/tags").json()
+    assert dog["species"] == "dog" and dog == client.get("/tags", params={"species": "dog"}).json()
+    cat = client.get("/tags", params={"species": "cat"}).json()
+    assert cat == {"species": "cat", "categories": [], "recommended": []}
+    assert client.get("/tags", params={"species": "etc"}).status_code == 422

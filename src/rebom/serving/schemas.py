@@ -106,7 +106,8 @@ class TagCategory(_Model):
 
 
 class TagCatalog(_Model):
-    categories: list[TagCategory]
+    species: str  # dog / cat
+    categories: list[TagCategory]  # 이 종의 태그 세트. 아직 없는 종은 빈 목록
     recommended: list[str]  # 추천 태그 코드 (보호중 동물이 많은 순)
 
 
