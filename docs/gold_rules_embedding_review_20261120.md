@@ -223,7 +223,7 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
 | 2 | 11-21 03:00 DAG 첫 자동 실행 확인 | 임베딩 | ✅ 11-21: canary 통과, 1,220장 임베딩, RDS 1,509칸 적재 |
 | 3 | 표 만들기 | **사람** | ✅ 11-21 test·prod 임베딩 묶음 5개씩. test 태깅 표 3개는 그대로 |
 | 4 | 기존 parquet → test 표로 옮기고 검증 (Gemini 호출 없음, `cli gold-migrate --gold-env test --write`) | 임베딩 | ✅ 11-21: 44,336행 → 사진 36,589행, 처리 기록 36,592행(빈 사진 3), canary 2행. 다시 읽어 벡터·키 대조 차이 0, Athena 조회 확인 |
-| 5 | parquet → prod 표로 옮기기 | 임베딩 | ✅ 11-21: test와 같은 결과, Athena에서 prod·test 벡터 36,589행 모두 같음. **전환 직전에 한 번 더 실행**해 그 사이 매일 실행분을 넣음(다시 해도 결과 같음) |
+| 5 | parquet → prod 표로 옮기기 | 임베딩 | ✅ 11-21: test와 같은 결과, Athena에서 prod·test 벡터 36,589행 모두 같음. **전환 직전에 한 번 더 실행**해 그 사이 매일 실행분을 넣음(다시 해도 결과 같음). ✅ 11-23 다시 실행: 36,779행(11-22 130 + 11-23 60 추가), 검증 차이 0 |
 | 6 | 코드 전환: embed는 prod 임베딩 묶음 표(결과·처리 기록·요청 기록)에 쓰고 load는 prod 표를 읽음, canary는 결과를 prod 표에 남김 | 임베딩 | 🟡 11-23 PR(Draft). 합치기 직전에 5번을 한 번 더. 7.2절 |
 | 7 | 종료 30일 뒤 RDS 삭제를 `load`에 추가 | 임베딩 | 승인 뒤 켬 |
 | 8 | 입력을 Silver 현재 사진으로 | 임베딩 | Silver 사진 DAG 정상 운영 뒤 |
@@ -273,7 +273,7 @@ DAG 세 task에 `--gold-env prod`를 붙입니다. 주지 않으면 전과 같�
 - 되돌리기: PR을 되돌리면(revert) parquet 경로로 돌아갑니다. parquet을 계속 써 두어 빈틈이 없습니다.
 
 합치기 전후 순서:
-1. 합치기 직전: `gold-migrate --gold-env prod --write`로 그 사이 매일 실행분을 prod에 넣고 검증 `ok` 확인(사람 승인 뒤).
+1. 합치기 직전: `gold-migrate --gold-env prod --write`로 그 사이 매일 실행분을 prod에 넣고 검증 `ok` 확인(사람 승인 뒤). ✅ 11-23 09:38 KST, 7.3절.
 2. develop에 합침 → 임베딩 이미지 빌드가 끝났는지 확인(GitHub Actions `build-images`). 03:00 전에 끝나야 합니다. 옛 이미지로 돌면 `--gold-env` 인자 오류로 canary가 실패하고 embed·load는 돌지 않습니다(데이터는 안전).
 3. 다음 03:00 실행 뒤: Airflow 로그의 `원본: Gold prod 표`·`gold {...}` 줄, Athena 행 수, RDS 적재 수를 확인합니다.
 
@@ -282,6 +282,16 @@ SELECT gold_run_id, count(*) FROM rebom_gold.gold_image_embedding WHERE gold_run
 SELECT dt, count(DISTINCT request_id) AS requests, sum(cost_usd) AS usd FROM rebom_gold.gold_embedding_request_log GROUP BY dt;
 SELECT status, count(*) FROM rebom_gold.gold_embedding_inference_log GROUP BY status;
 ```
+
+### 7.3 11-23 확인 기록 (합치기 전)
+
+| 시각 (KST) | 한 일 | 결과 |
+|---|---|---|
+| 09:30 | 11-22·11-23 03:00 DAG 임베딩 로그 | 둘 다 canary 통과(최소 코사인 1.0). 11-22 130장·RDS 179칸, 11-23 60장·RDS 72칸 |
+| 09:30 | PR 코드로 prod 표 읽기 (`embed --dry-run --gold-env prod`, 쓰기 없음) | 11초. 보낼 사진 190장 = 11-22·11-23 parquet 실행분 |
+| 09:38 | prod 옮기기 다시 (`gold-migrate --gold-env prod --write`, 승인 뒤) | 25초, 검증 `ok: true`. 사진 36,779행, 처리 기록 36,782행(OK 36,779 / BLANK 3), canary 4행, 벡터·키·실행 id 차이 0 |
+| 09:39 | Athena 조회 | 11-22 실행 130행, 11-23 실행 60행, 전체 36,779행. canary 4행(11-19·20·21·22 UTC). 요청 기록 0행(전환 뒤부터 씀) |
+| 09:39 | 다시 prod 표 읽기 (쓰기 없음) | 이미 있음 44,569칸, 빈 사진 49칸 건너뜀, **보낼 사진 0장** → 첫 Gold 실행은 그날 새 사진만 보냄 |
 
 ---
 
