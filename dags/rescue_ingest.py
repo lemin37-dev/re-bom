@@ -56,7 +56,8 @@ from datetime import timedelta
 import pendulum
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
-from airflow.sdk import DAG
+from airflow.providers.standard.operators.python import ShortCircuitOperator
+from airflow.sdk import DAG, Variable
 from kubernetes.client import models as k8s
 
 INGEST_IMAGE = "559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/ingest:develop"
@@ -90,6 +91,14 @@ def pod_task(task_id: str, name: str, cmds: list[str] | None = None, arguments: 
         in_cluster=True,
         **kwargs,
     )
+
+
+def is_silver_photo_apply_enabled():
+    value = Variable.get(
+        "rebom_silver_photo_apply_enabled",
+        default="false",
+    )
+    return str(value).strip().lower() == "true"
 
 
 with DAG(
@@ -155,6 +164,11 @@ with DAG(
 
     # 사진이 끝난 표시. 사진 task 가 실패해도 끝나기만 하면 성공으로 넘어간다(all_done).
     # Silver 는 기본 규칙(모두 성공)을 그대로 둬서, 이벤트가 실패하면 돌지 않고 사진 실패로는 막히지 않는다.
+    silver_photo_apply_enabled = ShortCircuitOperator(
+        task_id="silver_photo_apply_enabled",
+        python_callable=is_silver_photo_apply_enabled,
+    )
+
     silver_photo_apply = KubernetesPodOperator(
         task_id="silver_photo_apply",
         name="silver-photo-apply",
@@ -248,5 +262,5 @@ with DAG(
     rescue_incremental >> [generate_ingest_events, rescue_photos]
     rescue_photos >> photos_done
     [generate_ingest_events, photos_done] >> silver_dry_run
-    silver_dry_run >> silver_photo_apply
+    silver_dry_run >> silver_photo_apply_enabled >> silver_photo_apply
     photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings
