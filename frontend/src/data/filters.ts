@@ -1,15 +1,15 @@
 import type { FilterKey, Filters, SortOption } from '@/types/filters'
 
-export const allFilters: Filters = { region: '전국', type: '전체', age: '무관', size: '무관', gender: '무관' }
+export const allFilters: Filters = { region: '전국', type: '전체', size: '무관', gender: '무관' }
 /** 첫 검색 조건. 실제 공고 수가 적은 조건으로 시작하면 결과가 비기 쉬워 모두 '무관'에서 시작합니다. */
 export const initialFilters: Filters = allFilters
 
-export const filterLabels: Record<FilterKey, string> = { region: '지역', type: '종류', age: '나이', size: '크기', gender: '성별' }
+export const filterLabels: Record<FilterKey, string> = { region: '지역', type: '종류', size: '크기', gender: '성별' }
 export const filterOptions: Record<FilterKey, string[]> = {
   region: ['전국', '서울·경기', '인천', '강원', '충청', '전라', '경상', '제주'],
-  type: ['전체', '개', '고양이', '기타'],
-  age: ['무관', '1살 미만', '1~7살', '8살 이상'],
-  size: ['무관', '소형 8kg 미만', '중형 8~15kg', '대형 15kg 이상'],
+  type: ['전체', '개', '고양이'],
+  /** Silver size 와 같은 경계: 10kg 미만 · 10~25kg 미만 · 25kg 이상 */
+  size: ['무관', '소형 10kg 미만', '중형 10~25kg', '대형 25kg 이상'],
   gender: ['무관', '수컷', '암컷'],
 }
 
@@ -21,7 +21,7 @@ export const searchSuggestions = ['사람을 잘 따르는 온순한 아이', '�
 /** 추천 문장에 맞춰 함께 바꿀 조건 */
 export function filtersForSuggestion(text: string, filters: Filters): Filters {
   if (text.includes('고양이')) return { ...filters, type: '고양이', size: '무관' }
-  if (text.includes('소형견')) return { ...filters, type: '개', size: '소형 8kg 미만' }
+  if (text.includes('소형견')) return { ...filters, type: '개', size: '소형 10kg 미만' }
   return filters
 }
 

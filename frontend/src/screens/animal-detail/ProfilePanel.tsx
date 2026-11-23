@@ -1,5 +1,5 @@
 import { Icon } from '@/components/icons/Icon'
-import { animalMeta, availabilityLabel, isAvailable, noticePeriod, noticeProgress, shortDate, statusLabel } from '@/lib/animal'
+import { animalMeta, animalTitle, availabilityLabel, isAvailable, noticePeriod, noticeProgress, shortDate, statusLabel } from '@/lib/animal'
 import type { Animal } from '@/types/animal'
 
 function todayLabel() {
@@ -13,7 +13,7 @@ export function ProfilePanel({ animal: a, compact, onContact, onChecklist }: { a
   const progress = noticeProgress(a)
   return <div className="profile-panel">
     <div className="notice-meta"><span className={`inline-status ${available ? '' : 'pending'}`}>{statusLabel(a)}</span>{a.noticeNo && <span>{a.noticeNo}</span>}<span>공고 기간 {noticePeriod(a)}</span></div>
-    <div className="eyebrow">{a.protectedNow ? '새로운 가족을 기다리고 있어요' : '보호가 끝난 공고예요'}</div><h1>{a.kind} · {a.gender} · {a.ageLabel}{a.age !== null && <span>(추정)</span>}</h1><p className="profile-meta">{animalMeta(a)}</p>
+    <div className="eyebrow">{a.protectedNow ? '새로운 가족을 기다리고 있어요' : '보호가 끝난 공고예요'}</div><h1>{animalTitle(a)}</h1><p className="profile-meta">{animalMeta(a)}</p>
     {a.score !== undefined && <div className="why-box">
       <h2><Icon name="leaf" size={18} />왜 이 아이일까요?<span>매칭 {a.score}%</span></h2>
       {a.reasons?.map(([label, source]) => <div className="why-line" key={label}><span className={`why-dot ${source === '사진' ? 'peach' : source === '조건' ? 'sage' : 'green'}`} /><span>{label}</span><small>{source}</small></div>)}
