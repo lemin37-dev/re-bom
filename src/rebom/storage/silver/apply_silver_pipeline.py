@@ -1,6 +1,8 @@
 ﻿"""Apply prepared Silver changes to isolated Iceberg test tables."""
 
 import pyarrow as pa
+from pyiceberg.expressions import In
+from pyiceberg.table import DataScan, UpsertResult
 
 from rebom.storage.silver.apply_notice_pipeline import get_local_catalog
 
@@ -49,6 +51,48 @@ def prepare_arrow(rows, table, keys, require_all_fields=False):
 
     index_rows(rows, keys)
     return pa.Table.from_pylist(rows, schema=schema)
+
+
+def upsert_notice(table, arrow):
+    """Upsert on main, projecting its rows onto the current schema after evolution."""
+    snapshot = table.current_snapshot()
+    schema = table.schema()
+    if snapshot is None or snapshot.schema_id in (None, schema.schema_id):
+        return table.upsert(arrow, join_cols=list(NOTICE_KEYS))
+
+    if not arrow.schema.equals(schema.as_arrow(), check_metadata=False):
+        raise ValueError("Notice upsert requires the current table schema")
+    incoming = index_rows(arrow.to_pylist(), NOTICE_KEYS)
+    if not incoming:
+        return UpsertResult(rows_updated=0, rows_inserted=0)
+
+    key_column, = NOTICE_KEYS
+    with table.transaction() as tx:
+        # An unpinned scan reads main using the current schema. Iceberg projects
+        # nullable columns missing from old data files as null by field ID.
+        scan = DataScan(
+            table_metadata=tx.table_metadata,
+            io=table.io,
+            row_filter=In(key_column, [key for key, in incoming]),
+        )
+        existing = index_rows(scan.to_arrow().to_pylist(), NOTICE_KEYS)
+        inserts = []
+        updates = []
+        for position, (key, row) in enumerate(incoming.items()):
+            if key not in existing:
+                inserts.append(position)
+            elif existing[key] != row:
+                updates.append(position)
+
+        if updates:
+            tx.overwrite(
+                arrow.take(updates),
+                overwrite_filter=In(key_column, arrow[key_column].take(updates).to_pylist()),
+            )
+        if inserts:
+            tx.append(arrow.take(inserts))
+
+    return UpsertResult(rows_updated=len(updates), rows_inserted=len(inserts))
 
 
 def verify_rows(catalog, table_name, expected, keys):
@@ -108,12 +152,7 @@ def apply_prepared_silver(prepared, apply=False, stop_after_notice=False):
         return result
 
     if notice_rows:
-        notice_write = notice_table.upsert(
-            notice_arrow,
-            join_cols=list(NOTICE_KEYS),
-            when_matched_update_all=True,
-            when_not_matched_insert_all=True,
-        )
+        notice_write = upsert_notice(notice_table, notice_arrow)
         result["notice_inserted"] = notice_write.rows_inserted
         result["notice_updated"] = notice_write.rows_updated
     else:

@@ -7,7 +7,7 @@ import pytest
 from pyiceberg.catalog import load_catalog
 from pyiceberg.types import StringType
 
-from rebom.storage.silver.apply_silver_pipeline import NOTICE_KEYS, prepare_arrow
+from rebom.storage.silver.apply_silver_pipeline import NOTICE_KEYS, prepare_arrow, upsert_notice
 from rebom.storage.silver.prepare_notice_closure import prepare_notice_closure
 from rebom.storage.silver.prepare_notice_delta import prepare_notice_delta
 from rebom.storage.silver.transform_notice import transform_notice
@@ -113,7 +113,7 @@ def test_new_fields_participate_in_notice_delta_without_changing_status_history(
     assert {field: closed[field] for field in FIELDS} == {field: updated[field] for field in FIELDS}
 
 
-def test_extend_legacy_iceberg_schema_without_rewriting_existing_rows(tmp_path, notice_schema):
+def test_upsert_after_evolving_full_notice_schema_from_41_to_45_columns(tmp_path, notice_schema):
     warehouse = tmp_path / "warehouse"
     warehouse.mkdir()
     catalog = load_catalog(
@@ -124,16 +124,23 @@ def test_extend_legacy_iceberg_schema_without_rewriting_existing_rows(tmp_path, 
     catalog.create_namespace("rebom_test")
     name = "rebom_test.notice"
     old_schema = pa.schema([field for field in notice_schema if field.name not in FIELDS])
+    assert len(old_schema) == 41
+    assert len(notice_schema) == 45
     table = catalog.create_table(name, schema=old_schema)
-    raw = dict(SAMPLE, desertionNo="OLD")
-    row = transform_notice(raw)
-    legacy_row = {field: row[field] for field in old_schema.names}
-    table.append(prepare_arrow([legacy_row], table, NOTICE_KEYS, require_all_fields=True))
+    seeds = [
+        transform_notice(dict(SAMPLE, desertionNo=key, specialMark=f"mark-{key}"))
+        for key in ("UPDATE", "SAME", "UNTOUCHED")
+    ]
+    legacy_rows = [{field: row[field] for field in old_schema.names} for row in seeds]
+    table.append(prepare_arrow(legacy_rows, table, NOTICE_KEYS, require_all_fields=True))
     snapshot_id = table.current_snapshot().snapshot_id
     existing_fields = table.schema().fields
 
+    updated = dict(seeds[0], health_chk="checked", vaccination_chk=None)
+    inserted = transform_notice(dict(SAMPLE, desertionNo="INSERT"))
+    unchanged = {**legacy_rows[1], **dict.fromkeys(FIELDS)}
     with pytest.raises(ValueError, match="Unexpected columns"):
-        prepare_arrow([row], table, NOTICE_KEYS, require_all_fields=True)
+        prepare_arrow([updated], table, NOTICE_KEYS, require_all_fields=True)
 
     with table.update_schema() as update:
         for field in FIELDS:
@@ -142,6 +149,23 @@ def test_extend_legacy_iceberg_schema_without_rewriting_existing_rows(tmp_path, 
 
     assert table.current_snapshot().snapshot_id == snapshot_id
     assert table.schema().fields[:len(existing_fields)] == existing_fields
-    stored, = table.scan().to_arrow().to_pylist()
-    assert stored == {**legacy_row, **dict.fromkeys(FIELDS)}
-    assert prepare_arrow([row], table, NOTICE_KEYS, require_all_fields=True).to_pylist() == [row]
+    assert len(table.schema().fields) == 45
+    before = {row["desertion_no"]: row for row in table.scan().to_arrow().to_pylist()}
+    assert before == {
+        row["desertion_no"]: {**row, **dict.fromkeys(FIELDS)} for row in legacy_rows
+    }
+
+    payload = prepare_arrow([updated, unchanged, inserted], table, NOTICE_KEYS, require_all_fields=True)
+    result = upsert_notice(table, payload)
+    assert (result.rows_updated, result.rows_inserted) == (1, 1)
+    table = catalog.load_table(name)
+    stored = table.scan().to_arrow().to_pylist()
+    assert len(stored) == 4
+    assert {row["desertion_no"]: row for row in stored} == {
+        **before, "UPDATE": updated, "INSERT": inserted,
+    }
+
+    committed_snapshot = table.current_snapshot().snapshot_id
+    rerun = upsert_notice(table, payload)
+    assert (rerun.rows_updated, rerun.rows_inserted) == (0, 0)
+    assert catalog.load_table(name).current_snapshot().snapshot_id == committed_snapshot
