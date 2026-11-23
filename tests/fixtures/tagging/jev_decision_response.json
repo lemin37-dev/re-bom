@@ -1,0 +1,17 @@
+{
+ "id": "gen-test-0001",
+ "model": "typesafe/jev-1.14-20261014",
+ "provider": "TypeSafe",
+ "answers": {
+  "trait_soon": {"type": "noul", "noul": 0.97},
+  "trait_friendly": {"type": "noul", "noul": 0.62},
+  "trait_fear": {"type": "noul", "noul": 0.05},
+  "trait_wary": {"type": "noul", "noul": 0.03},
+  "trait_active": {"type": "noul", "noul": 0.81},
+  "trait_aggr": {"type": "noul", "noul": 0.02},
+  "trait_sensitive": {"type": "noul", "noul": 0.04},
+  "trait_curious": {"type": "noul", "noul": 0.1},
+  "health_info": {"type": "choice", "choice": "정보 있음", "probabilities": {"정보 없음": 0.08, "정보 있음": 0.92}}
+ },
+ "usage": {"input_tokens": 3919, "output_tokens": 170, "cost": 0.000165}
+}
