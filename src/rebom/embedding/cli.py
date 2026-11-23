@@ -28,10 +28,7 @@ PR 을 되돌리면 parquet 경로가 빈틈 없이 이어진다. staged·smoke�
     python -m rebom.embedding.cli gold-migrate --gold-env test|prod [--write] [--profile rebom]
         옛 S3 parquet → Gold Iceberg 임베딩 표 (사진당 1행, Gemini 호출 없음, gold_migrate.py).
         기본은 계획만 출력. --write 면 쓰고 다시 읽어 검증한다. 표는 gold_catalog --create 로 먼저 만든다(사람).
-<<<<<<< HEAD
-=======
         그 환경 표에 embed --gold-env 로 직접 쓴 실행이 있으면(전환 뒤) 멈춘다.
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
 
 현재 사진을 읽는 곳 (embed·staged·load·smoke): --source bronze(기본, 사진 manifest) | silver(Silver 이미지 표).
 silver 는 Silver 가 운영(apply)으로 열린 뒤 쓴다. --silver-env test 로는 S3·RDS 에 쓰지 않는다 (sources.py).
@@ -88,8 +85,6 @@ def _current(args: argparse.Namespace, s3: Any, bucket: str, writes: bool = Fals
     return current, manifests
 
 
-<<<<<<< HEAD
-=======
 def _gold_target(args: argparse.Namespace):
     """--gold-env 가 있으면 (카탈로그, Gold 환경), 없으면 None (parquet 경로)."""
     name = getattr(args, "gold_env", None)
@@ -110,7 +105,6 @@ def _gold_state(gold, dim: int):
     return state
 
 
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
 def _print(title: str, value: Any) -> None:
     print(f"== {title} ==")
     print(json.dumps(value, ensure_ascii=False, indent=2, default=str))
@@ -241,17 +235,12 @@ def embed(args: argparse.Namespace) -> int:
     from rebom.embedding import gemini, gold_store, plan as planmod, prep, staging
 
     bucket, s3 = _bucket(), _s3()
-<<<<<<< HEAD
-    staged = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION)
-    current, manifests = _current(args, s3, bucket, writes=not args.dry_run)
-=======
     gold = _gold_target(args)
     current, manifests = _current(args, s3, bucket, writes=not args.dry_run)
     if gold is None:
         staged = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION)
     else:
         staged = _gold_state(gold, args.dim).staged(current)
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
     plan = planmod.build(manifests, staged, current)
     order = plan.send_order()[: args.limit]
     retry_keys = [k for p in plan.send.values() for k in [p[0].s3_key] if k in staged.read_errors]
@@ -490,10 +479,6 @@ def load(args: argparse.Namespace) -> int:
     from rebom.embedding import gemini, plan as planmod, prep, staging, store
 
     bucket, s3 = _bucket(), _s3()
-<<<<<<< HEAD
-    st = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION, run_ids=args.run_id)
-    current, _ = _current(args, s3, bucket, writes=not args.dry_run)
-=======
     gold = _gold_target(args)
     if gold is not None and args.run_id:
         sys.exit("--gold-env 와 --run-id 는 같이 쓰지 않습니다 (Gold 표는 실행별이 아니라 사진별)")
@@ -502,7 +487,6 @@ def load(args: argparse.Namespace) -> int:
         st = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION, run_ids=args.run_id)
     else:
         st = _gold_state(gold, args.dim).staged(current)
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
     with store.connect() as conn:
         if not store.table_exists(conn):
             sys.exit(f"{store.TABLE} 테이블이 없습니다. db/migrations/001_init.sql 을 먼저 적용해 주세요.")
@@ -633,15 +617,12 @@ def canary_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
-<<<<<<< HEAD
-=======
 def _add_gold(p: argparse.ArgumentParser) -> None:
     p.add_argument("--gold-env", choices=("test", "prod"), default=None,
                    help="결과 원본을 Gold 임베딩 묶음 표로 (매일 DAG 는 prod). 없으면 S3 parquet 만 (전환 전 방식)")
     p.add_argument("--profile", default=None, help="Gold 카탈로그용 AWS 프로필 (PC). 파드에서는 비운다")
 
 
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
 def _add_source(p: argparse.ArgumentParser) -> None:
     from rebom.embedding import sources
 
@@ -669,14 +650,11 @@ def gold_migrate_cmd(args: argparse.Namespace) -> int:
 
     bucket, s3 = _bucket(), _s3()
     runs = gm.read_runs(s3, bucket, gemini.MODEL, args.dim)
-<<<<<<< HEAD
-=======
     direct = gm.direct_runs(runs, args.gold_env)
     if direct:
         print(f"gold-migrate 멈춤: {args.gold_env} 표에 embed --gold-env 로 직접 쓴 실행이 있습니다 {direct[:3]}. "
               "전환 뒤에는 옮기기를 하지 않습니다 (DAG 가 쓴 처리 기록을 덮어씀).", file=sys.stderr)
         return 2
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
     current, _ = sources.load_current("bronze", s3, bucket)
     scores = gm.measure_blanks(s3, bucket, runs, current)
     plan = gm.build(runs, gemini.MODEL, args.dim, prep.PREP_VERSION,
@@ -714,10 +692,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--part-size", type=int, default=5000, help="parquet 파일 1개당 행 수")
     e.add_argument("--dim", type=int, default=768, help="벡터 차원 (테이블 vector(768) 과 같아야 함)")
     _add_source(e)
-<<<<<<< HEAD
-=======
     _add_gold(e)
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
     e.set_defaults(func=embed)
 
     g = sub.add_parser("staged", help="S3 parquet 결과 점검 (과금 없음)")
@@ -734,10 +709,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="쓸 행이 N 을 넘으면 쓰지 않고 실패 (매일 DAG 의 안전장치, 0 이면 상한 없음)")
     ld.add_argument("--dim", type=int, default=768)
     _add_source(ld)
-<<<<<<< HEAD
-=======
     _add_gold(ld)
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
     ld.set_defaults(func=load)
 
     c = sub.add_parser("canary", help="매일 embed 전 모델 변화 감시: 고정 사진 6장 재임베딩(1장씩) → 기준과 코사인")

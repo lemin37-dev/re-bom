@@ -16,15 +16,9 @@
 - gold_text_embedding    공고 글 카드 1개 × 모델 × 템플릿 버전 × 카드 해시가 한 행. 가린 카드 본문(input_text)도 남긴다
 - gold_embedding_canary  모델 변화 확인(canary) 1번이 한 행
 - gold_embedding_inference_log  태깅 처리 기록과 같은 칸 + detail(판정 근거 JSON, 빈 사진의 회색조 표준편차 등)
-<<<<<<< HEAD
-- gold_embedding_request_log    태깅 요청 기록과 같은 칸 + batch_size. 여러 대상을 한 요청으로 보내면(사진 최대 6장)
-                                대상마다 한 행에 같은 request_id, batch_size = 대상 수, cost_usd·토큰은 나눠 넣어
-                                request_id 로 더하면 실제 값이 된다
-=======
 - gold_embedding_request_log    태깅 요청 기록과 같은 칸 + batch_size. 요청 1번 = 1행(태깅과 같은 뜻, 11-23).
                                 매일 실행은 사진 1장씩이라 batch_size = 1. 묶어 보내면 subject_key = 첫 사진,
                                 batch_size = 장수, 비용은 요청 전체 값 (사진은 처리 기록 detail.request_id 로 이음)
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
 두 묶음의 기록 표는 같은 칸 이름·타입이라 Athena 에서 UNION ALL 로 합쳐 볼 수 있다.
 
 테이블 만들기·칸 추가(create_tables)는 클라우드 리소스를 바꾸는 일이라 사람이 PC 관리자 프로필로 직접 실행한다:
@@ -185,11 +179,7 @@ def schemas():
     )
     embedding_request = Schema(
         *request.fields,
-<<<<<<< HEAD
-        f(28, "batch_size", IntegerType()),  # 한 요청에 같이 보낸 대상 수. cost_usd·토큰은 이 수로 나눈 몫
-=======
         f(28, "batch_size", IntegerType()),  # 한 요청에 같이 보낸 대상 수 (매일 실행 1). cost_usd·토큰은 요청 전체 값
->>>>>>> e268e68adf2fab168d57dc21b029f29cd4929bb8
     )
 
     def vector(i):
