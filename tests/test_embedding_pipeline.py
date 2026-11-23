@@ -270,7 +270,7 @@ def test_embed_dedupes_skips_blank_and_writes_s3_not_rds(monkeypatch):
     s3 = make_world()
     monkeypatch.setattr(store, "connect", lambda: pytest.fail("embed 는 RDS 에 쓰지 않는다"))
     run_cli(monkeypatch, s3, ["embed", "--limit", "10", "--workers", "2"])
-    assert FakeEmbedder.calls == [2]  # 고유 3개 중 빈 사진 1개 제외 → 요청 1번에 2장
+    assert FakeEmbedder.calls == [1, 1]  # 고유 3개 중 빈 사진 1개 제외 → 1장씩 요청 2번
     rows = staged_rows(s3)
     assert sorted((r["desertion_no"], r["image_slot"], r["source"]) for r in rows) == [
         ("411300202500001", 1, "api"), ("411300202500001", 2, "dup"),

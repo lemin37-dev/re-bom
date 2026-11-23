@@ -1,5 +1,7 @@
 # 사진 임베딩 파이프라인: Bronze 사진 → S3 parquet → RDS pgvector
 
+> 11-23: 결과 원본을 Gold Iceberg prod 임베딩 묶음 표로 옮기는 PR이 있습니다(`--gold-env prod`, `docs/data_contract.md` 13.4, `docs/gold_rules_embedding_review_20261120.md` 7.2절). 합쳐진 뒤에는 embed·load 가 parquet 대신 그 표를 읽고, parquet 은 되돌릴 때를 위해 같이 써 둡니다. 아래 parquet 설명은 전환 전 방식이자 되돌렸을 때의 방식입니다.
+
 작성: 2026-11-17 · 상태: **시범 운영** (1,461칸 RDS 적재·검증 완료, 전체 백필 진행 중) · 코드: `src/rebom/embedding/`
 
 표기는 `docs/data_contract.md`와 같습니다. 스키마·경로 약속은 그 문서 6절 "사진 임베딩 (pgvector)"이 기준이고, 이 문서는 실행 방법과 근거를 정리합니다.
@@ -11,7 +13,7 @@ Bronze 사진 + manifest (S3, 수집 A가 매일 씀)
   │  manifest: bronze/rescue/image_runs/dt=<날짜>/run_id=<id>/manifest.json
   │  사진:     bronze/rescue/images/<desertionNo>/popfile<N>[_vNNN].<ext>
   ▼
-① embed   보낼 사진 고르기 → 전처리 → Gemini(6장씩, 동시 4요청) → L2 정규화
+① embed   보낼 사진 고르기 → 전처리 → Gemini(1장씩, 동시 4요청. 11-23 전에는 6장씩) → L2 정규화
   ▼
 S3 parquet (원본, 모델·차원·전처리별로 모두 보관)
   │  gold/image_embedding/model=<모델>/dim=<차원>/run_id=<id>/part-*.parquet, summary.json
@@ -50,6 +52,13 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 
 ## 3. ① embed: 보낼 사진 고르기와 전처리
 
+### 3.0 현재 사진을 읽는 곳 (`sources.py`, 11-20)
+
+- `--source bronze`(기본): 사진 manifest를 모두 읽어 아래 1번 규칙으로 칸별 현재 사진을 고릅니다.
+- `--source silver`: Silver 이미지 표(칸마다 최신 정상 버전)의 `original_s3_key`·`sha256`을 그대로 씁니다. 사진 파일은 두 경우 모두 Bronze S3 원본에서 읽습니다.
+- Silver가 운영으로 열린 뒤 넘어갑니다. 조건·순서: `docs/image_embedding_status_20261120.md` 4절. `--silver-env test`로는 S3·RDS에 쓰지 않습니다.
+- 전환 전 대조: `python -m rebom.embedding.cli compare-sources --silver-env <환경>` → `switch_ready: true`
+
 ### 3.1 보내기 전에 거르는 것 (`plan.py`)
 
 1. **칸별 최신 버전만**: (`desertionNo`, `slot`)마다 `version`이 가장 큰 항목, 같으면 나중 실행. `failed`는 대상 아님.
@@ -76,7 +85,7 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 1. S3에서 원본을 받아 **sha256을 manifest와 대조**. 다르면 보내지 않고 `sha_mismatch_keys`에 기록(일시 문제일 수 있어 다음 실행에서 다시 봄).
 2. **빈 사진 판정**: 회색조 → 256×256 → 픽셀 표준편차 < 4.0이면 `blank`.
 3. **전처리**: EXIF 회전 보정 → RGB → 긴 변 1024 이하로 축소(늘리지 않음) → JPEG 품질 90 → `image/jpeg`. 버전 이름 `exif-rgb-max1024-jpeg90`을 parquet에 남깁니다.
-4. **요청**: 요청 1번에 최대 6장, 사진마다 Content 1개(문자열 목록을 그대로 넘기면 벡터 1개만 옴). 동시 요청 `--workers`(기본 4). 429·5xx는 지수 대기 후 최대 5번 재시도.
+4. **요청**: 요청 1번에 사진 `--image-batch`장(기본 1, 11-23 결정. 요청 기록 1행 = 사진 1장. 전체 재임베딩 때만 최대 6), 사진마다 Content 1개(문자열 목록을 그대로 넘기면 벡터 1개만 옴). 동시 요청 `--workers`(기본 4). 429·5xx는 지수 대기 후 최대 5번 재시도.
 5. **L2 정규화**, 768차원이 아니면 중단.
 
 ### 3.3 S3 결과 (`staging.py`)
@@ -257,7 +266,7 @@ OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 prov
 | 모델 | `gemini-embedding-2`, `output_dimensionality=768`, 받은 벡터는 L2 정규화 |
 | 입력 형식 | 저장하는 카드는 `"title: none \| text: " + 카드`, 검색어는 `"task: search result \| query: " + 검색어` (벤치마크 I2와 같음). `gemini.py`의 `document_text`·`query_text`가 이 형식과 같은지 확인 |
 | 요청 | 요청 1번에 여러 문장 (벤치마크는 20개, `TEXT_BATCH` 100도 결과는 같음). 문장마다 Content 1개 |
-| 카드 내용 | **A 템플릿**. `text_card_reference.py`의 `build_card()`와 글자까지 같게 만듭니다 (벤치마크 글 960/960 일치) |
+| 카드 내용 | **A 템플릿**. `src/rebom/embedding/handoff_20261120/text_card_reference.py`의 `build_card()`와 글자까지 같게 만듭니다 (벤치마크 글 960/960 일치) |
 | Silver 칼럼 | Silver 이름을 API 이름(kindNm·age·sexCd·neuterYn·weight·colorCd·specialMark)으로 바꿔 넣습니다. A2의 특징 글은 정제 단계가 `specialMark`·`sfeSoci`·`sfeHealth` 등을 합쳐 정리한 문장 칼럼 하나를 씁니다(11-18 결정, 칼럼 이름은 정리 뒤 확정). Silver의 `color_tag`·`size`는 쓰지 않고, 원래 털색·몸무게 값에서 같은 규칙으로 다시 계산합니다 |
 | 제외 | 보호자 실명(`careOwnerNm`)·연락처(AGENTS.md 1번). 특징 글 안의 전화번호는 **API로 보내기 전에** `[번호]`로 가리고, 앞의 관리 번호는 지웁니다 |
 | 발견 장소 | 카드에 넣지 않고 지역 필터로 씁니다 [제안] |
@@ -270,7 +279,7 @@ OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 prov
 | 2 | age | `2026년생` (네 자리 연도만) |
 | 3 | sexCd | 수컷 / 암컷 (미상은 뺌) |
 | 4 | neuterYn | 중성화함 / 중성화 안 함 (미상은 뺌) |
-| 5 | weight | `2.3kg 소형` (10kg 이하 소형 · 25kg 미만 중형 · 그 이상 대형) |
+| 5 | weight | `2.3kg 소형` — A1(벤치마크): 10kg 이하 소형 · A2(11-20, Silver 규칙): 10kg 미만 소형 · 10~25kg 미만 중형 · 25kg 이상 대형. `size_of(k, template)` |
 | 6 | colorCd | `털색 흰색계열·검정계열` (5계열 사전) + `(공고 털색 <원래 값>)` |
 | 7 | (A2) 태그 | `털 길이 장모`처럼 `이름표 값`, 확인불가·빈 값은 뺌 |
 | 8 | A1: specialMark / A2: 정리된 특징 문장 (specialMark + sfeSoci + sfeHealth 등) | `. 특징: <글>` (관리 번호 지우기·전화번호 가리기는 똑같이) |
@@ -324,7 +333,7 @@ OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 prov
   - 카드 만들기: `text_card.py` (A 템플릿 규칙 + 전화번호 가리기 + `template_version`)
   - 기존 모듈 재사용: `gemini.py`(글 접두어), `plan.py`·`staging.py`·`store.py`를 사진·글 공용으로 일반화
 - smoke 항목 (기준 파일: Colab `cell_S1_글시험기준.py` 11-18판 → `text_smoke_ref.parquet`, 30마리)
-  1. **카드 일치**: Silver 칼럼으로 만든 A1 카드(사회성 빼고)가 기준 `text`와 글자까지 같은가 → 다르면 칼럼 매핑 문제
+  1. **카드 일치**: Silver 칼럼으로 만든 A1 카드(사회성 빼고 — `build_card`는 `soci=True`가 아니면 sfeSoci를 넣지 않음)가 기준 `text`와 글자까지 같은가 → 다르면 칼럼 매핑 문제. `handoff_20261120/silver_schema_check.py --card-ref text_smoke_ref.parquet`로 미리 확인 가능
   2. **벡터 일치**: 기준 `doc_input`을 Gemini 768로 임베딩한 값과 기준 `vec`의 코사인이 0.99 이상인가 → 다르면 모델 이름·차원·접두어 문제
   3. 카드 질의로 자기 공고 찾기
   4. 글 질의 지연 p95 (서버 Pod에서. Colab에서는 0.218초)
