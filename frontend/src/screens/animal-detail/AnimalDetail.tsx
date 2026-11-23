@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom'
 import { PetCard } from '@/components/animal/PetCard'
 import { Icon } from '@/components/icons/Icon'
 import { SectionTitle } from '@/components/ui/SectionTitle'
-import { behaviorTags, isAvailable, noticePeriod, sizeLabel } from '@/lib/animal'
+import { behaviorTags, isAvailable, noticePeriod } from '@/lib/animal'
+import { breedSizeOf } from '@/lib/breed-size'
 import type { Animal } from '@/types/animal'
 import { SupportCards } from '../common/SupportCards'
 import { DetailInformation } from './DetailInformation'
@@ -33,12 +34,12 @@ function protectionLabel(a: Animal) {
 }
 
 export function AnimalDetail({ animal: a, similar, onBack, onGuide, onOpen, compact = false, actionTarget }: Props) {
+  const breedSize = breedSizeOf(a.kind)
   const [gallery, setGallery] = useState(0)
   const [modal, setModal] = useState<DetailModalKind | null>(null)
   const [checked, setChecked] = useState<string[]>([])
   const center = a.shelter
   const behavior = behaviorTags(a)
-  const size = sizeLabel(a)
   const neutered = a.care === '중성화 완료' ? a.care : a.care === '중성화 안 함' ? '안 함' : UNCONFIRMED
   const health: [string, string][] = [
     ['중성화', neutered],
@@ -63,13 +64,18 @@ export function AnimalDetail({ animal: a, similar, onBack, onGuide, onOpen, comp
     <div className="detail-section-nav">{sectionLabels.map((label, i) => <a href={`#pet-section-${i}`} key={label} onClick={e => jumpToSection(e, i)}>{label}</a>)}</div>
 
     <DetailInformation compact={compact} id="pet-section-0" number="01" title="공고 정보" sub="보호센터가 전하는 아이의 이야기예요.">
-      <dl className="notice-facts"><div><dt>공고상 품종</dt><dd>{a.kind}</dd></div><div><dt>발견 장소</dt><dd>{a.happenPlace || '공고에 없음'}</dd></div><div><dt>보호 상태</dt><dd>{protectionLabel(a)}</dd></div><div><dt>공고 기간</dt><dd>{noticePeriod(a)}</dd></div></dl>
+      <dl className="notice-facts"><div><dt>공고상 품종</dt><dd>{a.kind}</dd></div><div><dt>출생 연도</dt><dd>{a.birthYear ? `${a.birthYear}년생` : '공고에 없음'}</dd></div><div><dt>발견 장소</dt><dd>{a.happenPlace || '공고에 없음'}</dd></div><div><dt>보호 상태</dt><dd>{protectionLabel(a)}</dd></div><div><dt>공고 기간</dt><dd>{noticePeriod(a)}</dd></div></dl>
       <div className="original-quote"><span>공고 특징 · 원문</span><p>{a.quote ? `“${a.quote}”` : '보호소가 적은 특징 문장이 없어요.'}</p></div>
     </DetailInformation>
 
     <DetailInformation compact={compact} id="pet-section-1" number="02" title="외형 정보" sub="생김새는 참고만, 가족이 될 이유는 일상에서 찾아요.">
       <div className="breed-fixed">공고상 품종: <strong>{a.kind}</strong></div>
-      <div className="appearance-tags">{[size, a.weightLabel, a.color].filter(Boolean).map(tag => <span key={tag}>{tag}</span>)}</div>
+      <div className="appearance-tags">{[a.size, a.weightLabel, a.color].filter(Boolean).map(tag => <span key={tag}>{tag}</span>)}</div>
+      {breedSize && <div className="breed-size">
+        <span className="breed-size-title">품종 정보(크기)</span>
+        <ul>{breedSize.lines.map(l => <li key={l.name}>{breedSize.showNames && <b>{l.name}</b>}{l.label}</li>)}</ul>
+        <small>품종의 대표 몸무게예요. 이 아이의 크기는 위 공고 체중 기준이에요 · 출처 {breedSize.sources.join(' · ')}</small>
+      </div>}
       <p className="info-note"><Icon name="leaf" size={16} />공고에 적힌 체중·색상이에요. 사진으로 털 길이·귀 모양 등을 정리하는 기능은 준비 중이에요.</p>
     </DetailInformation>
 
