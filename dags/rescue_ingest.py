@@ -179,7 +179,6 @@ with DAG(
         cmds=["python", "scripts/storage/rebom_auto_process_photo_manifests.py"],
         arguments=[
             "--bronze-run-id", BRONZE_RUN_ID,
-            "--defer-missing-manifest",
             "--apply",
         ],
         env_vars={
