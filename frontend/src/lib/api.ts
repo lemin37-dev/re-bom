@@ -1,5 +1,5 @@
 import type { Animal, AnimalShelter, ShelterSummary, SizeLabel, Species } from '@/types/animal'
-import type { TagCatalog } from '@/types/tags'
+import type { PhotoTag, TagCatalog } from '@/types/tags'
 
 /**
  * 검색 API 주소. 기본은 같은 주소의 /api (k3s·CloudFront 배포: /api 를 검색 API 로 넘김).
@@ -40,6 +40,8 @@ export type ApiAnimal = {
   orgName: string | null
   shelter: ApiShelter
   updatedAt: string | null
+  /** 대표 사진을 보고 모델이 붙인 태그. 태그가 없는 공고는 빈 배열 */
+  photoTags?: PhotoTag[]
   // 상세
   endReason?: string | null
   healthCheck?: string | null
@@ -171,6 +173,7 @@ export function toAnimal(a: ApiAnimal): Animal {
     shelter: a.shelter,
     quote: a.specialMark || '',
     photos: a.photos,
+    photoTags: a.photoTags ?? [],
     healthCheck: a.healthCheck,
     vaccinationCheck: a.vaccinationCheck,
     sociality: a.sociality,

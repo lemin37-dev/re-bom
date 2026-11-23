@@ -20,11 +20,11 @@ export function TagPicker({ compact = false }: { compact?: boolean }) {
 
   const byCode = new Map<string, TagOption>(catalog.categories.flatMap(c => c.tags.map(t => [t.code, t] as const)))
   const openCategory = catalog.categories.find(c => c.key === open)
-  const chip = (t: TagOption, withCount: boolean) => {
+  const chip = (t: TagOption) => {
     const on = tags.includes(t.code)
     return <button key={t.code} type="button" className={`tag-chip ${on ? 'on' : ''}`} aria-pressed={on}
       disabled={!on && t.count === 0} onClick={() => toggleTag(t.code)}>
-      {on && <Icon name="check" size={12} />}{t.label}{withCount && <small>{t.count}</small>}
+      {on && <Icon name="check" size={12} />}{t.label}
     </button>
   }
 
@@ -36,7 +36,7 @@ export function TagPicker({ compact = false }: { compact?: boolean }) {
 
     {catalog.recommended.length > 0 && <div className="tag-row tag-recommended">
       <span className="tag-row-label">추천</span>
-      <div className="tag-chips">{catalog.recommended.map(code => byCode.get(code)).filter(t => t !== undefined).map(t => chip(t, false))}</div>
+      <div className="tag-chips">{catalog.recommended.map(code => byCode.get(code)).filter(t => t !== undefined).map(chip)}</div>
     </div>}
 
     <div className="tag-row">
@@ -54,7 +54,7 @@ export function TagPicker({ compact = false }: { compact?: boolean }) {
     </div>
 
     {openCategory && <div className="tag-panel" id={panelId} role="group" aria-label={`${openCategory.label} 상세 태그`}>
-      <div className="tag-chips">{openCategory.tags.map(t => chip(t, true))}</div>
+      <div className="tag-chips">{openCategory.tags.map(chip)}</div>
       <p>같은 범주에서 여러 개를 고르면 그중 하나라도 맞는 아이를, 다른 범주끼리는 모두 맞는 아이를 찾아요.</p>
     </div>}
 

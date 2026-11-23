@@ -48,6 +48,8 @@ class AnimalRepository(Protocol):
 
     def tag_counts(self) -> dict[str, int]: ...
 
+    def tags_of(self, desertion_no: str) -> frozenset[str]: ...
+
 
 def _words(q: str | None) -> list[str]:
     # 한 글자 단어(조사 등)는 너무 많이 걸려서 뺀다
@@ -157,6 +159,9 @@ class SampleRepository:
 
     def count(self) -> int:
         return len(self._rows)
+
+    def tags_of(self, desertion_no: str) -> frozenset[str]:
+        return self._tags.get(desertion_no, frozenset())
 
     def tag_counts(self) -> dict[str, int]:
         """태그별 보호중 동물 수 (검색 화면은 보호중만 보여 준다)."""

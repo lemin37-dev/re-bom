@@ -61,6 +61,12 @@ def load_sample_tags(path: Path) -> dict[str, frozenset[str]]:
     return {str(i["desertionNo"]): frozenset(c for c in i.get("tags") or () if c in known) for i in items}
 
 
+def chips(codes: Iterable[str]) -> list[dict]:
+    """공고 카드에 붙일 태그 칩(code, label), 사전 순서대로. 고를 수 없는 태그는 빠진다."""
+    have = set(codes)
+    return [{"code": t.code, "label": t.label} for t in selectable() if t.code in have]
+
+
 def catalog(counts: Mapping[str, int]) -> dict:
     """범주별 상세 태그와 추천 태그. counts 는 태그별 동물 수(보호중)."""
     tags = selectable()

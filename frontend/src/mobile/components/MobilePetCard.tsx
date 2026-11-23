@@ -1,6 +1,7 @@
 'use client'
 
 import { AnimalPhoto } from '@/components/animal/AnimalPhoto'
+import { PhotoTagChips } from '@/components/animal/PhotoTagChips'
 import { Reasons } from '@/components/animal/Reasons'
 import { Icon } from '@/components/icons/Icon'
 import { animalMeta, animalTitle, availabilityLabel, isAvailable, statusLabel } from '@/lib/animal'
@@ -14,6 +15,7 @@ export function MobilePetCard({ animal: a, onOpen, featured = false }: { animal:
     <div className="mobile-pet-copy">
       <div className="mobile-pet-title"><h3>{animalTitle(a)}</h3>{a.score !== undefined && <span>매칭 <b>{a.score}%</b></span>}</div>
       <p className="mobile-pet-meta">{animalMeta(a)}</p>
+      <PhotoTagChips tags={a.photoTags} />
       {!!a.reasons?.length && <div className="mobile-pet-reasons"><span>잘 맞는 이유</span><Reasons animal={a} /></div>}
       {a.quote && <blockquote>“{a.quote}”</blockquote>}
       <div className="mobile-pet-center"><Icon name="pin" size={14} /><span>{a.center}</span>{a.distance !== undefined && <b>{a.distance}km</b>}</div>

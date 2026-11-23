@@ -94,3 +94,13 @@ def test_real_sample_tags_match_catalog_counts():
         total = client.get("/animals", params={"tags": tag["code"], "state": "protect"}).json()["total"]
         assert total == expected
     assert len(body["recommended"]) == 4
+
+
+def test_animals_carry_their_photo_tags_as_chips(client):
+    a, b, _, _ = PROTECTED_DOGS[:4]
+    items = {i["desertionNo"]: i for i in client.get("/animals", params={"size": 100}).json()["items"]}
+    assert items[a]["photoTags"] == [{"code": "fur.fluffy", "label": "복슬복슬"}, {"code": "ear.drop", "label": "늘어진 귀"}]
+    assert [t["code"] for t in items[b]["photoTags"]] == ["fur.fluffy", "ear.semi"]  # 품종 태그는 칩에 없다
+    untagged = next(i for no, i in items.items() if no not in PROTECTED_DOGS[:4])
+    assert untagged["photoTags"] == []
+    assert client.get(f"/animals/{a}").json()["photoTags"] == items[a]["photoTags"]

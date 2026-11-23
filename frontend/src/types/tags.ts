@@ -1,3 +1,6 @@
+/** 공고에 붙은 사진 태그 (검색 API `photoTags`) */
+export type PhotoTag = { code: string; label: string }
+
 /** 사진 태그 한 개 (검색 API `/tags`). count 는 이 태그가 붙은 보호 중인 아이 수 */
 export type TagOption = { code: string; label: string; count: number }
 

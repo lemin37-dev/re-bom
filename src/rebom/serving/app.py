@@ -79,7 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tags=tag_groups, sort=sort, page=page, size=size,
         )
         total, rows = r.search(query)
-        return AnimalPage(total=total, page=page, size=size, items=[to_summary(x) for x in rows])
+        return AnimalPage(total=total, page=page, size=size, items=[to_summary(x, r.tags_of(x["desertionNo"])) for x in rows])
 
     @app.get("/tags", response_model=TagCatalog, response_model_by_alias=True)
     def list_tags(r: AnimalRepository = Depends(repo)) -> TagCatalog:
@@ -97,7 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raw = r.get(desertion_no)
         if raw is None:
             raise HTTPException(status_code=404, detail="해당 구조번호의 동물이 없습니다.")
-        return to_detail(raw)
+        return to_detail(raw, r.tags_of(desertion_no))
 
     return app
 

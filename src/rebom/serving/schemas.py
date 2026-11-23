@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
 from typing import Any
 
@@ -12,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 from rebom.serving.derive import age_label, age_years, sido, sigungu, weight_kg
+from rebom.serving.tags import chips
 
 PHOTO_KEYS = tuple(f"popfile{i}" for i in range(1, 9))
 
@@ -32,6 +34,11 @@ class Shelter(_Model):
 class ShelterSummary(Shelter):
     animal_count: int  # 보호중인 동물 수
 
+
+
+class PhotoTag(_Model):
+    code: str  # 예: ear.drop
+    label: str  # 예: 늘어진 귀
 
 
 class AnimalSummary(_Model):
@@ -60,6 +67,7 @@ class AnimalSummary(_Model):
     org_name: str | None = None
     shelter: Shelter
     updated_at: str | None = None
+    photo_tags: list[PhotoTag] = []  # 대표 사진을 보고 모델이 붙인 태그 (serving/tags.py)
 
 
 class AnimalDetail(AnimalSummary):
@@ -131,7 +139,7 @@ def shelter_of(raw: dict[str, Any]) -> Shelter:
     )
 
 
-def _summary_fields(raw: dict[str, Any], today: date | None = None) -> dict[str, Any]:
+def _summary_fields(raw: dict[str, Any], tags: Iterable[str] = (), today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
     photos = _photos(raw)
     return {
@@ -160,16 +168,17 @@ def _summary_fields(raw: dict[str, Any], today: date | None = None) -> dict[str,
         "org_name": raw.get("orgNm"),
         "shelter": shelter_of(raw),
         "updated_at": raw.get("updTm"),
+        "photo_tags": chips(tags),
     }
 
 
-def to_summary(raw: dict[str, Any]) -> AnimalSummary:
-    return AnimalSummary(**_summary_fields(raw))
+def to_summary(raw: dict[str, Any], tags: Iterable[str] = ()) -> AnimalSummary:
+    return AnimalSummary(**_summary_fields(raw, tags))
 
 
-def to_detail(raw: dict[str, Any]) -> AnimalDetail:
+def to_detail(raw: dict[str, Any], tags: Iterable[str] = ()) -> AnimalDetail:
     return AnimalDetail(
-        **_summary_fields(raw),
+        **_summary_fields(raw, tags),
         end_reason=raw.get("endReason"),
         health_check=raw.get("healthChk"),
         vaccination_check=raw.get("vaccinationChk"),
