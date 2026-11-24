@@ -99,6 +99,58 @@ def main():
 
         subprocess.run(command, check=True, cwd=root)
 
+        if args.apply and args.environment == "test":
+            from rebom.storage.silver.aws_catalog import get_aws_catalog
+            from rebom.storage.silver.load_bronze import load_bronze_run
+            from rebom.storage.silver.publish_log import (
+                build_notice_snapshot_evidence,
+                find_completed_notice_snapshot_id,
+                save_notice_completion_s3,
+            )
+
+            bronze = load_bronze_run(fetched["bronze_manifest"])
+
+            if bronze["run_id"] != args.run_id:
+                raise RuntimeError("NOTICE_BRONZE_RUN_ID_MISMATCH")
+
+            catalog = get_aws_catalog()
+            notice_table = catalog.load_table(config.notice_table)
+
+            snapshot_id = find_completed_notice_snapshot_id(
+                s3,
+                args.bucket,
+                args.s3_state_prefix,
+                args.run_id,
+                notice_table,
+            )
+
+            record = build_notice_snapshot_evidence(
+                bronze_run_id=args.run_id,
+                notice_table=config.notice_table,
+                notice_snapshot_id=snapshot_id,
+                source_fetched_at=bronze["fetched_at"],
+            )
+
+            record["status"] = "COMPLETED"
+
+            completion_prefix = (
+                "bench_tmp/b-storage-test/notice_completion"
+            )
+
+            result = save_notice_completion_s3(
+                s3,
+                args.bucket,
+                completion_prefix,
+                record,
+            )
+
+            print("NOTICE_COMPLETION:", result)
+            print("NOTICE_SNAPSHOT_ID:", snapshot_id)
+            print(
+                "NOTICE_COMPLETION_KEY:",
+                f"{completion_prefix}/{args.run_id}.json",
+            )
+
 
         if args.apply_image or args.check_image:
             from rebom.storage.silver.aws_catalog import get_aws_catalog

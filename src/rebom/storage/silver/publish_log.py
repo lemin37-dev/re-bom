@@ -291,8 +291,11 @@ def find_run_final_snapshot_id(table, bronze_run_id):
 def find_completed_notice_snapshot_id(
     s3, bucket, notice_prefix, bronze_run_id, notice_table,
 ):
-    """Recover a notice snapshot only for a completed Silver run."""
-    from rebom.storage.silver.s3_run_journal import read_stage
+    """Recover the fixed snapshot for a completed Silver run."""
+    from rebom.storage.silver.s3_run_journal import (
+        read_stage,
+        read_notice_snapshot,
+    )
 
     completed = read_stage(
         s3, bucket, notice_prefix, bronze_run_id, "COMPLETED"
@@ -301,10 +304,26 @@ def find_completed_notice_snapshot_id(
     if completed is None:
         raise RuntimeError("NOTICE_RUN_NOT_COMPLETED")
 
+    evidence = read_notice_snapshot(
+        s3, bucket, notice_prefix, bronze_run_id
+    )
+
+    if evidence is not None:
+        table_name = ".".join(notice_table.name())
+
+        if evidence["notice_table"] != table_name:
+            raise RuntimeError("NOTICE_EVIDENCE_TABLE_MISMATCH")
+
+        snapshot_id = evidence["notice_snapshot_id"]
+
+        if notice_table.snapshot_by_id(snapshot_id) is None:
+            raise RuntimeError("NOTICE_EVIDENCE_SNAPSHOT_MISSING")
+
+        return snapshot_id
+
     return find_run_final_snapshot_id(
         notice_table, bronze_run_id
     )
-
 
 
 def save_notice_completion_s3(s3, bucket, prefix, record):
@@ -361,3 +380,116 @@ def save_notice_completion_s3(s3, bucket, prefix, record):
         raise RuntimeError("NOTICE_COMPLETION_CONFLICT")
 
     return "ALREADY_EXISTS"
+
+
+
+def reserve_publish_seq(s3, bucket, prefix, publish_id):
+    """Reserve a unique publication sequence using S3 conditional writes."""
+    import json
+    import re
+    from botocore.exceptions import ClientError
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", publish_id):
+        raise ValueError("INVALID_PUBLISH_ID")
+
+    if not prefix or prefix.startswith("/"):
+        raise ValueError("INVALID_PUBLISH_PREFIX")
+
+    base = f"{prefix.rstrip('/')}/_sequence/"
+    mapping_key = f"{base}by_id/{publish_id}.json"
+
+    def read(key):
+        try:
+            response = s3.get_object(Bucket=bucket, Key=key)
+            return json.loads(response["Body"].read())
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] in {"NoSuchKey", "404"}:
+                return None
+            raise
+
+    def create(key, record):
+        try:
+            s3.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=json.dumps(record, sort_keys=True).encode("utf-8"),
+                ContentType="application/json",
+                IfNoneMatch="*",
+            )
+            return True
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] in {
+                "PreconditionFailed", "412", "ConditionalRequestConflict", "409"
+            }:
+                return False
+            raise
+
+    def validate_mapping(record):
+        seq = record.get("publish_seq")
+
+        if record.get("publish_id") != publish_id:
+            raise RuntimeError("PUBLISH_SEQUENCE_ID_MISMATCH")
+
+        if type(seq) is not int or seq <= 0:
+            raise RuntimeError("INVALID_PUBLISH_SEQUENCE")
+
+        owner = read(f"{base}slots/{seq:020d}.json")
+
+        if owner != record:
+            raise RuntimeError("PUBLISH_SEQUENCE_OWNER_MISMATCH")
+
+        return seq
+
+    for _ in range(20):
+        existing = read(mapping_key)
+
+        if existing is not None:
+            return validate_mapping(existing)
+
+        highest = 0
+        owned = []
+
+        for page in s3.get_paginator("list_objects_v2").paginate(
+            Bucket=bucket,
+            Prefix=f"{base}slots/",
+        ):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                name = key.rsplit("/", 1)[-1]
+
+                if not re.fullmatch(r"[0-9]{20}[.]json", name):
+                    raise RuntimeError("INVALID_SEQUENCE_SLOT")
+
+                seq = int(name[:-5])
+                highest = max(highest, seq)
+
+                slot = read(key)
+
+                if slot and slot.get("publish_id") == publish_id:
+                    owned.append(seq)
+
+        if owned:
+            seq = min(owned)
+        else:
+            seq = highest + 1
+            record = {
+                "publish_id": publish_id,
+                "publish_seq": seq,
+            }
+
+            if not create(f"{base}slots/{seq:020d}.json", record):
+                continue
+
+        record = {
+            "publish_id": publish_id,
+            "publish_seq": seq,
+        }
+
+        create(mapping_key, record)
+
+        existing = read(mapping_key)
+
+        if existing is not None:
+            return validate_mapping(existing)
+
+    raise RuntimeError("PUBLISH_SEQUENCE_RETRY_EXHAUSTED")

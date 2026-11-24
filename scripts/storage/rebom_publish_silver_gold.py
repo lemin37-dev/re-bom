@@ -11,6 +11,7 @@ from rebom.storage.silver.publish_log import (
     assess_publish_readiness,
     build_publish_record,
     save_publish_record_s3,
+    reserve_publish_seq,
     find_completed_notice_snapshot_id,
     verify_photo_bronze_run,
 )
@@ -19,7 +20,7 @@ from rebom.storage.silver.publish_log import (
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bronze-run-id", required=True)
-    parser.add_argument("--photo-run-id", required=True)
+    parser.add_argument("--photo-run-id")
     parser.add_argument("--notice-table", required=True)
     parser.add_argument("--photo-table", required=True)
     parser.add_argument(
@@ -33,6 +34,7 @@ def main():
         default="bench_tmp/b-storage-test/journals/photo_auto_runs",
     )
     parser.add_argument("--profile", default="rebom-seoul")
+    parser.add_argument("--pod-auth", action="store_true")
     parser.add_argument("--publish-id")
     parser.add_argument("--publish-prefix", default="silver/rebom/publish")
     parser.add_argument("--publish", action="store_true")
@@ -40,10 +42,54 @@ def main():
     args = parser.parse_args()
 
     session = boto3.Session(
-        profile_name=args.profile,
+        profile_name=None if args.pod_auth else args.profile,
         region_name="ap-northeast-2",
     )
     s3 = session.client("s3")
+
+    if not args.photo_run_id:
+        matches = []
+
+        paginator = s3.get_paginator("list_objects_v2")
+
+        for page in paginator.paginate(
+            Bucket=args.bucket,
+            Prefix="bronze/rescue/image_runs/",
+        ):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+
+                if not key.endswith("/manifest.json"):
+                    continue
+
+                manifest = json.loads(
+                    s3.get_object(
+                        Bucket=args.bucket,
+                        Key=key,
+                    )["Body"].read()
+                )
+
+                if manifest.get("bronze_run_id") == args.bronze_run_id:
+                    photo_run_id = manifest.get("run_id")
+
+                    if not isinstance(photo_run_id, str) or not photo_run_id:
+                        raise RuntimeError("INVALID_PHOTO_RUN_ID")
+
+                    matches.append(photo_run_id)
+
+        matches = sorted(set(matches))
+
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"PHOTO_RUN_SELECTION_FAILED: {matches}"
+            )
+
+        args.photo_run_id = matches[0]
+
+    if args.publish and not args.publish_id:
+        args.publish_id = f"silver_{args.bronze_run_id}"
+
+    print("SELECTED_PHOTO_RUN_ID:", args.photo_run_id)
     if args.publish:
         import re
 
@@ -101,7 +147,11 @@ def main():
             print("PUBLISH_RECORD: REUSED")
             return
 
-    catalog = get_aws_catalog(profile=args.profile)
+    catalog = (
+        get_aws_catalog()
+        if args.pod_auth
+        else get_aws_catalog(profile=args.profile)
+    )
 
     reasons = []
     notice_snapshot_id = None
@@ -243,9 +293,17 @@ def main():
             source_fetched_at=source_fetched_at,
         )
 
+        record["publish_seq"] = reserve_publish_seq(
+            s3,
+            args.bucket,
+            args.publish_prefix,
+            args.publish_id,
+        )
+
         saved = save_publish_record_s3(
             s3, args.bucket, args.publish_prefix, record
         )
+        print("PUBLISH_SEQ:", record["publish_seq"])
         print("PUBLISH_RECORD:", saved)
         print("PUBLISH_ID:", args.publish_id)
     else:
