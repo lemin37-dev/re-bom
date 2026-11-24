@@ -252,7 +252,7 @@ def embed(args: argparse.Namespace) -> int:
             "model_id": gemini.MODEL, "dim": args.dim,
             "preprocess_version": prep.PREP_VERSION, "blank_std": prep.BLANK_STD,
         })
-        for table in (gc.IMAGE_EMBEDDING_TABLE, gc.EMBEDDING_REQUEST_LOG_TABLE):
+        for table in (gc.IMAGE_EMBEDDING_TABLE, gc.REQUEST_LOG_TABLE):
             require_version_column(catalog.load_table(env.table(table)))
     current, manifests = _current(args, s3, bucket, writes=not args.dry_run)
     if gold is None:
@@ -704,6 +704,8 @@ def canary_cmd(args: argparse.Namespace) -> int:
 
     bucket, s3 = _bucket(), _s3()
     gold = _gold_target(args)
+    if gold is not None:
+        gold_store.load_logs(*gold)  # 모델을 부르기 전에 로그 표·칸을 확인
     threshold = canary.THRESHOLD if args.threshold is None else args.threshold
     if args.reset:
         archived = canary.archive_reference(s3, bucket, gemini.MODEL, args.dim)

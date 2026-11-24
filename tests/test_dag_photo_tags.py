@@ -78,7 +78,19 @@ def test_select_then_run_with_same_run_id():
         assert args[args.index("--gold-env") + 1] == "test"
     run = tasks["tag_photos"]
     assert run[run.index("--max-photos") + 1] == "{{ params.max_photos }}"
+    assert run[run.index("--concurrency") + 1] == "{{ params.concurrency }}"
     assert "select_targets >> tag_photos" in DAG_FILE.read_text(encoding="utf-8")
+
+
+def test_select_passes_registered_version_for_every_task():
+    from rebom.tagging import run_photo_tags
+
+    select = _tasks()["select_targets"]
+    versions = [select[i + 1] for i, a in enumerate(select) if a == "--version"]
+    assert versions == ["photo_trait@1", "photo_breed@1"]
+    assert {v.split("@")[0] for v in versions} == set(run_photo_tags.VERSIONS)  # 작업마다 하나씩
+    assert "--version" not in _tasks()["tag_photos"]  # run 은 대상 목록의 버전을 쓴다
+    assert select[select.index("--silver-as-of") + 1] == "{{ params.silver_as_of }}"
 
 
 def test_image_and_secret():

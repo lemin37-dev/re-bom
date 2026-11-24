@@ -137,6 +137,32 @@ with DAG(
         arguments=["--run-id", BRONZE_RUN_ID, "--limit", "2000"],  # 상한. 시험할 때는 "--dry-run" 추가
     )
 
+    silver_shelter_apply = KubernetesPodOperator(
+        task_id="silver_shelter_apply",
+        name="silver-shelter-apply",
+        namespace="rebom-storage",
+        service_account_name="rebom-storage",
+        image="559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/storage:develop",
+        image_pull_policy="Always",
+        cmds=["python", "scripts/storage/rebom_run_silver_shelter.py"],
+        arguments=[
+            "--run-id", BRONZE_RUN_ID,
+            "--apply",
+        ],
+        env_vars={
+            "REBOM_S3_BUCKET": DATA_BUCKET,
+            "AWS_DEFAULT_REGION": "ap-northeast-2",
+        },
+        node_selector={"rebom/pool": "main"},
+        container_resources=k8s.V1ResourceRequirements(
+            requests={"cpu": "100m", "memory": "256Mi"},
+            limits={"memory": "1Gi"},
+        ),
+        get_logs=True,
+        on_finish_action="delete_pod",
+        in_cluster=True,
+    )
+
     silver_notice_apply = KubernetesPodOperator(
         task_id="silver_notice_apply",
         name="silver-notice-apply",
@@ -297,6 +323,7 @@ with DAG(
     )
 
     rescue_incremental >> [generate_ingest_events, rescue_photos]
+    rescue_incremental >> silver_shelter_apply
     rescue_photos >> photos_done
     generate_ingest_events >> silver_notice_apply
     photos_done >> silver_photo_apply_enabled >> silver_photo_apply
