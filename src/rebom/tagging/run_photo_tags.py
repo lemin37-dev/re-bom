@@ -36,7 +36,7 @@ import sys
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from rebom.common.openrouter import (
@@ -72,9 +72,36 @@ SUBJECT_PHOTO, SUBJECT_ANIMAL = "photo", "animal"
 TASKS = (trait_tags.TASK, breed_tags.TASK)
 VERSIONS = {trait_tags.TASK: trait_tags.PROMPT_VERSION, breed_tags.TASK: breed_tags.PROMPT_VERSION}
 
-# 처리 기록 status
+# 처리 기록 status. 사진 입력 문제(READ_ERROR·SHA_MISMATCH·BAD_IMAGE)는 사진 임베딩과 같은 값·같은 last_error·detail 을
+# 쓴다(공용 처리 로그, 노션 'Gold 임베딩 정리' 4.2·4.3절). FAILED 는 모델 호출·답 형식 실패만 뜻한다.
+#   OK·NO_RESULT·NO_PHOTO·BAD_IMAGE   끝남 (다시 부르지 않음)
+#   FAILED                            MAX_ATTEMPTS 번까지 다시 부름
+#   READ_ERROR·SHA_MISMATCH           매 실행 다시 봄 (모델을 부르지 않아 비용 없음). attempts = 연속 실패 횟수
 OK, NO_RESULT, FAILED, NO_PHOTO = "OK", "NO_RESULT", "FAILED", "NO_PHOTO"
-DONE_STATUSES = {OK, NO_RESULT, NO_PHOTO}
+READ_ERROR, SHA_MISMATCH, BAD_IMAGE = "READ_ERROR", "SHA_MISMATCH", "BAD_IMAGE"
+DONE_STATUSES = {OK, NO_RESULT, NO_PHOTO, BAD_IMAGE}
+
+
+class InputProblem(Exception):
+    """모델에 보내기 전에 걸린 사진 문제. 처리 기록의 status·last_error·detail 을 함께 가진다."""
+
+    def __init__(self, status: str, last_error: str, detail: dict):
+        super().__init__(last_error)
+        self.status, self.last_error, self.detail = status, last_error, detail
+
+
+def _s3_error_code(exc: Exception) -> str:
+    """boto3 ClientError 면 오류 코드(NoSuchKey, AccessDenied 등), 아니면 예외 이름 (사진 임베딩과 같은 규칙)."""
+    resp = getattr(exc, "response", None)
+    code = resp.get("Error", {}).get("Code") if isinstance(resp, dict) else None
+    return str(code or type(exc).__name__)
+
+
+def _failure_reason(err: BaseException) -> str:
+    """FAILED 의 last_error: model_error:<HTTP 상태나 오류 코드> 또는 bad_answer:<예외 이름>."""
+    if isinstance(err, OpenRouterError):
+        return f"model_error:{err.status or err.code or type(err).__name__}"
+    return f"bad_answer:{type(err).__name__}"
 
 
 class ResolutionGuardError(RuntimeError):
@@ -184,7 +211,8 @@ class TaskOutcome:
     task: str
     status: str
     tag_rows: list[dict] = field(default_factory=list)
-    error: str | None = None
+    error: str | None = None  # 처리 기록 last_error
+    detail: dict | None = None  # 처리 기록 detail (실패 근거)
 
 
 @dataclass
@@ -317,8 +345,8 @@ def tag_photos(
         else:
             try:
                 prepared = prepare_image(data)
-            except Exception as exc:  # noqa: BLE001 - 깨진 사진은 그 사진만 FAILED
-                prepared = exc
+            except Exception as exc:  # noqa: BLE001 - 열리지 않거나 너무 큰 사진은 그 사진만 BAD_IMAGE
+                prepared = InputProblem(BAD_IMAGE, f"bad_image:{type(exc).__name__}", {"s3_key": target.s3_key})
         for task in target.tasks:
             for run_no in range(1, REPEATS + 1):
                 req = prepared if isinstance(prepared, Exception) else _request_for(task, *prepared)
@@ -331,7 +359,7 @@ def tag_photos(
         at = now()
         if stop:
             return call, None, None, at, True
-        if isinstance(req, Exception):
+        if isinstance(req, InputProblem):
             return call, None, req, at, False
         try:
             res = client.chat(req)
@@ -394,7 +422,12 @@ def _photo_outcome(target: Target, got: list, cfg: TaggerConfig, ts: datetime) -
         runs.sort(key=lambda x: x[0])
         errors = [e for _, p, e in runs if p is None]
         if errors:
-            tasks[task] = TaskOutcome(task, FAILED, error=f"{type(errors[0]).__name__}: {errors[0]}"[:500])
+            first = errors[0]
+            if isinstance(first, InputProblem):
+                tasks[task] = TaskOutcome(task, first.status, error=first.last_error, detail=first.detail)
+            else:
+                tasks[task] = TaskOutcome(task, FAILED, error=_failure_reason(first),
+                                          detail={"error": str(first)[:300]})
             continue
         answers = [p for _, p, _ in runs]
         rows = (trait_tag_rows if task == trait_tags.TASK else breed_tag_rows)(target, answers, cfg.run_id, ts)
@@ -420,6 +453,7 @@ def inference_rows(outcomes: Sequence[PhotoOutcome], previous: dict[tuple, dict]
                 "attempts": attempts,
                 "tag_count": sum(1 for r in t.tag_rows if r["searchable"]),
                 "last_error": t.error,
+                "detail": json.dumps(t.detail, ensure_ascii=False) if t.detail else None,
                 "gold_run_id": run_id,
                 "gold_updated_at": ts,
             })
@@ -557,31 +591,72 @@ def tag_scope_filter(task: str, version: str, shas: Sequence[str], *,
 # ---------------------------------------------------------------- Silver 읽기·S3
 
 
-def read_silver(catalog, silver_env) -> tuple[list[str], list[dict]]:
-    """(보호중 개 공고번호, 이미지 현재 행)."""
+KST = timezone(timedelta(hours=9))
+
+
+def silver_cutoff(value: str | None) -> tuple[datetime, bool] | None:
+    """--silver-as-of 값 → (기준 시각, 그 시각 포함 여부). 날짜만 주면 그날 끝(다음날 00:00 KST 전)까지.
+
+    예: "2026-11-23" → 2026-11-24 00:00 KST 보다 앞선 마지막 스냅샷. 시각을 주면 그 시각까지(포함).
+    """
+    if not value:
+        return None
+    if len(value) == 10:
+        day = date.fromisoformat(value)
+        return datetime.combine(day + timedelta(days=1), time(), KST), False
+    at = datetime.fromisoformat(value)
+    return (at if at.tzinfo else at.replace(tzinfo=KST)), True
+
+
+def _snapshot_id(table, name: str, cutoff: tuple[datetime, bool] | None, used: dict | None) -> int | None:
+    if cutoff is None:
+        snap = table.current_snapshot()
+    else:
+        at, inclusive = cutoff
+        snap = table.snapshot_as_of_timestamp(int(at.timestamp() * 1000), inclusive=inclusive)
+        if snap is None:
+            raise ValueError(f"{name}: {at.isoformat()} 이전 스냅샷이 없습니다")
+    if used is not None and snap is not None:
+        used[name] = {
+            "snapshot_id": snap.snapshot_id,
+            "committed_at": datetime.fromtimestamp(snap.timestamp_ms / 1000, UTC).isoformat(),
+        }
+    return None if cutoff is None else snap.snapshot_id
+
+
+def read_silver(catalog, silver_env, cutoff: tuple[datetime, bool] | None = None,
+                used: dict | None = None) -> tuple[list[str], list[dict]]:
+    """(보호중 개 공고번호, 이미지 현재 행). cutoff 를 주면 두 표 모두 그 시각의 스냅샷을 읽는다.
+
+    used 를 주면 읽은 표별 snapshot_id·커밋 시각을 채운다(대상 목록에 남겨 어느 Silver 로 골랐는지 확인용).
+    """
     from pyiceberg.expressions import And, EqualTo
 
-    notices = catalog.load_table(silver_env.notice_table).scan(
+    notice_table = catalog.load_table(silver_env.notice_table)
+    notices = notice_table.scan(
         row_filter=And(EqualTo("species_code", DOG_SPECIES_CODE), EqualTo("status_group", PROTECTING)),
         selected_fields=("desertion_no",),
+        snapshot_id=_snapshot_id(notice_table, silver_env.notice_table, cutoff, used),
     ).to_arrow().to_pylist()
     dogs = [r["desertion_no"] for r in notices]
-    images = catalog.load_table(silver_env.image_table).scan(
+    image_table = catalog.load_table(silver_env.image_table)
+    images = image_table.scan(
         selected_fields=("desertion_no", "image_slot", "original_s3_key", "sha256"),
+        snapshot_id=_snapshot_id(image_table, silver_env.image_table, cutoff, used),
     ).to_arrow().to_pylist()
     wanted = set(dogs)
     return dogs, [r for r in images if r["desertion_no"] in wanted]
 
 
-def fetch_image(s3, bucket: str, target: Target) -> bytes | Exception:
-    """원본을 받아 sha256 을 Silver 값과 대조한다. 다르면 그 사진만 실패."""
+def fetch_image(s3, bucket: str, target: Target) -> bytes | InputProblem:
+    """원본을 받아 sha256 을 Silver 값과 대조한다. 못 읽거나 다르면 그 사진만 READ_ERROR·SHA_MISMATCH."""
     try:
         data = s3.get_object(Bucket=bucket, Key=target.s3_key)["Body"].read()
-    except Exception as exc:  # noqa: BLE001
-        return RuntimeError(f"S3 읽기 실패 {target.s3_key}: {exc}")
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != target.sha256:
-        return RuntimeError(f"SHA_MISMATCH {target.s3_key}: silver {target.sha256[:12]} != s3 {digest[:12]}")
+    except Exception as exc:  # noqa: BLE001 - 파일 없음·권한·네트워크
+        code = _s3_error_code(exc)
+        return InputProblem(READ_ERROR, f"read_error:{code}", {"s3_key": target.s3_key, "error": code})
+    if hashlib.sha256(data).hexdigest() != target.sha256:
+        return InputProblem(SHA_MISMATCH, "sha_mismatch", {"s3_key": target.s3_key})
     return data
 
 
@@ -656,17 +731,22 @@ def cmd_select(args) -> int:
     registered = _registered_versions(getattr(args, "version", ()))
     versions = registered or VERSIONS
     sink = _sink(args, catalog, registered)
-    dogs, images = read_silver(catalog, get_silver_environment(args.silver_env))
+    cutoff = silver_cutoff(getattr(args, "silver_as_of", None))
+    snapshots: dict = {}
+    dogs, images = read_silver(catalog, get_silver_environment(args.silver_env), cutoff, snapshots)
     targets, no_photo = select_targets(dogs, images, sink.read_inference_log(), versions=versions, limit=args.limit or None)
     calls = sum(len(t.tasks) for t in targets) * REPEATS
     summary = {
         "run_id": args.run_id, "selected_at": _now().isoformat(), "silver_env": args.silver_env,
+        "silver_as_of": cutoff[0].isoformat() if cutoff else None, "silver_snapshots": snapshots,
         "protecting_dogs": len(set(dogs)), "targets": len(targets), "target_dogs": sum(len(t.desertion_nos) for t in targets),
         "no_photo_new": len(no_photo), "calls": calls,
         "prompt_versions": VERSIONS, "items": [asdict(t) for t in targets],
     }
     if registered:
         summary["versions"] = registered
+    for name, snap in snapshots.items():
+        print(f"Silver {name}: snapshot {snap['snapshot_id']} ({snap['committed_at']})")
     print(f"보호중 개 {summary['protecting_dogs']}마리, 대상 사진 {len(targets)}장({summary['target_dogs']}마리, 호출 {calls}번), "
           f"새 NO_PHOTO {len(no_photo)}마리")
     if args.dry_run:
@@ -735,6 +815,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--bucket", default="rebom-data-559987919299")
     ap.add_argument("--silver-env", default="test")
     ap.add_argument("--gold-env", default="test")
+    ap.add_argument("--silver-as-of", default="", help="select: 이 날짜(그날 끝, KST)나 시각 기준 Silver 스냅샷으로 고른다. "
+                    "예: 2026-11-23. 비우면 현재 Silver")
     ap.add_argument("--version", action="append", default=[], help="등록된 작업 버전, 예: photo_trait@1. 작업별 반복 지정")
     ap.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드에서는 비운다")
     ap.add_argument("--local-out", default=None, help="Gold 대신 이 폴더에 JSONL 로 쓴다 (PC 시험용)")
