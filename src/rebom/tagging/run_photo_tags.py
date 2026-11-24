@@ -510,7 +510,10 @@ class GoldSink:
             require_version_column(self.requests)
 
     def read_inference_log(self) -> list[dict]:
-        return self.inference.scan().to_arrow().to_pylist()
+        """사진 태깅 행만. 처리 기록은 글 태깅·임베딩과 같이 쓰는 공용 로그다."""
+        from pyiceberg.expressions import In
+
+        return self.inference.scan(row_filter=In("task", sorted(VERSIONS))).to_arrow().to_pylist()
 
     @staticmethod
     def _arrow(table, rows):

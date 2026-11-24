@@ -129,17 +129,16 @@ def test_embed_writes_gold_tables_and_parquet(monkeypatch, gold):
                                                                                prep.PREP_VERSION)
     assert r["source_hash"] == r["subject_key"] and r["embedding"][:2] == pytest.approx([0.6, 0.8])
 
-    logs = {x["subject_key"]: x for x in table(gc.EMBEDDING_INFERENCE_LOG_TABLE)}
+    logs = {x["subject_key"]: x for x in table(gc.INFERENCE_LOG_TABLE)}
     assert {k: v["status"] for k, v in logs.items()} == {**{s: "OK" for s in sent}, blank: "BLANK"}
     assert set(json.loads(logs[blank]["detail"])) == {"gray_std", "blank_std"} and logs[blank]["version"] == VERSION
 
-    reqs = table(gc.EMBEDDING_REQUEST_LOG_TABLE)  # 기본 1장씩: 요청 1행 = 사진 1장
+    reqs = table(gc.REQUEST_LOG_TABLE)  # 기본 1장씩: 요청 1행 = 사진 1장
     assert sorted(x["subject_key"] for x in reqs) == sorted(sent) and {x["batch_size"] for x in reqs} == {1}
     assert len({x["request_id"] for x in reqs}) == len(sent)
     assert all(x["cost_usd"] == pytest.approx(0.000116) for x in reqs)
     by_req = {x["subject_key"]: x["request_id"] for x in reqs}
     assert all(json.loads(logs[s]["detail"]) == {"request_id": by_req[s], "batch_size": 1} for s in sent)
-    assert not table(gc.INFERENCE_LOG_TABLE) and not table(gc.REQUEST_LOG_TABLE)  # 태깅 표에는 안 씀
 
     (summary,) = summaries(s3)
     assert summary["gold"] == {"env": "unit", "written": {"image": 2, "log": 3, "request": 2}}
@@ -167,9 +166,9 @@ def test_registered_embedding_versions_do_not_change_legacy_reads(monkeypatch, g
     for version in ("image_embedding@1", "image_embedding@2", None):
         assert len(read_state(catalog, env, gemini.MODEL, 768, prep.PREP_VERSION, version=version).vectors) == 2
     assert len(table(gc.IMAGE_EMBEDDING_TABLE)) == 6
-    assert len(table(gc.EMBEDDING_INFERENCE_LOG_TABLE)) == 9
-    assert len(table(gc.EMBEDDING_REQUEST_LOG_TABLE)) == 6
-    assert {row["version"] for row in table(gc.EMBEDDING_REQUEST_LOG_TABLE)} == {
+    assert len(table(gc.INFERENCE_LOG_TABLE)) == 9
+    assert len(table(gc.REQUEST_LOG_TABLE)) == 6
+    assert {row["version"] for row in table(gc.REQUEST_LOG_TABLE)} == {
         "image_embedding@1", "image_embedding@2", None,
     }
     with pytest.raises(ValueError, match="does not match"):
@@ -185,9 +184,9 @@ def test_batched_run_is_still_one_request_row_and_links_photos(monkeypatch, gold
     FakeEmbedder.calls = []
     embed(monkeypatch, s3, "--image-batch", "6")
     assert FakeEmbedder.calls == [2]
-    (req,) = table(gc.EMBEDDING_REQUEST_LOG_TABLE)
+    (req,) = table(gc.REQUEST_LOG_TABLE)
     assert req["batch_size"] == 2 and req["cost_usd"] == pytest.approx(0.000116 * 2)
-    ok = [x for x in table(gc.EMBEDDING_INFERENCE_LOG_TABLE) if x["status"] == "OK"]
+    ok = [x for x in table(gc.INFERENCE_LOG_TABLE) if x["status"] == "OK"]
     assert len(ok) == 2 and {json.loads(x["detail"])["request_id"] for x in ok} == {req["request_id"]}
     assert req["subject_key"] in {x["subject_key"] for x in ok}
 
@@ -215,11 +214,11 @@ def test_read_error_attempts_count_up_then_ok(monkeypatch, gold):
     FakeEmbedder.calls = []
     embed(monkeypatch, s3)
     embed(monkeypatch, s3)
-    row = {r["subject_key"]: r for r in table(gc.EMBEDDING_INFERENCE_LOG_TABLE)}[sha]
+    row = {r["subject_key"]: r for r in table(gc.INFERENCE_LOG_TABLE)}[sha]
     assert row["status"] == "READ_ERROR" and row["attempts"] == 2 and json.loads(row["detail"])["s3_key"] == key
     s3.objects[key] = data
     embed(monkeypatch, s3)
-    rows = [r for r in table(gc.EMBEDDING_INFERENCE_LOG_TABLE) if r["subject_key"] == sha]
+    rows = [r for r in table(gc.INFERENCE_LOG_TABLE) if r["subject_key"] == sha]
     assert [r["status"] for r in rows] == ["OK"]  # 같은 키라 바뀌어 쓰임
     assert sha in {r["subject_key"] for r in table(gc.IMAGE_EMBEDDING_TABLE)}
 
@@ -244,7 +243,7 @@ def test_bad_image_is_skipped_until_photo_changes(monkeypatch, gold):
     monkeypatch.setattr(mf, "latest_photos", photos(bad))
     FakeEmbedder.calls = []
     embed(monkeypatch, s3)
-    logs = {r["subject_key"]: r for r in table(gc.EMBEDDING_INFERENCE_LOG_TABLE)}
+    logs = {r["subject_key"]: r for r in table(gc.INFERENCE_LOG_TABLE)}
     assert logs[bad]["status"] == "BAD_IMAGE" and logs[bad]["last_error"].startswith("bad_image:")
     assert bad not in {r["subject_key"] for r in table(gc.IMAGE_EMBEDDING_TABLE)}
     calls = list(FakeEmbedder.calls)
@@ -256,9 +255,71 @@ def test_bad_image_is_skipped_until_photo_changes(monkeypatch, gold):
     assert new not in (good, bad)
     monkeypatch.setattr(mf, "latest_photos", photos(new))
     embed(monkeypatch, s3)
-    logs = {r["subject_key"]: r["status"] for r in table(gc.EMBEDDING_INFERENCE_LOG_TABLE)}
+    logs = {r["subject_key"]: r["status"] for r in table(gc.INFERENCE_LOG_TABLE)}
     assert logs[new] == "OK" and logs[bad] == "BAD_IMAGE"
     assert new in {r["subject_key"] for r in table(gc.IMAGE_EMBEDDING_TABLE)}
+
+
+def test_shared_log_keeps_other_tasks(monkeypatch, gold):
+    """같은 사진의 태깅 행과 글 임베딩 행이 공용 로그에 있어도, 임베딩은 자기 행만 읽고 바꾼다. 태깅도 자기 행만 읽는다."""
+    from rebom.common import gold_catalog as gc
+    from rebom.tagging import run_photo_tags as rpt
+
+    catalog, env, table = gold
+    s3 = make_world()
+    shas = sorted({p.sha256 for p in mf.latest_photos(mf.load_manifests(s3, "test-bucket")).values()})
+    at = datetime(2026, 11, 24, tzinfo=timezone.utc)
+
+    def other(subject, key, task, status, version="v"):
+        return {"subject_type": subject, "subject_key": key, "task": task, "version": version, "input_hash": key,
+                "status": status, "attempts": 1, "gold_run_id": "other", "gold_updated_at": at}
+
+    # version 문자열과 status 가 임베딩과 같아도 task 로 나뉜다 (task 없이 읽으면 BLANK 로 보고 보내지 않게 됨)
+    others = [other("photo", s, t, "BLANK", VERSION) for s in shas for t in rpt.VERSIONS]
+    others += [other("animal", "411300202500001", "text_embedding", "OK")]
+    log_t = catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE))
+    log_t.append(gs.table_arrow(log_t, others))
+    req_t = catalog.load_table(env.table(gc.REQUEST_LOG_TABLE))
+    req_t.append(gs.table_arrow(req_t, [{"request_id": "tag-1", "subject_type": "photo", "subject_key": shas[0],
+                                         "task": "photo_trait", "cost_usd": 0.0008, "requested_at": at,
+                                         "dt": "2026-11-24"}]))
+    FakeEmbedder.calls = []
+    embed(monkeypatch, s3)
+    rows = table(gc.INFERENCE_LOG_TABLE)
+    kept = [r for r in rows if r["gold_run_id"] == "other"]
+    assert len(kept) == len(others) and len(rows) == len(others) + 3
+    assert {r["task"] for r in rows if r["gold_run_id"] != "other"} == {"image_embedding"}
+    embed(monkeypatch, s3)
+    assert FakeEmbedder.calls == [1, 1]  # 다른 작업의 BLANK 를 자기 기록으로 읽지 않고, 다시 보내지도 않음
+
+    sink = rpt.GoldSink(catalog, env)
+    assert {r["task"] for r in sink.read_inference_log()} == set(rpt.VERSIONS)  # 글·사진 임베딩 행은 읽지 않음
+    sink.write([], [], [dict(others[0], status="OK", attempts=2)], [])
+    done = [r for r in table(gc.INFERENCE_LOG_TABLE) if r["task"] == "image_embedding" and r["status"] == "OK"]
+    assert len(done) == 2 and all(json.loads(r["detail"])["request_id"] for r in done)  # 임베딩 행은 그대로
+    cost = {}
+    for r in table(gc.REQUEST_LOG_TABLE):  # 한 표에서 작업별 비용
+        cost[r["task"]] = cost.get(r["task"], 0) + r["cost_usd"]
+    assert cost == {"photo_trait": pytest.approx(0.0008), "image_embedding": pytest.approx(0.000232)}
+
+
+def test_stops_before_model_calls_when_shared_log_lacks_columns(monkeypatch, gold):
+    """공용 로그에 임베딩 칸이 없으면 값이 버려지므로 모델을 부르기 전에 멈춘다."""
+    from rebom.common import gold_catalog as gc
+
+    catalog, env, _ = gold
+    s3 = make_world()
+    FakeEmbedder.calls = []
+    for base, column in ((gc.REQUEST_LOG_TABLE, "batch_size"), (gc.INFERENCE_LOG_TABLE, "detail")):
+        with catalog.load_table(env.table(base)).update_schema(allow_incompatible_changes=True) as update:
+            update.delete_column(column)
+        with pytest.raises(gs.LogSchemaError, match=column):
+            embed(monkeypatch, s3)
+        with pytest.raises(gs.LogSchemaError, match=column):
+            cli.main(["canary", "--gold-env", "test"])
+        gc.create_tables(env, catalog, group="log")  # 칸을 다시 더함
+    assert FakeEmbedder.calls == []
+    assert embed(monkeypatch, s3) == 0
 
 
 def test_load_reads_gold(monkeypatch, gold):
@@ -294,7 +355,7 @@ def test_canary_writes_gold_row_and_requests(monkeypatch, gold):
     assert cli.main(["canary", "--gold-env", "test"]) == 0
     (row,) = table(gc.EMBEDDING_CANARY_TABLE)
     assert row["passed"] is True and row["photo_count"] == 6 and row["model"] == MID
-    reqs = table(gc.EMBEDDING_REQUEST_LOG_TABLE)  # 1장씩 요청 6번 = 6행
+    reqs = table(gc.REQUEST_LOG_TABLE)  # 1장씩 요청 6번 = 6행
     assert len(reqs) == 6 and {r["gold_run_id"] for r in reqs} == {row["gold_run_id"]}
     assert {r["batch_size"] for r in reqs} == {1} and {r["subject_key"] for r in reqs} == {p["sha256"] for p in photos}
     assert len({r["request_id"] for r in reqs}) == 6

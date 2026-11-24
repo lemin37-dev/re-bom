@@ -84,7 +84,7 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     assert len(results) == 3
     assert {r["version"] for r in results} == {version}
     assert len({r["source_hash"] for r in results if r["subject_key"] == "1"}) == 2
-    requests = catalog.load_table(gold.table(gc.EMBEDDING_REQUEST_LOG_TABLE)).scan().to_arrow().to_pylist()
+    requests = catalog.load_table(gold.table(gc.REQUEST_LOG_TABLE)).scan().to_arrow().to_pylist()
     assert sorted(r["batch_size"] for r in requests) == [1, 2]
-    logs = catalog.load_table(gold.table(gc.EMBEDDING_INFERENCE_LOG_TABLE)).scan().to_arrow().to_pylist()
+    logs = catalog.load_table(gold.table(gc.INFERENCE_LOG_TABLE)).scan().to_arrow().to_pylist()
     assert len(logs) == 3 and {r["status"] for r in logs} == {"OK"}

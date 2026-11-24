@@ -12,7 +12,7 @@ from uuid import uuid4
 from rebom.common import gold_catalog as gc
 from rebom.common.gold_version_registry import require_version_column, resolve_version
 from rebom.embedding import gemini, prep, text_card
-from rebom.embedding.gold_store import table_arrow
+from rebom.embedding.gold_store import load_logs, table_arrow
 from rebom.tagging.run_photo_tags import representative_photos
 from rebom.tagging.tag_codes import TAGS
 
@@ -100,8 +100,7 @@ def write_cards(catalog, env, table, cards: list[Card], *, template: str, versio
     """Save request, then results, then per-card success status."""
     from pyiceberg.expressions import And, EqualTo, Or
 
-    requests = catalog.load_table(env.table(gc.EMBEDDING_REQUEST_LOG_TABLE))
-    logs = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE))
+    logs, requests = load_logs(catalog, env)
     vectors, meta = embedder.embed_texts_recorded([text_card.doc_input(card.text) for card in cards])
     valid = len(vectors) == len(cards) and all(
         len(vector) == gemini.DEFAULT_DIM and all(map(math.isfinite, vector)) and any(vector)
@@ -167,7 +166,7 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
     if not any(field.name == "tag_versions" for field in table.schema().fields):
         raise ValueError("Apply the Gold embedding schema before running text embedding")
     if write:
-        require_version_column(catalog.load_table(gold.table(gc.EMBEDDING_REQUEST_LOG_TABLE)))
+        require_version_column(load_logs(catalog, gold)[1])
 
     notices = catalog.load_table(silver.notice_table)
     # Select only public card fields and the identifiers needed for selection.

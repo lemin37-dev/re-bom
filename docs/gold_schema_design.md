@@ -5,13 +5,13 @@
 | 구간 | 결정과 구현 상태 |
 | --- | --- |
 | 버전 정의 | Gold의 `gold_version_registry`에서 작업별 `task@N` 설정을 등록·조회합니다. 등록 및 해시 검증 코드가 있습니다. |
-| 결과와 로그 | 사진 태깅·사진 임베딩과 글 임베딩 후보 실행은 등록 버전을 결과와 처리·요청 로그에 기록합니다. 사진 작업의 기존 실행은 종전 키를 씁니다. 기존 행의 공통 버전 매핑은 후속입니다. |
+| 결과와 로그 | 사진 태깅·사진 임베딩과 글 임베딩 후보 실행은 등록 버전을 결과와 처리·요청 로그에 기록합니다. 로그는 태깅·임베딩이 공용 `gold_inference_log`·`gold_model_request_log`를 같이 쓰고 `task`로 구분합니다(11/24 결정). 사진 작업의 기존 실행은 종전 키를 씁니다. 기존 행의 공통 버전 매핑은 후속입니다. |
 | Silver 입력 | 기존 적재·복구 저널을 유지합니다. Gold가 함께 읽을 공고·현재 사진 Iceberg 스냅샷은 `silver_publish_log`의 `READY` 발행본으로 전달하는 방향입니다. 발행과 Gold 소비는 구현 전입니다. |
 | RDS 서비스 | 일일 배치가 시작 시 읽을 운영 버전과 검색 API가 사용할 버전을 RDS `active_version`으로 관리하는 설계입니다. 수동 Airflow 실행은 지정한 후보 버전을 준비합니다. 활성 설정과 전환은 구현 전입니다. |
 
 ## 사진 후보 버전 실행
 
-1. 관리자가 `gold_catalog --create --group registry`와 `--group tagging`, `--group embedding`을 각 환경에 적용합니다. 등록 버전으로 실행하기 전에 nullable `version` 컬럼이 필요합니다. 업데이트는 기존 행을 자동 이관하지 않습니다.
+1. 관리자가 `gold_catalog --create --group registry`와 `--group log`, `--group tagging`, `--group embedding`을 각 환경에 적용합니다. 등록 버전으로 실행하기 전에 nullable `version` 컬럼이 필요합니다. 업데이트는 기존 행을 자동 이관하지 않습니다.
 2. 실행할 코드의 설정으로 버전을 등록합니다. 사진 임베딩 설정은 `model_id`, `dim`, `preprocess_version`, `blank_std`입니다. 사진 태깅 설정은 `model_id`, `prompt_version`, `provider`, `preprocess_version`, `media_resolution`, `reasoning_effort`, `temperature`입니다. 실행하는 코드와 등록 설정이 일치할 때만 후보를 처리할 수 있습니다. 모델이나 전처리를 바꾸는 후보는 그 설정을 지원하는 코드가 필요합니다.
 3. 사진 태깅은 `select --version photo_trait@1`로 대상 파일을 만들고 같은 대상 파일로 `run`을 실행합니다. 선택한 작업만 처리하며, 다른 작업도 필요하면 `--version`을 반복합니다. 사진 임베딩은 `embed --gold-env test --version image_embedding@1`과 기존 실행 옵션을 사용합니다. 후보 parquet과 실행 요약은 기존 배치가 읽는 경로 밖에 저장합니다.
 
