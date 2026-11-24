@@ -313,6 +313,46 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 종료 공고(11-20 결정): 종료 뒤 **30일**이 지나면 `load` 가 RDS 벡터를 지웁니다. Bronze·Gold 에는 남아 있어 복귀하면 Gemini 를 다시 부르지 않고 다시 넣습니다. RDS 쓰기라 승인 뒤에 켭니다.
 - 활성 버전: 코드 상수(`gemini.MODEL`·`DEFAULT_DIM`, `prep.PREP_VERSION`, 글 템플릿). 바꾸면 PR 로 남깁니다.
 
+### 13.5 Gold 공용 기록 스키마 [초안, 2026-11-22]
+
+태깅·임베딩의 대상은 Silver에서 고릅니다. 사진은 Silver 현재 사진에 기록된 S3 키로 Bronze 원본을 읽습니다. 사진 임베딩에서 manifest를 직접 읽는 방식은 임시입니다.
+
+| 테이블 | 한 행의 의미 | 키와 쓰기 방식 |
+|---|---|---|
+| `gold_inference_log` | 입력 하나에 대한 작업의 처리 상태 | 기존 키 `(subject_type, subject_key, task, version, input_hash)`로 upsert |
+| `gold_model_request_log` | 모델 호출 한 건의 응답·사용량·오류 | append. `requested_at`의 UTC 날짜인 `dt`로 파티션. 공급자 `request_id`는 응답에서 받을 수 있을 때 저장 |
+
+**처리 기록 필드안**
+
+| 필드 | 타입 | 의미 |
+|---|---|---|
+| `subject_type`, `subject_key` | string, 필수 | `animal`은 공고번호, `photo`는 원본 사진 sha256. 배치로 보낸 항목도 각 대상 키로 기록 |
+| `task`, `version`, `input_hash` | string, 필수 | 작업, 결과 재사용을 구분하는 버전, 실제 모델 입력의 해시. 사진 원본을 그대로 쓰는 작업은 원본 sha256. 글은 개인정보를 가리고 전처리한 모델 입력을 해시 |
+| `status`, `attempts`, `tag_count`, `last_error` | string, int, int, string | 기존 처리 상태와 시도 횟수, 태그 수, 마지막 오류. 임베딩은 `tag_count`를 비움 |
+| `gold_run_id`, `gold_updated_at` | string, timestamptz | 처리 배치와 상태 갱신 시각 |
+
+모델·질문지·전처리의 변경이 결과에 영향을 주면 재사용 키의 `version`도 바뀌도록 합니다. 기존 사진 태깅 버전과 공용 버전의 생성 규칙은 구현 전 확인합니다.
+
+**호출별 요청 기록 [11/23 결정]**
+
+- 호출당 한 행에 비용·토큰·지연을 기록합니다. 사진 태깅은 한 장씩 호출합니다. 임베딩은 매일 한 장씩 보내고 재임베딩에서 최대 여섯 장을 묶을 수 있습니다.
+- 임베딩 요청은 `subject_type=photo`, `subject_key=첫 사진의 SHA-256`, `batch_size=실제 전송 수`를 저장합니다. 사진별 처리 행의 `detail.request_id`로 해당 호출을 연결합니다. 태깅 요청 로그는 `batch_size`가 없으므로 한 장으로 해석합니다.
+- 두 요청 로그의 기존 `response_model`과 `provider`는 응답에서 확인한 값이 있을 때 기록합니다. SDK 재시도를 별도 호출로 집계하는 정책은 후속 협의 사항입니다.
+
+### 13.6 Gold 버전 레지스트리
+
+`rebom_gold.gold_version_registry`는 작업별 실행 설정을 보관합니다. 논리 키는 `(task, version)`이며, 버전은 `image_embedding@1`처럼 `task@N`을 사용합니다. `config_json`에는 `model_id`와 해당 작업의 프롬프트·전후처리·벡터 차원 등 실행 설정을 넣습니다. `config_hash`는 키를 정렬하고 불필요한 공백을 제거한 UTF-8 JSON의 SHA-256이며, `registered_at`은 최초 등록 시각입니다. 설정 JSON에는 비밀값과 개인정보를 넣지 않습니다.
+
+같은 설정으로 등록을 반복하면 기존 행을 유지합니다. 설정이 바뀌면 새 버전을 등록합니다. 읽을 때는 저장된 해시를 검증합니다. 먼저 관리자가 `gold_catalog --create --group registry`로 테이블을 만들고, `python -m rebom.common.gold_version_registry --env test --task image_embedding --version image_embedding@1 --config config.json`으로 등록합니다. `--config`를 생략하면 등록값을 조회합니다.
+
+사진 태깅·사진 임베딩은 등록 버전을 명시하면 결과와 처리·요청 로그에 해당 버전을 기록합니다. 사진 입력의 식별값은 이번 연결에서 기존과 같이 검증한 원본 SHA-256입니다. 전처리 변경은 등록 버전으로 구분합니다. 사진 태그의 논리 키는 `(subject_type, subject_key, task, version, tag_code)`, 사진 벡터는 `(subject_type, subject_key, task, version)`입니다. 태그가 0개면 해당 버전의 기존 태그를 지우고 처리 기록을 남깁니다.
+
+글 임베딩의 후보 실행은 `gold_text_embedding.version`과 카드 본문 `source_hash`로 동일 공고의 기존 벡터를 찾습니다. `prompt_version`은 카드 템플릿, `tag_versions`는 카드 생성에 사용한 작업별 태그 버전의 JSON입니다. 같은 버전·같은 본문이면 재호출하지 않습니다. Jev가 태깅한 입력 글의 해시와 A2 카드 전체 본문의 해시는 각각 별개입니다.
+
+기존 결과의 새 `version` 컬럼은 null로 두고, 기존 질문지 또는 모델·차원·전처리 키로 계속 읽습니다. 이전 행을 새 버전으로 이관하려면 실제 설정을 확인해야 합니다. 필드가 추가된 테이블을 먼저 적용하고 초기 버전을 등록한 후 후보 실행을 사용합니다. Silver `publish_id` 연결과 RDS `active_version` 전환은 별도 구현입니다.
+
+단계별 연동과 검증 항목은 [Gold 스키마 구현 기준](gold_schema_design.md)을 참고합니다.
+
 ## 14. 현재 사진 스냅샷 [합의, 2026-11-20 이광훈 님 · A 구현 `CODE_VERSION` 2026-11-20]
 
 사진 manifest는 그날 처리한 칸만 담는 변경분이라, 하루를 빠뜨리면 Silver가 칸의 현재 사진을 알 수 없습니다(11/19·11/20 실패). 그래서 A가 사진 실행이 `ok`로 끝날 때마다 **오늘 보호중 공고의 모든 칸의 현재 상태**를 함께 씁니다. 원천은 A 상태 파일이고, Silver의 입력입니다(기준 데이터는 Silver).
@@ -331,6 +371,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 오늘 목록에 있는 공고 중, 상태 파일에 버전 기록이 있는 칸만 나옵니다(`--limit`로 아직 한 번도 시도하지 않은 칸은 없음).
 - `active`: 오늘 목록에 그 칸의 주소가 있음. `emptied`: 기록은 있지만 오늘 주소가 없음(보호소가 사진을 뺌). `emptied`는 현재 사진 칸이 모두 null입니다.
 - **`emptied` 처리 [확정, 11/20 이광훈 님]**: Silver는 그 칸의 현재 사진 정보를 비우고, 과거 버전 이력은 보존합니다. 같은 주소가 다시 생기면 같은 버전으로 `active`, 다른 주소면 새 버전입니다.
+- **RDS 반영 [설계 결정, 11/22 차현지]**: Silver에서 `emptied`로 확정된 칸은 RDS `image_embedding`에서 해당 공고번호·사진 칸의 행을 삭제합니다. Silver 사진 버전 이력과 Gold 결과는 보존합니다. URL이 남아 있는 HTTP 404에는 이 삭제 규칙을 적용하지 않습니다. RDS 동기화 구현은 별도 작업입니다.
 - 목록에서 빠진 공고(보호 종료 등)는 나오지 않습니다.
 
 ### 14.3 칸

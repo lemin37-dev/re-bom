@@ -96,11 +96,11 @@ def _gold_target(args: argparse.Namespace):
     return get_aws_catalog(profile=getattr(args, "profile", None)), gc.get_gold_environment(name)
 
 
-def _gold_state(gold, dim: int):
+def _gold_state(gold, dim: int, *, version: str | None = None):
     from rebom.embedding import gemini, gold_store, prep
 
     catalog, env = gold
-    state = gold_store.read_state(catalog, env, gemini.MODEL, dim, prep.PREP_VERSION)
+    state = gold_store.read_state(catalog, env, gemini.MODEL, dim, prep.PREP_VERSION, version=version)
     print(f"원본: Gold {env.name} 표 ({env.location_prefix}), 사진 벡터 {len(state.vectors)}개, 처리 기록 {len(state.logs)}행")
     return state
 
@@ -236,11 +236,25 @@ def embed(args: argparse.Namespace) -> int:
 
     bucket, s3 = _bucket(), _s3()
     gold = _gold_target(args)
+    candidate = getattr(args, "version", None)
+    if candidate is not None:
+        if gold is None:
+            raise ValueError("--version requires --gold-env")
+        from rebom.common import gold_catalog as gc
+        from rebom.common.gold_version_registry import require_version_column, verify_runtime_config
+
+        catalog, env = gold
+        verify_runtime_config(catalog, env, gold_store.IMAGE_TASK, candidate, {
+            "model_id": gemini.MODEL, "dim": args.dim,
+            "preprocess_version": prep.PREP_VERSION, "blank_std": prep.BLANK_STD,
+        })
+        for table in (gc.IMAGE_EMBEDDING_TABLE, gc.EMBEDDING_REQUEST_LOG_TABLE):
+            require_version_column(catalog.load_table(env.table(table)))
     current, manifests = _current(args, s3, bucket, writes=not args.dry_run)
     if gold is None:
         staged = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION)
     else:
-        staged = _gold_state(gold, args.dim).staged(current)
+        staged = _gold_state(gold, args.dim, version=candidate).staged(current)
     plan = planmod.build(manifests, staged, current)
     order = plan.send_order()[: args.limit]
     retry_keys = [k for p in plan.send.values() for k in [p[0].s3_key] if k in staged.read_errors]
@@ -261,6 +275,8 @@ def embed(args: argparse.Namespace) -> int:
 
     run_id = _new_run_id()
     prefix = staging.run_prefix(gemini.MODEL, args.dim, run_id)
+    if candidate is not None:
+        prefix = f"gold/_work{gold[1].suffix}/embedding_candidates/{candidate}/{run_id}/"
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     embedder = gemini.GeminiEmbedder(dim=args.dim, session_id=f"embed-{run_id}")
     stats: Counter = Counter()
@@ -270,7 +286,7 @@ def embed(args: argparse.Namespace) -> int:
     rows: list[dict] = []
     parts: list[str] = []
     mid = gold_store.model_id(gemini.MODEL, args.dim)
-    version = gold_store.log_version(mid, prep.PREP_VERSION)
+    version = candidate or gold_store.log_version(mid, prep.PREP_VERSION)
     gold_images: list[dict] = []  # Gold 결과 표 (사진당 1행)
     gold_logs: dict[str, dict] = {}  # sha256 → 처리 기록 행
     gold_requests: list[dict] = []  # 요청 기록 (요청 1번 = 1행)
@@ -394,7 +410,7 @@ def embed(args: argparse.Namespace) -> int:
             try:
                 gold_info["written"] = gold_store.write_run(
                     gold[0], gold[1], mid=mid, prep_version=prep.PREP_VERSION, images=gold_images,
-                    logs=list(gold_logs.values()), requests=gold_requests)
+                    logs=list(gold_logs.values()), requests=gold_requests, version=candidate)
             except Exception as exc:  # noqa: BLE001 - summary 에 남기고 아래에서 다시 올린다
                 gold_error = exc
                 gold_info["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
@@ -407,6 +423,7 @@ def embed(args: argparse.Namespace) -> int:
             "skipped_sha256": skipped, "sha_mismatch_keys": sha_mismatch, "read_error_keys": read_errors,
             "api_usage": embedder.usage(),  # 경로(openrouter/google)·호출 수·OpenRouter 비용(USD)
             "gold": gold_info,  # --gold-env 일 때 쓴 환경과 행 수 (gold-migrate 가 멈추는 표시)
+            "version": candidate,
         }
         s3.put_object(Bucket=bucket, Key=f"{prefix}summary.json",
                       Body=json.dumps(summary, ensure_ascii=False, indent=2).encode("utf-8"))
@@ -673,9 +690,24 @@ def gold_migrate_cmd(args: argparse.Namespace) -> int:
     return 0 if result["ok"] else 2
 
 
+def embed_text(args: argparse.Namespace) -> int:
+    from rebom.embedding import text_batch
+
+    return text_batch.command(args)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m rebom.embedding.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    text_parser = sub.add_parser("embed-text", help="A2 카드의 새 글 벡터를 Gold에 적재")
+    text_parser.add_argument("--silver-env", choices=("test", "prod"), default="test")
+    text_parser.add_argument("--gold-env", choices=("test", "prod"), default="test")
+    text_parser.add_argument("--profile")
+    text_parser.add_argument("--version", required=True)
+    text_parser.add_argument("--limit", type=int, required=True)
+    text_parser.add_argument("--write", action="store_true", help="임베딩 API를 호출하고 Gold에 저장")
+    text_parser.set_defaults(func=embed_text)
 
     d = sub.add_parser("discover", help="읽기만 하는 환경 점검")
     d.add_argument("--ping", action="store_true", help="Gemini 모델 정보 조회 (과금 없음)")
@@ -691,6 +723,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="요청 1번에 보내는 사진 수. 기본 1(요청 기록 1행 = 사진 1장). 전체 재임베딩 때만 6"),
     e.add_argument("--part-size", type=int, default=5000, help="parquet 파일 1개당 행 수")
     e.add_argument("--dim", type=int, default=768, help="벡터 차원 (테이블 vector(768) 과 같아야 함)")
+    e.add_argument("--version", help="등록된 후보 버전, 예: image_embedding@1. --gold-env 필요")
     _add_source(e)
     _add_gold(e)
     e.set_defaults(func=embed)
