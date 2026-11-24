@@ -181,7 +181,7 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
     ).to_arrow().to_pylist()
     photos, tags = [], []
     if template == "A2":
-        photos = catalog.load_table(silver.photo_table).scan(
+        photos = catalog.load_table(silver.image_table).scan(
             selected_fields=("desertion_no", "image_slot", "sha256", "original_s3_key"),
         ).to_arrow().to_pylist()
         tag_table = catalog.load_table(gold.table(gc.TAG_TABLE))

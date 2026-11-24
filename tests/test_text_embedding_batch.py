@@ -18,7 +18,7 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     gold = gc.GoldEnvironment("test", "rebom_gold", "_test", f"file://{tmp_path}/wh/gold")
     gc.create_tables(gold, catalog)
     catalog.create_namespace("silver")
-    silver = SimpleNamespace(notice_table="silver.notice", photo_table="silver.image")
+    silver = SimpleNamespace(notice_table="silver.notice", image_table="silver.image")
     notices = pa.table({
         "desertion_no": ["1", "2", "3"], "status_group": ["PROTECTING", "PROTECTING", "CLOSED"],
         "breed_name_raw": ["믹스견", "믹스묘", "믹스견"], "info_text": ["온순", "활발", "온순"],
@@ -28,7 +28,7 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
         "desertion_no": ["1", "1"], "image_slot": [2, 1], "sha256": ["b", "a"],
         "original_s3_key": ["photo-b", "photo-a"],
     })
-    catalog.create_table(silver.photo_table, schema=photos.schema).append(photos)
+    catalog.create_table(silver.image_table, schema=photos.schema).append(photos)
     tags = catalog.load_table(gold.table(gc.TAG_TABLE))
     versions = {"photo_trait": "photo_trait@1", "text_personality": "text-personality-v1",
                 "text_health": "text-health-v1"}

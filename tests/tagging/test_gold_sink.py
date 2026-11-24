@@ -168,13 +168,13 @@ def test_old_schema_table_is_not_patched(tmp_path):
         gc.create_tables(gc.GoldEnvironment("prod", "rebom_gold", "", "x"), catalog, recreate=True)
 
 
-def test_silver_photo_table_is_photo_pipeline_table():
-    """태깅은 사진 처리 DAG 가 쓰는 표(auto_b_test)를 읽는다. 옛 실험 표(image_table)는 run_silver_once 용으로 남는다."""
+def test_silver_image_table_is_photo_pipeline_table():
+    """태깅·사진 임베딩·글 카드는 rescue_ingest 사진 처리가 쓰는 표(auto_b_test)를 읽는다."""
     from rebom.storage.silver.environment_config import get_silver_environment
 
     env = get_silver_environment("test")
-    assert env.photo_table == "rebom_silver.silver_animal_image_auto_b_test"
-    assert env.image_table != env.photo_table
+    assert env.image_table == "rebom_silver.silver_animal_image_auto_b_test"
+    assert not hasattr(env, "photo_table")
 
 
 def test_read_silver_filters_protecting_dogs(tmp_path):
@@ -199,8 +199,7 @@ def test_read_silver_filters_protecting_dogs(tmp_path):
 
     class Env:
         notice_table = "rebom_silver.notice"
-        image_table = "rebom_silver.old_image"  # 옛 실험 표는 읽지 않는다
-        photo_table = "rebom_silver.image"
+        image_table = "rebom_silver.image"
 
     dogs, rows = rpt.read_silver(catalog, Env)
     assert sorted(dogs) == ["1", "4"]

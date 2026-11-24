@@ -40,6 +40,11 @@ def main():
     if not args.bucket:
         parser.error("Bucket is required")
 
+    # 옛 실험 경로(2026-11-18 이후 쓰지 않음). image_table 은 이제 rescue_ingest 사진 처리 표라서
+    # 이 경로로 쓰면 안 된다. 아무것도 실행하기 전에 멈춘다.
+    if args.apply_image or args.check_image:
+        parser.error("IMAGE_EXPERIMENT_RETIRED: 사진은 rescue_ingest 사진 처리가 Silver 이미지 표에 쓴다")
+
     if args.apply_image and not args.apply:
         parser.error("--apply-image requires --apply")
 

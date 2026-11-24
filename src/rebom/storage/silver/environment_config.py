@@ -8,12 +8,11 @@ class SilverEnvironment:
     name: str
     notice_table: str
     history_table: str
+    # 칸별 현재 사진 표. rescue_ingest 사진 처리가 쓰고, 태깅·사진 임베딩·글 카드가 읽는다.
+    # 이 표는 iceberg_prefix 밖(bench_tmp/b-storage-test/iceberg/)에 있어 table_location() 으로 위치를 만들지 않는다.
     image_table: str
     iceberg_prefix: str
     s3_state_prefix: str
-    # 사진 처리(rescue_ingest·silver_photo_apply)가 현재 사진을 쓰는 표. 태깅·글 카드는 이 표를 읽는다(2026-11-24).
-    # image_table 은 run_silver_once --apply-image/--check-image 가 쓰는 옛 실험 표라 그대로 둔다.
-    photo_table: str = "rebom_silver.silver_animal_image_auto_b_test"
 
     def table_location(self, table_name: str) -> str:
         return f"{self.iceberg_prefix.rstrip('/')}/{table_name.split('.')[-1]}"
@@ -23,7 +22,7 @@ TEST = SilverEnvironment(
     name="test",
     notice_table="rebom_silver.silver_animal_notice_real_20261111_test",
     history_table="rebom_silver.silver_animal_status_history_real_20261111_test",
-    image_table="rebom_silver.silver_animal_image_real_20261111_test",
+    image_table="rebom_silver.silver_animal_image_auto_b_test",
     iceberg_prefix=(
         "s3://rebom-data-559987919299/"
         "bench_tmp/b-storage-test/iceberg/real-bronze-20261111"
