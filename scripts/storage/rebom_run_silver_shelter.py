@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import tempfile
 import json
 from pathlib import Path
 from collections import Counter
@@ -204,7 +205,9 @@ def execute(args, s3, catalog):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--manifest")
+    source.add_argument("--run-id")
     parser.add_argument("--profile")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
@@ -217,15 +220,48 @@ def main():
     s3 = session.client("s3")
     catalog = get_aws_catalog(profile=args.profile)
 
-    metadata = json.loads(
-        Path(args.manifest).read_text(encoding="utf-8-sig")
-    )
+    def process():
+        metadata = json.loads(
+            Path(args.manifest).read_text(encoding="utf-8-sig")
+        )
+        run_id = metadata["run_id"]
 
-    if args.apply:
-        with shelter_writer_lock(s3, BUCKET, metadata["run_id"]):
+        if args.run_id and run_id != args.run_id:
+            raise RuntimeError("SHELTER_INPUT_RUN_MISMATCH")
+
+        if args.apply:
+            with shelter_writer_lock(s3, BUCKET, run_id):
+                execute(args, s3, catalog)
+        else:
             execute(args, s3, catalog)
+
+    if args.run_id:
+        observed = run_time(args.run_id)
+        prefix = (
+            f"bronze/rescue/raw/dt={observed.date().isoformat()}/"
+            f"run_id={args.run_id}"
+        )
+
+        with tempfile.TemporaryDirectory(prefix="rebom-shelter-") as tmp:
+            directory = Path(tmp)
+
+            for filename in (
+                "manifest.json",
+                "updated.jsonl.gz",
+                "list_notice.jsonl.gz",
+                "list_protect.jsonl.gz",
+            ):
+                s3.download_file(
+                    BUCKET,
+                    f"{prefix}/{filename}",
+                    str(directory / filename),
+                )
+
+            args.manifest = str(directory / "manifest.json")
+            print("SHELTER_BRONZE_DOWNLOADED:", args.run_id)
+            process()
     else:
-        execute(args, s3, catalog)
+        process()
 
 
 if __name__ == "__main__":
