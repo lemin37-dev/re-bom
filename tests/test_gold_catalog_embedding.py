@@ -41,7 +41,10 @@ def test_group_embedding_creates_only_embedding_tables(world):
     # 태깅 묶음을 나중에 만들면 태깅 표 3개만 새로 생긴다. canary 표는 대상 칸이 없어도 옛 스키마로 보지 않는다
     assert sorted(gc.create_tables(env, catalog, group="tagging")) == sorted(
         f"만듦 {env.table(b)}" for b in gc.GROUPS["tagging"])
-    assert gc.create_tables(env, catalog) == [f"만듦 {env.table(gc.VERSION_REGISTRY_TABLE)}"]
+    assert gc.create_tables(env, catalog) == [
+        f"만듦 {env.table(gc.RUN_INPUT_TABLE)}",
+        f"만듦 {env.table(gc.VERSION_REGISTRY_TABLE)}",
+    ]
     assert gc.create_tables(env, catalog) == []
     with pytest.raises(ValueError, match="UNKNOWN_GOLD_GROUP"):
         gc.create_tables(env, catalog, group="nope")
