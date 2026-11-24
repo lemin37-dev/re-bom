@@ -31,7 +31,7 @@ def row(sha, source, run, vec):
 def test_build_one_row_per_sha_prefers_latest_api_row():
     runs = [
         gm.Run("r1", [row("a", "api", "r1", [1, 0]), row("a", "dup", "r1", [1, 0]), row("b", "api", "r1", [0, 1])],
-               {"skipped_sha256": {"z": "blank"}, "started_at": "2026-11-17T06:54:13Z"}),
+               {"skipped_sha256": {"z": "blank", "y": "bad_image:UnidentifiedImageError"}, "started_at": "2026-11-17T06:54:13Z"}),
         gm.Run("r2", [row("a", "reuse", "r2", [1, 0]), row("b", "api", "r2", [0.6, 0.8])], {}),
     ]
     plan = gm.build(runs, MODEL, 2, prep.PREP_VERSION, blank_scores={"z": 1.23456})
@@ -45,7 +45,8 @@ def test_build_one_row_per_sha_prefers_latest_api_row():
     by = {r["subject_key"]: r for r in plan.logs}
     assert by["a"]["status"] == "OK" and by["a"]["version"] == f"{MODEL}:2/{prep.PREP_VERSION}"
     assert by["z"]["status"] == "BLANK" and json.loads(by["z"]["detail"]) == {"gray_std": 1.2346, "blank_std": 4.0}
-    assert plan.stats["log_ok"] == 2 and plan.stats["log_blank"] == 1 and plan.stats["blank_without_score"] == 0
+    assert by["y"]["status"] == "BAD_IMAGE" and json.loads(by["y"]["detail"])["reason"] == "bad_image:UnidentifiedImageError"
+    assert plan.stats["log_ok"] == 2 and plan.stats["log_blank"] == 2 and plan.stats["blank_without_score"] == 1
 
 
 def test_canary_row_uses_session_id_or_checked_at():
