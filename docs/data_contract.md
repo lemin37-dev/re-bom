@@ -261,7 +261,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 |---|---|---|
 | `gold_animal_tag` | 대상 × 작업 × 질문지 버전 × 태그 | 같은 대상·같은 질문지 버전으로 다시 태깅했을 때만 (`subject_type`, `subject_key`, `task`, `prompt_version`) 범위의 행을 교체. 사진이 바뀌면 새 sha256 이 새 행이 되고, 질문지 버전을 올려도 이전 행은 남음(이전 버전 보존). 실패한 작업은 교체하지 않음 |
 | `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error`. `status`·`tag_count` 뜻은 아래 표 |
-| `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분), `request_scope`(single·batch)·`item_count`(실제로 보낸 입력 수, 사진 태깅은 늘 single·1. 11-23 추가, 이전 행은 비어 있으면 single·1 로 읽음) |
+| `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분). 한 행 = API 호출 한 번. 사진 태깅은 늘 한 장씩 부르므로 `batch_size` 칸을 두지 않고 1장으로 읽습니다(`request_scope`·`item_count` 는 두지 않음, 11/23 결정) |
 
 `gold_inference_log` 의 `status`·`tag_count` 뜻(OK·NO_RESULT 는 둘 다 끝난 것으로 보고 다시 부르지 않습니다):
 
@@ -276,7 +276,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 
 - 위치: test `s3://rebom-data-559987919299/gold/_test/iceberg/`, prod `s3://rebom-data-559987919299/gold/iceberg/`. 실행 중간 파일(대상 목록)은 `gold/_work_test/photo_tags/<run_id>/targets.json`.
 - 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. `subject_type`·`subject_key` 가 없는 옛 테이블(11/20 이전 `desertion_no` 키)은 칸 추가로 맞추지 않고 멈추며, test 는 `--create --recreate` 로 지우고 다시 만듭니다(옛 행은 버림, prod 는 거부). 파드(노드 역할)는 읽기·쓰기만 합니다.
-- `request_scope`·`item_count` 를 더한 코드를 돌리기 전에 위 `--create` 로 칸부터 더합니다(칸이 없으면 값이 버려짐). 임베딩 요청 기록은 `batch_size` 를 그대로 씁니다(13.4).
+- 요청 기록 표는 작업 묶음별로 따로 둡니다. 태깅은 `gold_model_request_log`, 임베딩은 `gold_embedding_request_log`(공통 칸 + `batch_size`, 13.4).
 - 서비스 DB 적재(pgvector 쪽 태그 테이블)는 별도 작업입니다.
 - 이전 버전 보존(2026-11-20 결정): `gold_animal_tag` 는 사진이 바뀌거나 질문지 버전을 올려도 이전 행을 지우지 않습니다. 오래된 버전 정리는 공고·이미지 정리 기준이 정해진 뒤에 따로 합니다.
 - 서비스 DB 에 넣을 행(활성 태그): Silver 에서 공고별 대표 사진을 구해 사진 태그와 잇습니다. 아래 조건을 모두 만족하는 행만 고릅니다.

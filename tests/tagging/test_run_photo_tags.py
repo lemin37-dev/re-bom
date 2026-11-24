@@ -156,7 +156,6 @@ def test_tag_photos_makes_four_requests_and_tags():
     assert len(o.requests) == 4 and {r["cost_usd"] for r in o.requests} == {0.000697, 0.000953}
     assert all(r["canonical_slug"] and r["media_resolution"] == "MEDIA_RESOLUTION_MEDIUM" for r in o.requests)
     assert {(r["temperature"], r["reasoning_effort"], r["finish_reason"]) for r in o.requests} == {(1.0, "low", "stop")}
-    assert {(r["request_scope"], r["item_count"]) for r in o.requests} == {("single", 1)}
 
 
 def test_bad_answer_marks_task_failed_and_keeps_old_tags():

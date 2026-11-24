@@ -10,7 +10,7 @@
                          (subject_type, subject_key, task, prompt_version) 범위를 교체(overwrite). 사진이 바뀌면 새 sha256 이
                          새 행이 되고, 질문지 버전을 올려도 이전 행은 남는다(이전 버전 보존)
 - gold_inference_log     대상·작업·버전·입력당 한 행. (subject_type, subject_key, task, version, input_hash) 로 upsert
-- gold_model_request_log 모델 요청 한 번이 한 행. append 만, dt(요청 UTC 날짜) 파티션. 끝에 request_scope·item_count(11-23)
+- gold_model_request_log 모델 요청 한 번이 한 행. append 만, dt(요청 UTC 날짜) 파티션
 임베딩 묶음 (docs/data_contract.md 13.4절, 2026-11-21 결정: 처리·요청 기록도 태깅과 따로 둔다):
 - gold_image_embedding   사진(sha256) 1장 × 모델 × 전처리 버전이 한 행. 같은 사진을 쓰는 공고·칸은 이 한 행을 같이 쓴다
 - gold_text_embedding    공고 글 카드 1개 × 모델 × 템플릿 버전 × 카드 해시가 한 행. 가린 카드 본문(input_text)도 남긴다
@@ -171,13 +171,6 @@ def schemas():
         f(26, "finish_reason", StringType()),
         f(27, "native_finish_reason", StringType()),
     )
-    # 태깅 요청 기록 표: 공통 칸 뒤에 요청 범위 두 칸 (노션 Gold 확정 규칙 '요청 기록 스키마 변경 결정', 11-23).
-    # nullable 이라 이 칸이 비어 있는 옛 행은 사진 키가 있으면 single·1 로 읽는다
-    tag_request = Schema(
-        *request.fields,
-        f(28, "request_scope", StringType()),  # single(입력 1개) · batch(2개 이상). 사진 태깅은 늘 single
-        f(29, "item_count", IntegerType()),  # 실제로 모델에 보낸 입력 수. 사진 태깅은 1
-    )
     # 임베딩 기록 표: 태깅 기록 표와 같은 칸(UNION ALL 가능) 뒤에 임베딩에만 필요한 칸을 더한다
     embedding_inference = Schema(
         *inference.fields,
@@ -242,7 +235,7 @@ def schemas():
     return {
         TAG_TABLE: (tag, PartitionSpec()),
         INFERENCE_LOG_TABLE: (inference, PartitionSpec()),
-        REQUEST_LOG_TABLE: (tag_request, request_spec),
+        REQUEST_LOG_TABLE: (request, request_spec),
         IMAGE_EMBEDDING_TABLE: (image_embedding, model_spec),
         TEXT_EMBEDDING_TABLE: (text_embedding, model_spec),
         EMBEDDING_CANARY_TABLE: (canary, PartitionSpec()),
