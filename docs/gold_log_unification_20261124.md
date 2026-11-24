@@ -359,6 +359,7 @@ python -m rebom.embedding.gold_snapshot --until 2026-11-24T00:00:00+09:00 --prof
 python -m rebom.embedding.gold_snapshot --until 2026-11-24T00:00:00+09:00 --profile rebom --write
 ```
 
+- **11-24 복사 완료:** 사진 벡터 36,779 / 처리 로그 36,782 / 요청 로그 0 / canary 4. prod 같은 시점과 빠진 행·더 들어간 행·값 차이 0, 태깅 기존 행 31,594 그대로. [실측] 전체 현황과 상태값 정리는 `docs/embedding_gold_status_20261124.md`
 - 10절의 test `log_copy`(11/21까지)는 이 복사로 대신합니다.
 - Silver test 표는 11/23 뒤에도 갱신됩니다. 태깅·글 임베딩이 11/23 시점만 보려면 읽을 Iceberg 스냅샷을 고정해야 합니다.
 - RDS 사진 벡터는 prod에서 매일 들어가므로 11/23 시점과 다릅니다.
