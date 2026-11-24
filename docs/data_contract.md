@@ -229,7 +229,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 대표 사진: Silver 이미지 테이블에서 `original_s3_key` 가 있는 가장 작은 `image_slot`. 키는 Silver 값을 그대로 쓰고(`_v002` 같은 교체 사진 포함), 받은 사진의 sha256 이 Silver 값과 다르면 그 사진은 실패(`SHA_MISMATCH`)로 둡니다.
 - 보호중 개들의 대표 사진을 sha256 으로 묶어 사진 단위로 부릅니다. 다른 공고에서 이미 태깅한 사진이면 부르지 않습니다.
 - 사진이 없는 개는 `NO_PHOTO` 로 한 번만 기록합니다(`subject_type = animal`, `subject_key` = 공고번호, `input_hash = "no-photo"`). 나중에 사진이 생기면 그 사진(sha256)이 새 대상이 됩니다.
-- 다시 부르는 경우는 둘뿐입니다. 공고의 대표 사진이 아직 태깅하지 않은 sha256 으로 바뀌었을 때, 질문지 버전(`version`)이 바뀌었을 때. 실패(`FAILED`)는 3번까지 다시 시도합니다.
+- 다시 부르는 경우는 둘뿐입니다. 공고의 대표 사진이 아직 태깅하지 않은 sha256 으로 바뀌었을 때, 질문지 버전(`version`)이 바뀌었을 때. 모델 실패(`FAILED`)는 3번까지, 사진을 못 읽었거나(`READ_ERROR`) sha256 이 다른(`SHA_MISMATCH`) 사진은 매 실행 다시 봅니다. 열리지 않는 사진(`BAD_IMAGE`)은 다시 보지 않습니다.
 - 모델: OpenRouter `google/gemini-3.1-flash-lite`, 공급자 `google-ai-studio` 고정(대체 공급자 없음), reasoning low, `media_resolution = MEDIA_RESOLUTION_MEDIUM`, temperature 1.0(평가 때 Google 기본값과 같은 값을 명시). seed 는 보내지 않습니다. 2회 답의 일치로 판정하므로 두 회차가 독립이어야 합니다.
 - 실행을 멈추는 경우: 특징 질문 하나의 prompt_tokens 가 1,500 을 넘을 때(해상도 설정이 빠진 것으로 봄, medium 약 1,294, high 약 1,818), 그리고 키·계정 오류(401, 402, 검열 표시가 없는 403, 키 한도)일 때. 계정 오류를 사진 실패로 세면 모든 대상의 시도 횟수가 쌓여 3번 뒤 영구히 건너뛰기 때문입니다.
 - 사진 크기: 10MB 를 넘는 원본은 보내지 않고 실패(`IMAGE_TOO_LARGE`)로 둡니다.
@@ -260,7 +260,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 | 테이블 (test 는 이름 뒤 `_test`) | 한 행 | 쓰는 방식 |
 |---|---|---|
 | `gold_animal_tag` | 대상 × 작업 × 질문지 버전 × 태그 | 같은 대상·같은 질문지 버전으로 다시 태깅했을 때만 (`subject_type`, `subject_key`, `task`, `prompt_version`) 범위의 행을 교체. 사진이 바뀌면 새 sha256 이 새 행이 되고, 질문지 버전을 올려도 이전 행은 남음(이전 버전 보존). 실패한 작업은 교체하지 않음 |
-| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error`. `status`·`tag_count` 뜻은 아래 표 |
+| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO·READ_ERROR·SHA_MISMATCH·BAD_IMAGE, `attempts`, `tag_count`, `last_error`, `detail`. 임베딩과 같은 공용 로그라 읽을 때 `task` 조건을 넣습니다. `status`·`tag_count` 뜻은 아래 표 |
 | `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분). 한 행 = API 호출 한 번. 사진 태깅은 늘 한 장씩 부르므로 `batch_size` 칸을 두지 않고 1장으로 읽습니다(`request_scope`·`item_count` 는 두지 않음, 11/23 결정) |
 
 `gold_inference_log` 의 `status`·`tag_count` 뜻(OK·NO_RESULT 는 둘 다 끝난 것으로 보고 다시 부르지 않습니다):
@@ -270,7 +270,17 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 | `photo_trait` | 태그 행이 하나 이상 | 2회 답이 맞는 요소가 하나도 없음(태그 행 없음) | 태그 행 수(모두 검색용) |
 | `photo_breed` | 강 신호(평균 유사도 90 이상) 품종이 하나 이상 | 강 신호 없음. 두 회차 모두 Top3 에 든 품종이 있으면 검색에 안 쓰는 품종 행(`searchable = false`)은 남아 있음 | 강 신호(검색용) 행 수 |
 
-그 밖에 `FAILED`(호출·답 형식 오류, 3번까지 다시 시도), `NO_PHOTO`(사진 없는 공고, `subject_type = animal`)가 있습니다.
+그 밖의 상태는 아래와 같습니다. 사진 입력 문제 세 가지는 사진 임베딩과 같은 값·같은 `last_error`·`detail` 을 씁니다(공용 로그에서 같은 상황이 같은 값으로 보이게, 11/24).
+
+| `status` | 언제 | 모델 호출 | 다음 실행 | `last_error` | `detail` |
+|---|---|---|---|---|---|
+| `FAILED` | 모델 호출 오류, 답 형식 오류 | 했음 | 3번까지 다시 | `model_error:<HTTP 상태·코드>`, `bad_answer:<예외 이름>` | `{"error": …}` |
+| `READ_ERROR` | S3 에서 사진을 못 읽음 | 안 함 | 매번 다시 (`attempts` = 연속 실패 횟수) | `read_error:<오류 코드>` | `{"s3_key": …, "error": …}` |
+| `SHA_MISMATCH` | 받은 사진의 sha256 이 Silver 값과 다름 | 안 함 | 매번 다시 | `sha_mismatch` | `{"s3_key": …}` |
+| `BAD_IMAGE` | 이미지로 열리지 않거나 10MB 초과 | 안 함 | 다시 안 함 | `bad_image:<예외 이름>` | `{"s3_key": …}` |
+| `NO_PHOTO` | 사진 없는 공고 (`subject_type = animal`) | 안 함 | 다시 안 함 | 비움 | 비움 |
+
+`OK`·`NO_RESULT` 는 `detail` 을 비웁니다. 키·계정 오류나 해상도 감시로 실행이 멈추면 그 사진은 처리 기록을 남기지 않고 다음 실행에서 다시 부릅니다.
 
 `gold_animal_tag` 칸: `subject_type`, `subject_key`, `tag_code`, `source`(출처: photo 사진 · text 공고 글 · rule 공고 칸. 모델 이름은 넣지 않고 `model`·버전으로 구분, 11/24), `tagger_version`, `task`, `model`, `prompt_version`, `source_hash`(입력 해시, 사진은 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
 

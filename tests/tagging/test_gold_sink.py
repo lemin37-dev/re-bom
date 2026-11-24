@@ -5,6 +5,7 @@
 - 처리 기록은 (subject_type, subject_key, task, version, input_hash) 로 upsert 된다.
 - 키 칸이 없는 옛 테이블은 칸 추가로 맞추지 않고 멈추며, test 에서만 --recreate 로 다시 만든다.
 """
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -293,3 +294,30 @@ def test_create_tables_adds_missing_columns_to_existing_table(tmp_path):
     assert {"temperature", "finish_reason", "native_finish_reason"} <= fields
     assert gc.create_tables(env, catalog) == []
     assert isinstance(catalog.load_table(name).schema(), Schema)
+
+
+def test_read_inference_log_reads_only_photo_tagging_rows_and_keeps_detail(sink):
+    """처리 기록은 임베딩과 같이 쓰는 공용 로그다. 태깅은 자기 task 행만 읽고, 실패 근거는 detail 에 남는다.
+
+    detail 칸은 공용 로그(_test 는 이미 있음, 2026-11-24 Glue 확인)에만 있어, 여기서는 칸을 더한 표로 본다.
+    """
+    from pyiceberg.types import StringType
+
+    with sink.inference.update_schema() as update:
+        update.add_column("detail", StringType())
+    sink.inference.refresh()
+    ts = datetime.now(UTC)
+    embedding = {
+        "subject_type": "photo", "subject_key": "e" * 64, "task": "image_embedding", "version": "m/p",
+        "input_hash": "e" * 64, "status": "READ_ERROR", "attempts": 1, "tag_count": None,
+        "last_error": "read_error:NoSuchKey", "detail": '{"s3_key": "k", "error": "NoSuchKey"}',
+        "gold_run_id": "r", "gold_updated_at": ts,
+    }
+    failed = rpt.InputProblem("SHA_MISMATCH", "sha_mismatch", {"s3_key": "k/1.jpg"})
+    target = rpt.Target("1" * 64, "k/1.jpg", (rpt.trait_tags.TASK,), ("1",))
+    outcomes, _ = rpt.tag_photos([(target, failed)], client=None, cfg=rpt.TaggerConfig(run_id="r"))
+    sink.write([], [], [embedding, *rpt.inference_rows(outcomes, {}, "r", ts)], [])
+
+    rows = sink.read_inference_log()
+    assert [(r["task"], r["status"], r["last_error"]) for r in rows] == [(rpt.trait_tags.TASK, "SHA_MISMATCH", "sha_mismatch")]
+    assert json.loads(rows[0]["detail"]) == {"s3_key": "k/1.jpg"}
