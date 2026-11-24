@@ -204,3 +204,164 @@ def test_photo_current_local_iceberg_replacement(tmp_path):
 
     assert rerun["changed_count"] == 0
     assert rerun["verified_rows"] == 2
+
+
+def test_photo_current_multiple_overwrite_batches_local_iceberg(tmp_path):
+    from functools import reduce
+
+    from pyiceberg.expressions import And, EqualTo, Or
+
+    warehouse = tmp_path / "warehouse_batches"
+    warehouse.mkdir()
+
+    catalog = load_catalog(
+        "photo_batch_test",
+        type="sql",
+        uri=f"sqlite:///{(tmp_path / 'batch_catalog.db').as_posix()}",
+        warehouse=str(warehouse),
+    )
+    catalog.create_namespace("rebom_test")
+
+    schema = pa.schema([
+        pa.field("desertion_no", pa.string(), nullable=False),
+        pa.field("image_slot", pa.int32(), nullable=False),
+        pa.field("sha256", pa.string()),
+    ])
+
+    name = "rebom_test.photo_batch"
+    table = catalog.create_table(name, schema=schema)
+
+    original = [
+        {"desertion_no": f"TEST-{i:03d}", "image_slot": 1, "sha256": "a" * 64}
+        for i in range(201)
+    ]
+    table.append(pa.Table.from_pylist(original, schema=schema))
+
+    changed = [dict(row, sha256="b" * 64) for row in original]
+
+    for start in range(0, len(changed), 100):
+        batch = changed[start:start + 100]
+        filters = [
+            And(
+                EqualTo("desertion_no", row["desertion_no"]),
+                EqualTo("image_slot", row["image_slot"]),
+            )
+            for row in batch
+        ]
+
+        table.overwrite(
+            pa.Table.from_pylist(batch, schema=schema),
+            overwrite_filter=reduce(Or, filters),
+        )
+
+    stored_rows = catalog.load_table(name).scan().to_arrow().to_pylist()
+    stored = {(row["desertion_no"], row["image_slot"]): row for row in stored_rows}
+
+    assert len(stored_rows) == len(stored) == 201
+    assert all(
+        stored[(row["desertion_no"], 1)] == row
+        for row in changed
+    )
+
+
+def test_photo_current_recovers_partial_batches_real_iceberg(tmp_path, monkeypatch):
+    from rebom.storage.silver.photo_version_history import apply_photo_current_updates
+
+    warehouse = tmp_path / "recovery_warehouse"
+    warehouse.mkdir()
+
+    catalog = load_catalog(
+        "photo_recovery_test",
+        type="sql",
+        uri=f"sqlite:///{(tmp_path / 'recovery_catalog.db').as_posix()}",
+        warehouse=str(warehouse),
+    )
+    catalog.create_namespace("rebom_test")
+
+    schema = pa.schema([
+        pa.field("desertion_no", pa.string(), nullable=False),
+        pa.field("image_slot", pa.int32(), nullable=False),
+        pa.field("original_s3_key", pa.string()),
+        pa.field("serving_s3_key", pa.string()),
+        pa.field("thumb_s3_key", pa.string()),
+        pa.field("sha256", pa.string()),
+        pa.field("source_url", pa.string()),
+    ])
+
+    name = "rebom_test.photo_recovery"
+    table = catalog.create_table(name, schema=schema)
+
+    originals = []
+    targets = {}
+
+    for i in range(201):
+        no = f"TEST-{i:03d}"
+        original = {
+            "desertion_no": no,
+            "image_slot": 1,
+            "original_s3_key": f"bronze/rescue/images/{no}/popfile1.jpg",
+            "serving_s3_key": f"images/{no}/1.webp",
+            "thumb_s3_key": f"images/{no}/1_thumb.webp",
+            "sha256": "a" * 64,
+            "source_url": f"https://example.com/{no}.jpg",
+        }
+        originals.append(original)
+
+        targets[(no, 1)] = {
+            **original,
+            "original_s3_key": f"bronze/rescue/images/{no}/popfile1_v002.jpg",
+            "serving_s3_key": f"images/{no}/1_v002.webp",
+            "thumb_s3_key": f"images/{no}/1_v002_thumb.webp",
+            "sha256": "b" * 64,
+            "current_version": 2,
+            "latest_version": 2,
+            "slot_state": "active",
+        }
+
+    table.append(pa.Table.from_pylist(originals, schema=schema))
+    snapshot = {"rows": targets}
+
+    table_class = type(table)
+    original_overwrite = table_class.overwrite
+    calls = {"count": 0}
+
+    def interrupt_second_batch(self, *args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise RuntimeError("SIMULATED_ICEBERG_BATCH_FAILURE")
+        return original_overwrite(self, *args, **kwargs)
+
+    monkeypatch.setattr(table_class, "overwrite", interrupt_second_batch)
+
+    with pytest.raises(RuntimeError, match="SIMULATED_ICEBERG_BATCH_FAILURE"):
+        apply_photo_current_updates(
+            catalog, name, [], table.location(),
+            apply=True, snapshot=snapshot,
+        )
+
+    assert calls["count"] == 2
+
+    partially_stored = catalog.load_table(name).scan().to_arrow().to_pylist()
+    assert len(partially_stored) == 201
+    assert sum(row["sha256"] == "b" * 64 for row in partially_stored) == 100
+
+    monkeypatch.setattr(table_class, "overwrite", original_overwrite)
+
+    recovered = apply_photo_current_updates(
+        catalog, name, [], table.location(),
+        apply=True, snapshot=snapshot,
+    )
+
+    assert recovered["result"] == "APPLIED_AND_VERIFIED"
+    assert recovered["update_count"] == 101
+
+    stored_rows = catalog.load_table(name).scan().to_arrow().to_pylist()
+    assert len(stored_rows) == 201
+    assert len({(r["desertion_no"], r["image_slot"]) for r in stored_rows}) == 201
+    assert all(row["sha256"] == "b" * 64 for row in stored_rows)
+
+    repeated = apply_photo_current_updates(
+        catalog, name, [], table.location(),
+        apply=True, snapshot=snapshot,
+    )
+    assert repeated["changed_count"] == 0

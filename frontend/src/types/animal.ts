@@ -1,7 +1,11 @@
+import type { PhotoTag, TagMatch } from './tags'
+
 /** 매칭 이유 한 줄: [표시 문구, 근거 출처('문장' | '사진' | '조건')] */
 export type MatchReason = [label: string, source: string]
 
 export type Species = 'dog' | 'cat' | 'etc'
+
+export type SizeLabel = '소형' | '중형' | '대형'
 
 /** 공고의 보호소 정보 (검색 API `shelter`) */
 export type AnimalShelter = {
@@ -31,12 +35,14 @@ export type Animal = {
   kind: string
   /** 수컷 / 암컷 / 성별 미상 */
   gender: string
-  /** 추정 나이(살). 모르면 null */
-  age: number | null
-  /** 화면 표시용 나이 (예: 3살, 60일 미만) */
-  ageLabel: string
+  /** 출생 연도 (Silver birth_year). 나이(살)·60일 미만은 화면에 쓰지 않음 */
+  birthYear: number | null
+  /** Silver weight_kg (범위는 큰 값) */
   kg: number | null
+  /** 예: '9kg' · '체중 미상' */
   weightLabel: string
+  /** Silver size(small/medium/large)를 한국어로. 개만 값이 있고, 없으면 null (화면에서 숨김) */
+  size: SizeLabel | null
   color: string
   /** 중성화 여부 문구 */
   care: string
@@ -52,6 +58,10 @@ export type Animal = {
   /** 공고 특징 문장 (specialMark) */
   quote: string
   photos: string[]
+  /** 사진 태그 (털 · 귀 모양 · 눈매). 카드에 칩으로 보여 줌 */
+  photoTags: PhotoTag[]
+  /** 태그를 골라 검색했을 때 이 아이의 단계. 태그 없이 검색하면 null */
+  tagMatch: TagMatch | null
   // 상세에서만 오는 값
   healthCheck?: string | null
   vaccinationCheck?: string | null
