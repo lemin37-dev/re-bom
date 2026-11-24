@@ -6,7 +6,7 @@ import json
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from uuid import uuid4
 
 from rebom.common import gold_catalog as gc
@@ -39,6 +39,44 @@ class Card:
     source_hash: str
     source_updated: str | None
     tag_versions: dict[str, str]
+
+
+KST = timezone(timedelta(hours=9))
+
+
+def silver_cutoff(value: str | None) -> tuple[datetime, bool] | None:
+    """--silver-as-of 값 → (기준 시각, 그 시각 포함 여부). 사진 태깅의 select --silver-as-of(#78)와 같은 규칙이다.
+
+    날짜만 주면 그날 끝: "2026-11-23" → 2026-11-24 00:00 KST 보다 앞선 마지막 스냅샷. 시각을 주면 그 시각까지(포함).
+    """
+    if not value:
+        return None
+    if len(value) == 10:
+        return datetime.combine(date.fromisoformat(value) + timedelta(days=1), time(), KST), False
+    at = datetime.fromisoformat(value)
+    return (at if at.tzinfo else at.replace(tzinfo=KST)), True
+
+
+def _snapshot(table, name: str, cutoff: tuple[datetime, bool] | None):
+    """읽을 Silver 스냅샷. 기준 시각 전 스냅샷이 없으면 멈춘다."""
+    if cutoff is None:
+        return table.current_snapshot()
+    at, inclusive = cutoff
+    snapshot = table.snapshot_as_of_timestamp(int(at.timestamp() * 1000), inclusive=inclusive)
+    if snapshot is None:
+        raise ValueError(f"{name}: no snapshot before {at.isoformat()}")
+    return snapshot
+
+
+def _check_tag_sources(tags, versions: dict[str, str]) -> None:
+    """이 버전의 태그인데 모르는 source 면 멈춘다. 그대로 두면 태그가 카드에서 오류 없이 빠진다."""
+    unknown = sorted({
+        (row["task"], str(row["source"])) for row in tags
+        if (row.get("version") or row["prompt_version"]) == versions.get(row["task"])
+        and row["source"] not in TAG_SOURCES[row["task"]][0]
+    })
+    if unknown:
+        raise ValueError(f"Unexpected tag source {unknown}; expected one of TAG_SOURCES")
 
 
 def _tag_index(tags, versions: dict[str, str]):
@@ -99,7 +137,8 @@ def build_cards(notices, photos, tags, template: str, versions: dict[str, str]) 
     return cards
 
 
-def write_cards(catalog, env, table, cards: list[Card], *, template: str, version: str, run_id: str, embedder) -> None:
+def write_cards(catalog, env, table, cards: list[Card], *, template: str, version: str, run_id: str, embedder,
+                silver_snapshots: dict[str, int] | None = None) -> None:
     """Save request, then results, then per-card success status."""
     from pyiceberg.expressions import And, EqualTo, Or
 
@@ -127,7 +166,10 @@ def write_cards(catalog, env, table, cards: list[Card], *, template: str, versio
     outcomes = [{
         "subject_type": "animal", "subject_key": card.notice, "task": TASK, "version": version,
         "input_hash": card.source_hash, "status": "OK", "attempts": 1, "gold_run_id": run_id,
-        "gold_updated_at": now, "detail": json.dumps({"request_id": meta.get("request_id"), "batch_size": len(cards)}),
+        "gold_updated_at": now, "detail": json.dumps({
+            "request_id": meta.get("request_id"), "batch_size": len(cards),
+            **({"silver_snapshots": silver_snapshots} if silver_snapshots else {}),
+        }),
     } for card in cards]
     results = [{
         "subject_type": "animal", "subject_key": card.notice, "task": TASK, "version": version,
@@ -144,9 +186,12 @@ def write_cards(catalog, env, table, cards: list[Card], *, template: str, versio
     logs.upsert(table_arrow(logs, outcomes), join_cols=list(gc.INFERENCE_LOG_KEYS))
 
 
-def run(catalog, gold, silver, version: str, *, limit: int, write: bool,
-        published=None, embedder_factory=gemini.GeminiEmbedder) -> dict:
+def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedder_factory=gemini.GeminiEmbedder,
+        silver_as_of: str | None = None, require_tags: tuple[str, ...] = (), show: int = 0, published=None) -> dict:
     from pyiceberg.expressions import And, EqualTo, In
+
+    if published is not None and silver_as_of is not None:
+        raise ValueError("--publish-id and --silver-as-of are mutually exclusive")
 
     config = resolve_version(catalog, gold, TASK, version)
     template = config.get("template_version")
@@ -164,6 +209,9 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool,
         raise ValueError("A2 requires versions for photo_trait, text_personality and text_health")
     if limit < 1:
         raise ValueError("limit must be positive")
+    if set(require_tags) - set(versions):
+        raise ValueError(f"require_tags must be tasks of this version: {sorted(versions)}")
+    cutoff = silver_cutoff(silver_as_of)
 
     table = catalog.load_table(gold.table(gc.TEXT_EMBEDDING_TABLE))
     require_version_column(table)
@@ -172,24 +220,36 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool,
     if write:
         require_version_column(load_logs(catalog, gold)[1])
 
-    notice_scan, photo_scan = {}, {}
+    notice_table = published.notice_table if published else silver.notice_table
+    notices = catalog.load_table(notice_table)
+    snapshots = {}
     if published is not None:
         published.validate_snapshots(catalog)
-        notice_scan["snapshot_id"] = published.notice_snapshot_id
-        photo_scan["snapshot_id"] = published.photo_snapshot_id
-    notices = catalog.load_table(published.notice_table if published else silver.notice_table)
+        snapshots.update({published.notice_table: published.notice_snapshot_id,
+                          published.photo_table: published.photo_snapshot_id})
+
+    def snapshot_id(silver_table, name: str) -> int | None:
+        if published is not None:
+            return snapshots[name]
+        snapshot = _snapshot(silver_table, name, cutoff)
+        if snapshot is not None:
+            snapshots[name] = snapshot.snapshot_id
+        return snapshot.snapshot_id if cutoff is not None else None
+
     # Select only public card fields and the identifiers needed for selection.
     notice_fields = {"desertion_no", "status_group", "source_updated_at_raw", "info_text", *text_card.SILVER_TO_API}
     available = {field.name for field in notices.schema().fields}
     notice_rows = notices.scan(
         row_filter=EqualTo("status_group", "PROTECTING"), selected_fields=tuple(sorted(notice_fields & available)),
-        **notice_scan,
+        snapshot_id=snapshot_id(notices, notice_table),
     ).to_arrow().to_pylist()
     photos, tags = [], []
     if template == "A2":
-        photos = catalog.load_table(published.photo_table if published else silver.image_table).scan(
+        photo_table = published.photo_table if published else silver.image_table
+        images = catalog.load_table(photo_table)
+        photos = images.scan(
             selected_fields=("desertion_no", "image_slot", "sha256", "original_s3_key"),
-            **photo_scan,
+            snapshot_id=snapshot_id(images, photo_table),
         ).to_arrow().to_pylist()
         tag_table = catalog.load_table(gold.table(gc.TAG_TABLE))
         tag_fields = ("subject_type", "subject_key", "source_hash", "task", "source", "tag_code",
@@ -197,13 +257,16 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool,
         if any(field.name == "version" for field in tag_table.schema().fields):
             tag_fields += ("version",)
         tags = tag_table.scan(row_filter=In("task", sorted(versions)), selected_fields=tag_fields).to_arrow().to_pylist()
+        _check_tag_sources(tags, versions)
     cards = build_cards(notice_rows, photos, tags, template, versions)
+    with_tags = {task: sum(task in card.tag_versions for card in cards) for task in sorted(versions)}
+    selected = [card for card in cards if set(require_tags) <= set(card.tag_versions)]
     existing = table.scan(
         row_filter=And(EqualTo("subject_type", "animal"), EqualTo("task", TASK), EqualTo("version", version)),
         selected_fields=("subject_key", "source_hash"),
     ).to_arrow().to_pylist()
     keys = {(row["subject_key"], row["source_hash"]) for row in existing}
-    to_write = [card for card in cards if (card.notice, card.source_hash) not in keys][:limit]
+    to_write = [card for card in selected if (card.notice, card.source_hash) not in keys][:limit]
     run_id = f"text-{uuid4().hex}"
     if write and published is not None:
         inputs = catalog.load_table(gold.table(gc.RUN_INPUT_TABLE))
@@ -215,8 +278,12 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool,
         embedder = embedder_factory(dim=gemini.DEFAULT_DIM)
         for start in range(0, len(to_write), gemini.TEXT_BATCH):
             write_cards(catalog, gold, table, to_write[start:start + gemini.TEXT_BATCH],
-                        template=template, version=version, run_id=run_id, embedder=embedder)
-    result = {"cards": len(cards), "planned": len(to_write), "written": len(to_write) if write else 0}
+                        template=template, version=version, run_id=run_id, embedder=embedder,
+                        silver_snapshots=snapshots)
+    result = {"cards": len(cards), "with_tags": with_tags, "selected": len(selected), "planned": len(to_write),
+            "written": len(to_write) if write else 0, "silver_as_of": cutoff[0].isoformat() if cutoff else None,
+            "silver_snapshots": snapshots,
+            "show": [{"notice": c.notice, "text": c.text, "tag_versions": c.tag_versions} for c in to_write[:show]]}
     if published is not None:
         result.update(publish_id=published.publish_id, gold_run_id=run_id)
     return result
@@ -241,6 +308,7 @@ def command(args: argparse.Namespace) -> int:
         raise ValueError("Publication location requires --publish-id")
     silver = None if published else get_silver_environment(args.silver_env)
     result = run(get_aws_catalog(profile=args.profile), gc.get_gold_environment(args.gold_env),
-                 silver, args.version, limit=args.limit, write=args.write, published=published)
-    print(json.dumps(result, ensure_ascii=False))
+                 silver, args.version, limit=args.limit, write=args.write, silver_as_of=args.silver_as_of,
+                 require_tags=tuple(args.require_tags), show=args.show, published=published)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

@@ -37,6 +37,8 @@
 
 ## Silver 완료본
 
+`--silver-as-of`는 기준 시점의 스냅샷을 선택하고, `--publish-id`는 Silver가 READY로 확정한 스냅샷 쌍을 지정합니다. 한 실행에 두 옵션을 함께 지정하면 실행 전에 오류가 납니다.
+
 글 임베딩 후보 명령에 `--publish-id <ID> --publish-bucket <bucket> --publish-prefix <prefix>`를 추가하면 PR #68의 S3 JSON을 조회합니다. `READY`와 ID·필수 필드를 확인하고 지정된 공고·현재 사진 스냅샷이 존재하는지 검사한 뒤 해당 스냅샷만 읽습니다. 발행 파일이 없거나 스냅샷이 만료되면 실패합니다. 이 경로는 발행 기록의 테이블명을 사용합니다.
 
 `gold_run_input`의 키는 `gold_run_id`이며 `publish_id`, `task`, `version`, `started_at`을 저장합니다. 관리자가 `gold_catalog --create --group execution`으로 생성한 뒤 쓰기 실행을 사용합니다. 처리할 새 카드가 없어도 발행본을 읽은 쓰기 실행은 입력 연결 기록을 남깁니다. 이 기록은 실행 시작과 입력 추적용이며 성공 여부는 처리 로그로 확인합니다. 현재 연결 범위는 글 임베딩이며 사진 태깅·사진 임베딩과 정기 DAG 연결은 후속입니다.

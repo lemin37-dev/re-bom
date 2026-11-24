@@ -3,7 +3,7 @@
 규칙: docs/data_contract.md 13.4, 표 정의: rebom.common.gold_catalog. 처리·요청 기록은 태깅과 같이 쓰는 공용 로그다.
 
 - 읽기 (read_state): gold_image_embedding 에서 이 모델·전처리 버전의 sha256 → 벡터,
-  gold_inference_log(task = image_embedding) 에서 다시 보내지 않을 사진(BLANK·BAD_IMAGE)과 다시 읽을 사진(READ_ERROR).
+  gold_inference_log(task = image_embedding) 에서 다시 보내지 않을 사진(BLANK·BAD_IMAGE)과 다시 시도할 사진(READ_ERROR·API_ERROR).
   State.staged(current) 가 그 내용을 embed·load 가 쓰던 staging.Staged 모양으로 바꿔 준다(계획 코드는 그대로).
 - 쓰기 (write_run): embed 실행 1번의 결과. 요청 기록 append → 결과 표·처리 기록은 이 사진들만 교체(overwrite).
   같은 실행을 다시 써도 결과가 같다.
@@ -29,6 +29,7 @@ from rebom.embedding import staging
 IMAGE_TASK = "image_embedding"
 SUBJECT_PHOTO = "photo"
 OK, BLANK, BAD_IMAGE, READ_ERROR, SHA_MISMATCH = "OK", "BLANK", "BAD_IMAGE", "READ_ERROR", "SHA_MISMATCH"
+API_ERROR = "API_ERROR"  # 모델 호출이 재시도까지 끝내 실패. 다음 실행에서 다시 보낸다
 # 다시 보내지 않는다 (빈 사진, 열리지 않는 파일). 태깅의 FAILED(다시 시도하는 실패)와 뜻이 달라 이름을 나눈다(11-24).
 # 처리 기록은 sha256 단위라, 사진이 바뀌어 sha256 이 달라지면 새 사진으로 보낸다
 SKIP_STATUSES = (BLANK, BAD_IMAGE)
@@ -110,6 +111,8 @@ class State:
                 key = json.loads(r.get("detail") or "{}").get("s3_key")
                 if key:
                     st.read_errors[key] = r.get("attempts") or 1
+            elif r["status"] == API_ERROR:
+                st.api_errors[sha] = r.get("attempts") or 1
         return st
 
 

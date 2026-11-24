@@ -62,10 +62,12 @@ def test_state_staged_marks_done_skipped_and_read_errors():
         "c": {"status": "READ_ERROR", "attempts": 2, "detail": '{"s3_key": "bronze/x.jpg", "error": "NoSuchKey"}'},
         "d": {"status": "SHA_MISMATCH", "attempts": 1, "detail": '{"s3_key": "bronze/y.jpg"}'},
         "f": {"status": "BAD_IMAGE", "attempts": 1, "detail": None},
+        "g": {"status": "API_ERROR", "attempts": 2, "detail": '{"s3_key": "bronze/z.jpg", "error": "429"}'},
     })
     st = state.staged(current)
     assert set(st.rows) == {("n1", 1), ("n2", 1)} and st.rows[("n1", 1)]["sha256"] == "a"
     assert st.skipped == {"b": "blank", "f": "bad_image"}  # 다시 보내지 않음
+    assert st.api_errors == {"g": 2}  # 다시 보내고, 연속 실패 수를 이어 센다
     assert st.read_errors == {"bronze/x.jpg": 2}  # 다시 읽고, 연속 실패 수를 이어 센다 (sha 불일치도 다시 봄)
 
 
@@ -258,6 +260,139 @@ def test_bad_image_is_skipped_until_photo_changes(monkeypatch, gold):
     logs = {r["subject_key"]: r["status"] for r in table(gc.INFERENCE_LOG_TABLE)}
     assert logs[new] == "OK" and logs[bad] == "BAD_IMAGE"
     assert new in {r["subject_key"] for r in table(gc.IMAGE_EMBEDDING_TABLE)}
+
+
+class ApiError(RuntimeError):
+    def __init__(self, code):
+        super().__init__(f"HTTP {code}")
+        self.code = code
+
+
+def failing(*codes):
+    """처음 len(codes) 번의 호출을 순서대로 실패시킨다 (None 이면 성공)."""
+    plan = list(codes)
+
+    class Embedder(RecordedEmbedder):
+        calls_made = 0
+
+        def embed_images_recorded(self, images):
+            Embedder.calls_made += 1
+            code = plan.pop(0) if plan else None
+            if code is not None:
+                raise ApiError(code)
+            return super().embed_images_recorded(images)
+    return Embedder
+
+
+def embed_with(monkeypatch, s3, embedder, *extra):
+    monkeypatch.setenv("REBOM_S3_BUCKET", "test-bucket")
+    monkeypatch.setattr(cli, "_s3", lambda: s3)
+    monkeypatch.setattr(gemini, "GeminiEmbedder", embedder)
+    return cli.main(["embed", "--limit", "10", "--gold-env", "test", "--workers", "1", *extra])
+
+
+def test_failed_call_is_sent_again_in_same_run_and_others_are_saved(monkeypatch, gold):
+    from rebom.common import gold_catalog as gc
+
+    _, _, table = gold
+    s3, embedder = make_world(), failing(500)
+    assert embed_with(monkeypatch, s3, embedder) == 0
+    assert embedder.calls_made == 3  # 실패 1 + 나머지 1 + 다시 보내기 1
+    assert len(table(gc.IMAGE_EMBEDDING_TABLE)) == 2
+    assert sorted(r["status"] for r in table(gc.INFERENCE_LOG_TABLE)) == ["BLANK", "OK", "OK"]
+    reqs = table(gc.REQUEST_LOG_TABLE)
+    assert sorted(r["status"] for r in reqs) == ["ERROR", "OK", "OK"]
+    (bad,) = [r for r in reqs if r["status"] == "ERROR"]
+    assert bad["error_code"] == "500" and bad["cost_usd"] is None and bad["requested_model"] == gemini.MODEL
+
+
+def test_call_failing_twice_is_logged_and_sent_next_run(monkeypatch, gold, capsys):
+    from rebom.common import gold_catalog as gc
+
+    _, _, table = gold
+    s3 = make_world()
+    assert embed_with(monkeypatch, s3, failing(400, None, 400)) == 0  # 한 장만 실패하면 나머지 적재를 막지 않는다
+    (row,) = [r for r in table(gc.INFERENCE_LOG_TABLE) if r["status"] == "API_ERROR"]
+    assert row["attempts"] == 1 and json.loads(row["detail"])["error"] == "400" and row["last_error"] == "api_error:400"
+    assert len(table(gc.IMAGE_EMBEDDING_TABLE)) == 1
+    assert list(summaries(s3)[0]["api_error_sha256"]) == [row["subject_key"]]
+    capsys.readouterr()
+
+    embedder = failing(400, 400)
+    assert embed_with(monkeypatch, s3, embedder) == cli.EXIT_API_ERRORS  # 하나도 성공하지 못함 → Airflow 가 다시 실행
+    assert embedder.calls_made == 2 and '"retry_api_errors": 1' in capsys.readouterr().out  # 그 사진만
+    (row,) = [r for r in table(gc.INFERENCE_LOG_TABLE) if r["status"] == "API_ERROR"]
+    assert row["attempts"] == 2
+    assert embed_with(monkeypatch, s3, failing(400, 400)) == 0  # 3번째부터는 경고만 (매일 적재를 막지 않게)
+    assert "번 이상 연속으로 실패한 사진 1장" in capsys.readouterr().out
+    assert embed_with(monkeypatch, s3, failing()) == 0
+    assert {r["status"] for r in table(gc.INFERENCE_LOG_TABLE)} == {"OK", "BLANK"}
+
+
+def many_photos(n):
+    s3 = make_world()
+    files = []
+    for i in range(n):
+        key = f"bronze/rescue/images/4113002025{i:05d}/popfile1.jpg"
+        s3.objects[key] = jpeg(100 + i, (64, 48))
+        files.append({"desertionNo": f"4113002025{i:05d}", "slot": 1, "original": key, "ext": "jpg", "bytes": 1,
+                      "sha256": hashlib.sha256(s3.objects[key]).hexdigest(), "version": 1})
+    photos = mf.latest_photos([{"run_id": "r", "generated_at": "2026-11-24T00:00:00Z", "files": files, "failed": []}])
+    return s3, photos
+
+
+@pytest.mark.parametrize("code, sent", [(402, 1), (503, cli.API_STOP_AFTER)])
+def test_stops_sending_when_every_call_would_fail(monkeypatch, gold, capsys, code, sent):
+    """키·계정 오류는 바로, 장애는 연속 실패 뒤 멈춘다. 남은 요청을 보내고 버리지 않는다."""
+    from rebom.common import gold_catalog as gc
+
+    _, _, table = gold
+    s3, photos = many_photos(30)
+    monkeypatch.setattr(cli, "_current", lambda *a, **k: (photos, []))
+    embedder = failing(*[code] * 100)
+    assert embed_with(monkeypatch, s3, embedder, "--limit", "100") == cli.EXIT_API_ERRORS
+    assert sent <= embedder.calls_made <= sent + 2  # 이미 시작한 요청까지만
+    assert "모델 호출을 멈췄습니다" in capsys.readouterr().err
+    logs = table(gc.INFERENCE_LOG_TABLE)
+    assert len(logs) == embedder.calls_made and {r["status"] for r in logs} == {"API_ERROR"}
+    assert len(table(gc.REQUEST_LOG_TABLE)) == embedder.calls_made
+    assert summaries(s3)[0]["status"] == "stopped"
+
+    assert embed_with(monkeypatch, s3, failing(), "--limit", "100") == 0  # 다시 실행하면 모두 보냄
+    assert len(table(gc.IMAGE_EMBEDDING_TABLE)) == 30
+
+
+def test_abort_does_not_send_waiting_requests_and_keeps_costs(monkeypatch, gold):
+    """차원이 다른 벡터처럼 실행을 멈출 때, 대기 중이던 요청은 보내지 않고 이미 보낸 요청의 비용은 남긴다."""
+    from rebom.common import gold_catalog as gc
+
+    _, _, table = gold
+    s3, photos = many_photos(30)
+    monkeypatch.setattr(cli, "_current", lambda *a, **k: (photos, []))
+
+    class Wrong(RecordedEmbedder):
+        calls_made = 0
+
+        def embed_images_recorded(self, images):
+            Wrong.calls_made += 1
+            vecs, meta = super().embed_images_recorded(images)
+            return [v[:10] for v in vecs], meta
+
+    with pytest.raises(RuntimeError, match="벡터 차원"):
+        embed_with(monkeypatch, s3, Wrong, "--limit", "100")
+    assert Wrong.calls_made <= 3
+    assert len(table(gc.REQUEST_LOG_TABLE)) == Wrong.calls_made
+    assert table(gc.IMAGE_EMBEDDING_TABLE) == [] and summaries(s3)[0]["status"] == "aborted"
+
+
+def test_failed_batch_is_sent_again_one_by_one(monkeypatch, gold):
+    """묶음 요청이 실패하면 1장씩 다시 보내, 문제 사진 하나 때문에 묶음 전체가 빠지지 않는다."""
+    from rebom.common import gold_catalog as gc
+
+    _, _, table = gold
+    s3 = make_world()
+    assert embed_with(monkeypatch, s3, failing(400, 400), "--image-batch", "6") == 0
+    assert sorted(r["status"] for r in table(gc.INFERENCE_LOG_TABLE)) == ["API_ERROR", "BLANK", "OK"]
 
 
 def test_shared_log_keeps_other_tasks(monkeypatch, gold):
