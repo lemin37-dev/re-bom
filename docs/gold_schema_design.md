@@ -21,7 +21,7 @@
 
 | 테이블 | Jev 저장 단위와 소비에 필요한 필드 |
 | --- | --- |
-| `gold_animal_tag` | 공고의 태그 하나. `source=jev`, `subject_type=animal`, `subject_key=공고번호`. `task`는 `text_personality` 또는 `text_health`입니다. `tag_code`, `source_hash`, 태그 버전, `searchable`, `displayable`을 조회합니다. 별도 `gold_text_tag`는 현재 연결에 필요하지 않습니다. |
+| `gold_animal_tag` | 공고의 태그 하나. `source=text`(공고 글. 지금 적재 코드는 `jev` 로 쓰며, 바뀔 때까지 둘 다 읽음), `subject_type=animal`, `subject_key=공고번호`. `source` 는 출처(photo 사진 · text 공고 글 · rule 공고 칸)만 적고 모델 이름은 `model`·버전으로 구분합니다(11/24). `task`는 `text_personality` 또는 `text_health`입니다. `tag_code`, `source_hash`, 태그 버전, `searchable`, `displayable`을 조회합니다. 별도 `gold_text_tag`는 현재 연결에 필요하지 않습니다. |
 | `gold_inference_log` | 공고·작업·버전·입력별 처리 상태. `OK`, `NO_RESULT`(해당 결과 없음), `NO_TEXT`(호출할 글 없음), `FAILED`(호출·판정 실패)를 구분합니다. |
 | `gold_model_request_log` | Jev 모델 호출당 한 행. 응답 원문과 비용·토큰을 보관합니다. 같은 글을 여러 공고에서 재사용한 경우 태그의 `detail.request_id`로 실제 호출과 연결합니다. |
 
