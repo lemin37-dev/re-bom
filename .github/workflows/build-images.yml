@@ -18,7 +18,7 @@ on:
       - "infra/docker/ingest*"
       - "infra/docker/storage*"
       - "infra/docker/embed*"
-      - "scripts/storage/rebom_run_aws_real_silver_test.py"
+      - "scripts/storage/**"
       - "infra/docker/tag-img*"
       - ".dockerignore"
       - "frontend/**"
@@ -89,7 +89,7 @@ jobs:
               - "src/rebom/__init__.py"
               - "pyproject.toml"
               - "infra/docker/storage*"
-              - "scripts/storage/rebom_run_aws_real_silver_test.py" # storage.Dockerfile 이 이미지에 복사하는 실행기
+              - "scripts/storage/**" # storage.Dockerfile 이 이미지에 복사하는 실행기
               - ".dockerignore"
               - ".github/workflows/build-images.yml"
             embed:

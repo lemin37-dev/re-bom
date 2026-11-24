@@ -168,6 +168,15 @@ def test_old_schema_table_is_not_patched(tmp_path):
         gc.create_tables(gc.GoldEnvironment("prod", "rebom_gold", "", "x"), catalog, recreate=True)
 
 
+def test_silver_image_table_is_photo_pipeline_table():
+    """태깅·사진 임베딩·글 카드는 rescue_ingest 사진 처리가 쓰는 표(auto_b_test)를 읽는다."""
+    from rebom.storage.silver.environment_config import get_silver_environment
+
+    env = get_silver_environment("test")
+    assert env.image_table == "rebom_silver.silver_animal_image_auto_b_test"
+    assert not hasattr(env, "photo_table")
+
+
 def test_read_silver_filters_protecting_dogs(tmp_path):
     import pyarrow as pa
     from pyiceberg.catalog.sql import SqlCatalog
