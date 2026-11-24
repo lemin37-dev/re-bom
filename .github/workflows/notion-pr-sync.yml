@@ -1,0 +1,55 @@
+# PR 상태를 노션 일정 관리 DB 항목에 반영
+#   PR 본문에 일정 항목 링크가 있으면: 열림·리뷰 요청 → 상태 '진행 중'(대기일 때만), 머지 → '완료', 'GitHub PR' 칸에 PR 링크
+#   링크가 없으면: 구분=작업 항목을 새로 만들고 PR 본문 끝에 "노션 일정: <링크>" 를 붙임
+# 수동 실행(Actions 탭 → Run workflow): 기존 PR 전체를 같은 규칙으로 한 번 반영(백필). 먼저 dry run 으로 확인 권장
+#   수동 실행은 develop 에 이 워크플로가 들어간 뒤 가능
+# 필요: 저장소 Secret NOTION_TOKEN (노션 결정 → 이슈 워크플로와 같은 토큰)
+# 선택: 저장소 Variable NOTION_DATA_SOURCE_ID (없으면 아래 기본값 사용)
+name: PR → 노션 일정
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, edited, closed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "노션·PR 을 바꾸지 않고 할 일만 확인"
+        type: boolean
+        default: true
+      state:
+        description: "백필할 PR"
+        type: choice
+        options: [all, open, closed]
+        default: all
+
+permissions:
+  contents: read
+  pull-requests: write # 새로 만든 노션 항목 링크를 PR 본문에 추가
+
+concurrency:
+  # PR 별로 한 줄로 세움 (같은 PR 의 이벤트가 겹쳐 항목이 두 번 생기지 않게). 백필은 따로 하나만
+  group: notion-pr-sync-${{ github.event.pull_request.number || 'backfill' }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # 포크 PR 에는 Secret 이 전달되지 않으므로 같은 저장소 브랜치 PR 만
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: 노션 일정 항목 갱신
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATA_SOURCE_ID: ${{ vars.NOTION_DATA_SOURCE_ID || '363b95a0-bdee-8249-b2f1-87c03f2a8871' }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          BACKFILL_STATE: ${{ inputs.state }}
+        run: |
+          if [ -z "$NOTION_TOKEN" ]; then
+            echo "NOTION_TOKEN Secret이 없어 건너뜁니다."
+            exit 0
+          fi
+          python3 .github/scripts/notion_pr_sync.py
