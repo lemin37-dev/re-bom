@@ -504,3 +504,23 @@ def test_nearest_notices_fetches_enough_photo_candidates(monkeypatch):
     monkeypatch.setattr(store, "nearest", fake_nearest)
     assert store.nearest_notices(None, "m", [1.0], k=5) == [("A", 2, 0.9)]
     assert seen["k"] == store.SEARCH_CANDIDATES
+
+
+def test_nearest_widens_hnsw_search_and_sorts():
+    """ef_search 기본 40 이면 LIMIT 200 이 40개로 잘린다. 이번 트랜잭션에만 넓히고, relaxed_order 라 다시 정렬한다."""
+    class RecConn:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, sql, params=()):
+            self.calls.append((sql, params))
+            if "set_config" in sql:
+                return []
+            return [("B", 1, "s2", 0.2), ("A", 2, "s1", 0.9)]
+
+    conn = RecConn()
+    assert store.nearest(conn, "m", [1.0, 0.0], k=200) == [("A", 2, "s1", 0.9), ("B", 1, "s2", 0.2)]
+    sql, params = conn.calls[0]
+    assert "set_config('hnsw.ef_search', %s, true)" in sql and params == ("200", "relaxed_order")
+    store.nearest(conn, "m", [1.0], k=1)
+    assert conn.calls[2][1] == ("40", "relaxed_order")  # 기본값 아래로는 줄이지 않는다

@@ -29,7 +29,7 @@
 - 같은 점수면 앞 칸을 대표로 씁니다.
 - ②에서 200개를 넉넉히 뽑는 이유: 한 공고가 여러 칸을 차지하기 때문입니다.
 - 지금 코드(`store.py`)는 아직 서비스 테이블이 없어 200개를 먼저 뽑은 뒤 파이썬에서 보호중 공고만 남깁니다. `animal` 테이블이 생기면 ①처럼 SQL에서 거릅니다.
-- HNSW는 가까운 순으로 뽑은 뒤 조건을 거르므로, 기본 `ef_search`(40)로는 200개가 채워지지 않거나 고양이처럼 적은 종이 덜 나올 수 있습니다. 그래서 쿼리 앞에 `SET LOCAL hnsw.ef_search = 200`과 `SET LOCAL hnsw.iterative_scan = relaxed_order`를 둡니다(RDS pgvector 0.8.2).
+- HNSW는 가까운 순으로 뽑은 뒤 조건을 거르므로, 기본 `ef_search`(40)로는 200개가 채워지지 않거나 고양이처럼 적은 종이 덜 나올 수 있습니다. 그래서 `store.nearest`가 쿼리 앞에 이번 트랜잭션에만 `hnsw.ef_search` = LIMIT(최소 40, 최대 1000)과 `hnsw.iterative_scan = relaxed_order`를 둡니다(`SET LOCAL`과 같은 `set_config(…, true)`, RDS pgvector 0.8.2). `relaxed_order`는 순서가 조금 어긋날 수 있어 받은 뒤 유사도 순으로 다시 정렬합니다.
 
 ## 3. 예시
 
