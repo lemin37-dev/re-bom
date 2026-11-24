@@ -118,7 +118,7 @@ SELECT dt, task, SUM(cost_usd) FROM rebom_gold.gold_embedding_request_log GROUP 
 **`gold_embedding_inference_log`** (키: `subject_type`, `subject_key`, `task`, `version`, `input_hash`. 태깅 `gold_inference_log`와 같음)
 - 사진: `subject_type = photo`, `subject_key = input_hash = sha256`.
 - `version` = `<model>/<prompt_version>`, 예 `gemini-embedding-2:768/exif-rgb-max1024-jpeg90`. 이 표의 키에는 모델 칸이 없어서 모델까지 넣습니다. 이렇게 하지 않으면 모델을 바꿀 때 기록이 겹칩니다.
-- `status`: `OK`, `BLANK`(빈 사진), `SHA_MISMATCH`, `READ_ERROR`(원본 못 읽음), `FAILED`.
+- `status`: `OK`, `BLANK`(빈 사진), `SHA_MISMATCH`, `READ_ERROR`(원본 못 읽음), `BAD_IMAGE`(열리지 않는 파일, 11-24 `FAILED`에서 이름 변경).
 - **새 칸 `detail`** (판정 근거 JSON, 태깅의 `gold_animal_tag.detail`과 같은 방식):
   - 빈 사진은 사진을 회색조 256×256으로 줄여 픽셀 밝기의 **표준편차**를 잽니다. 흰 대체 그림은 거의 한 색이라 0에 가깝고, 실제 사진은 이보다 훨씬 큽니다. 4.0 미만이면 빈 사진으로 봅니다.
   - 이 값을 `{"gray_std": 1.2, "blank_std": 4.0}`처럼 남기면, 나중에 기준을 바꿔도 사진을 다시 받거나 계산하지 않고 기록만 보고 다시 판정할 수 있습니다.
@@ -261,7 +261,7 @@ DAG 세 task에 `--gold-env prod`를 붙입니다. 주지 않으면 전과 같�
 | task | 전환 뒤 |
 |---|---|
 | `check_embedding_drift` (canary) | 기준 사진·벡터는 지금처럼 S3. 1장씩 6번 보내, 결과를 `gold_embedding_canary` 1행, 요청을 `gold_embedding_request_log` 6행으로 남김 |
-| `embed_photos` | 보낼 사진을 **prod 결과 표·처리 기록**과 비교해 고름. 결과 표(사진당 1행), 처리 기록(OK·BLANK·FAILED·READ_ERROR·SHA_MISMATCH), 요청 기록(요청 1번 = 1행, 1장씩 보내 = 사진 1장)에 씀. OK 행 `detail`에 `request_id`. parquet·`summary.json`도 같이 씀(읽지는 않음) |
+| `embed_photos` | 보낼 사진을 **prod 결과 표·처리 기록**과 비교해 고름. 결과 표(사진당 1행), 처리 기록(OK·BLANK·BAD_IMAGE·READ_ERROR·SHA_MISMATCH), 요청 기록(요청 1번 = 1행, 1장씩 보내 = 사진 1장)에 씀. OK 행 `detail`에 `request_id`. parquet·`summary.json`도 같이 씀(읽지는 않음) |
 | `load_photo_embeddings` | 벡터를 **prod 결과 표**에서 읽어 RDS에 씀. 칸은 지금처럼 Bronze manifest |
 
 - 쓰는 순서: 요청 기록(append) → 결과 표·처리 기록(이 사진들만 교체). 실행이 중간에 끊겨도 이미 받은 벡터는 씁니다.
