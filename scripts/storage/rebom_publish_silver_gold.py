@@ -199,6 +199,106 @@ def main():
         )
 
         photo_needs_review = journal.get("needs_review")
+
+        from rebom.storage.silver.photo_snapshot import (
+            load_photo_snapshot,
+            PHOTO_FIELDS,
+        )
+
+        manifest_key = journal["manifest_key"]
+        manifest = json.loads(
+            s3.get_object(
+                Bucket=args.bucket,
+                Key=manifest_key,
+            )["Body"].read()
+        )
+
+        if (
+            journal.get("manifest_status") != "ok"
+            or manifest.get("status") != "ok"
+            or journal.get("processing_status") != "APPLIED"
+            or manifest.get("run_id") != args.photo_run_id
+        ):
+            raise RuntimeError("PHOTO_PROCESSING_NOT_COMPLETE")
+
+        failed = manifest["failed"]
+
+        if (
+            not isinstance(failed, list)
+            or journal.get("failed_count") != len(failed)
+        ):
+            raise RuntimeError("PHOTO_FAILED_COUNT_MISMATCH")
+
+        snapshot = load_photo_snapshot(
+            s3, args.bucket, manifest_key, manifest
+        )
+
+        if (
+            snapshot is None
+            or snapshot["checksum"] != journal.get("snapshot_checksum")
+        ):
+            raise RuntimeError("PHOTO_SNAPSHOT_CHECKSUM_MISMATCH")
+
+        fixed_snapshot_id = journal.get("current_snapshot_id")
+
+        if (
+            type(fixed_snapshot_id) is not int
+            or photo.snapshot_by_id(fixed_snapshot_id) is None
+        ):
+            raise RuntimeError("PHOTO_SNAPSHOT_MISSING")
+
+        rows = photo.scan(
+            snapshot_id=fixed_snapshot_id
+        ).to_arrow().to_pylist()
+
+        current = {
+            (str(row["desertion_no"]), row["image_slot"]): row
+            for row in rows
+        }
+
+        if len(current) != len(rows):
+            raise RuntimeError("DUPLICATE_PHOTO_SLOT")
+
+        for slot, source in snapshot["rows"].items():
+            stored = current.get(slot)
+
+            if source["current_version"] is None:
+                if stored and any(
+                    stored.get(field) != source[field]
+                    for field in PHOTO_FIELDS
+                ):
+                    raise RuntimeError(
+                        f"PHOTO_EMPTY_SLOT_MISMATCH: {slot}"
+                    )
+            elif stored is None or any(
+                stored.get(field) != source[field]
+                for field in PHOTO_FIELDS
+            ):
+                raise RuntimeError(
+                    f"PHOTO_SLOT_IDENTITY_MISMATCH: {slot}"
+                )
+
+        for failure in failed:
+            slot = (
+                str(failure["desertionNo"]),
+                failure["slot"],
+            )
+            source = snapshot["rows"].get(slot)
+
+            if (
+                failure.get("status") not in ("failed", "gave_up")
+                or source is None
+                or source["slot_state"] != "active"
+            ):
+                raise RuntimeError(
+                    f"UNRESOLVED_FAILED_PHOTO_SLOT: {slot}"
+                )
+
+        if photo_needs_review is True and failed:
+            photo_needs_review = False
+
+        print("PHOTO_SOURCE_FAILURE_COUNT:", len(failed))
+        print("PHOTO_SLOT_INTEGRITY: PASS")
         photo_snapshot_id = journal.get("current_snapshot_id")
 
         snapshots = {
@@ -292,6 +392,10 @@ def main():
             photo_needs_review=photo_needs_review,
             source_fetched_at=source_fetched_at,
         )
+
+        record["photo_failed_count"] = len(failed)
+        record["photo_journal_key"] = photo_key
+        record["photo_snapshot_checksum"] = journal["snapshot_checksum"]
 
         record["publish_seq"] = reserve_publish_seq(
             s3,
