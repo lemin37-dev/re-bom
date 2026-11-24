@@ -801,9 +801,13 @@ def main(argv: list[str] | None = None) -> int:
     text_parser.add_argument("--gold-env", choices=("test", "prod"), default="test")
     text_parser.add_argument("--profile")
     text_parser.add_argument("--version", required=True)
+    silver_input = text_parser.add_mutually_exclusive_group()
+    silver_input.add_argument("--publish-id", help="Silver READY 발행 ID")
+    text_parser.add_argument("--publish-bucket")
+    text_parser.add_argument("--publish-prefix")
     text_parser.add_argument("--limit", type=int, required=True)
     text_parser.add_argument("--write", action="store_true", help="임베딩 API를 호출하고 Gold에 저장")
-    text_parser.add_argument("--silver-as-of", default=None,
+    silver_input.add_argument("--silver-as-of", default=None,
                              help="이 날짜(YYYY-MM-DD, 그날 끝 KST) 기준 Silver 스냅샷. 비우면 현재 Silver. v0.1 은 2026-11-23")
     text_parser.add_argument("--require-tags", nargs="*", default=(), metavar="TASK",
                              help="이 작업의 태그가 모두 있는 공고만 (예: photo_trait text_personality text_health)")

@@ -43,7 +43,10 @@ def test_group_embedding_creates_only_embedding_tables(world):
     for group in ("tagging", "log"):
         assert sorted(gc.create_tables(env, catalog, group=group)) == sorted(
             f"만듦 {env.table(b)}" for b in gc.GROUPS[group])
-    assert gc.create_tables(env, catalog) == [f"만듦 {env.table(gc.VERSION_REGISTRY_TABLE)}"]
+    for group in ("execution", "registry"):
+        assert gc.create_tables(env, catalog, group=group) == [
+            f"만듦 {env.table(b)}" for b in gc.GROUPS[group]
+        ]
     assert gc.create_tables(env, catalog) == []
     with pytest.raises(ValueError, match="UNKNOWN_GOLD_GROUP"):
         gc.create_tables(env, catalog, group="nope")

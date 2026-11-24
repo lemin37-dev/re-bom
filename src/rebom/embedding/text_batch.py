@@ -204,8 +204,11 @@ def verify_template(catalog, gold, config: dict, *, write: bool) -> bool:
 
 
 def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedder_factory=gemini.GeminiEmbedder,
-        silver_as_of: str | None = None, require_tags: tuple[str, ...] = (), show: int = 0) -> dict:
+        silver_as_of: str | None = None, require_tags: tuple[str, ...] = (), show: int = 0, published=None) -> dict:
     from pyiceberg.expressions import And, EqualTo, In
+
+    if published is not None and silver_as_of is not None:
+        raise ValueError("--publish-id and --silver-as-of are mutually exclusive")
 
     config = resolve_version(catalog, gold, TASK, version)
     template = config.get("template_version")
@@ -234,10 +237,17 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
     if write:
         require_version_column(load_logs(catalog, gold)[1])
 
-    notices = catalog.load_table(silver.notice_table)
+    notice_table = published.notice_table if published else silver.notice_table
+    notices = catalog.load_table(notice_table)
     snapshots = {}
+    if published is not None:
+        published.validate_snapshots(catalog)
+        snapshots.update({published.notice_table: published.notice_snapshot_id,
+                          published.photo_table: published.photo_snapshot_id})
 
     def snapshot_id(silver_table, name: str) -> int | None:
+        if published is not None:
+            return snapshots[name]
         snapshot = _snapshot(silver_table, name, cutoff)
         if snapshot is not None:
             snapshots[name] = snapshot.snapshot_id
@@ -248,14 +258,15 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
     available = {field.name for field in notices.schema().fields}
     notice_rows = notices.scan(
         row_filter=EqualTo("status_group", "PROTECTING"), selected_fields=tuple(sorted(notice_fields & available)),
-        snapshot_id=snapshot_id(notices, silver.notice_table),
+        snapshot_id=snapshot_id(notices, notice_table),
     ).to_arrow().to_pylist()
     photos, tags = [], []
     if spec.uses_tags:
-        images = catalog.load_table(silver.image_table)
+        photo_table = published.photo_table if published else silver.image_table
+        images = catalog.load_table(photo_table)
         photos = images.scan(
             selected_fields=("desertion_no", "image_slot", "sha256", "original_s3_key"),
-            snapshot_id=snapshot_id(images, silver.image_table),
+            snapshot_id=snapshot_id(images, photo_table),
         ).to_arrow().to_pylist()
         tag_table = catalog.load_table(gold.table(gc.TAG_TABLE))
         tag_fields = ("subject_type", "subject_key", "source_hash", "task", "source", "tag_code",
@@ -273,18 +284,27 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
     ).to_arrow().to_pylist()
     keys = {(row["subject_key"], row["source_hash"]) for row in existing}
     to_write = [card for card in selected if (card.notice, card.source_hash) not in keys][:limit]
+    run_id = f"text-{uuid4().hex}"
+    if write and published is not None:
+        inputs = catalog.load_table(gold.table(gc.RUN_INPUT_TABLE))
+        inputs.append(table_arrow(inputs, [{
+            "gold_run_id": run_id, "publish_id": published.publish_id, "task": TASK,
+            "version": version, "started_at": datetime.now(UTC),
+        }]))
     if write and to_write:
         embedder = embedder_factory(dim=gemini.DEFAULT_DIM)
-        run_id = f"text-{uuid4().hex}"
         for start in range(0, len(to_write), gemini.TEXT_BATCH):
             write_cards(catalog, gold, table, to_write[start:start + gemini.TEXT_BATCH],
                         template=template, version=version, run_id=run_id, embedder=embedder,
                         silver_snapshots=snapshots)
-    return {"template": template, "template_sha256": spec.sha256, "template_recorded": fingerprint,
+    result = {"template": template, "template_sha256": spec.sha256, "template_recorded": fingerprint,
             "cards": len(cards), "with_tags": with_tags, "selected": len(selected), "planned": len(to_write),
             "written": len(to_write) if write else 0, "silver_as_of": cutoff[0].isoformat() if cutoff else None,
             "silver_snapshots": snapshots,
             "show": [{"notice": c.notice, "text": c.text, "tag_versions": c.tag_versions} for c in to_write[:show]]}
+    if published is not None:
+        result.update(publish_id=published.publish_id, gold_run_id=run_id)
+    return result
 
 
 def command(args: argparse.Namespace) -> int:
@@ -293,9 +313,20 @@ def command(args: argparse.Namespace) -> int:
 
     if args.silver_env != args.gold_env:
         raise ValueError("Silver and Gold environments must match")
-    silver = get_silver_environment(args.silver_env)
+    published = None
+    if args.publish_id:
+        import boto3
+        from rebom.common.silver_input import load_ready
+
+        if not args.publish_bucket or not args.publish_prefix:
+            raise ValueError("--publish-id requires --publish-bucket and --publish-prefix")
+        s3 = boto3.Session(profile_name=args.profile).client("s3")
+        published = load_ready(s3, args.publish_bucket, args.publish_prefix, args.publish_id)
+    elif args.publish_bucket or args.publish_prefix:
+        raise ValueError("Publication location requires --publish-id")
+    silver = None if published else get_silver_environment(args.silver_env)
     result = run(get_aws_catalog(profile=args.profile), gc.get_gold_environment(args.gold_env),
                  silver, args.version, limit=args.limit, write=args.write, silver_as_of=args.silver_as_of,
-                 require_tags=tuple(args.require_tags), show=args.show)
+                 require_tags=tuple(args.require_tags), show=args.show, published=published)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
