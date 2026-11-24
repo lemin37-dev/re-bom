@@ -186,24 +186,53 @@ def test_account_error_stops_run_without_counting_attempts():
     assert rpt.inference_rows(outcomes, {}, "run-1", datetime.now(UTC)) == []
 
 
-def test_oversized_image_fails_only_that_photo(monkeypatch):
+def log_rows_of(outcomes):
+    return {(r["subject_key"][:1], r["task"]): r for r in rpt.inference_rows(outcomes, {}, "run-1", datetime.now(UTC))}
+
+
+def test_unopenable_or_oversized_image_is_bad_image_and_not_retried(monkeypatch):
     small = jpeg()
     big = small + bytes(200)
     monkeypatch.setattr(image_input, "MAX_IMAGE_BYTES", len(small) + 100)
     client = FakeClient()
-    outcomes, stop = rpt.tag_photos([(target("1"), small), (target("2"), big)], client, cfg())
-    assert stop is None and len(client.requests) == 4
-    assert {t.status for t in outcomes[1].tasks.values()} == {"FAILED"}
-    assert "IMAGE_TOO_LARGE" in outcomes[1].tasks[TRAIT].error
+    items = [(target("1"), small), (target("2"), big), (target("3"), b"not an image")]
+    outcomes, stop = rpt.tag_photos(items, client, cfg())
+    assert stop is None and len(client.requests) == 4  # 1번 사진만 불렀다
+    rows = log_rows_of(outcomes)
+    assert rows[("2", TRAIT)]["status"] == "BAD_IMAGE"
+    assert rows[("2", TRAIT)]["last_error"] == "bad_image:ImageTooLargeError"
+    assert rows[("3", BREED)]["last_error"].startswith("bad_image:")
+    assert json.loads(rows[("3", TRAIT)]["detail"]) == {"s3_key": "k/3.jpg"}
+    assert rpt.is_done(rows[("2", TRAIT)])
 
 
-def test_s3_or_api_error_fails_only_that_photo():
-    client = FakeClient(trait=lambda: OpenRouterError("HTTP 400", status=400))
-    outcomes, stop = rpt.tag_photos([(target("1", (TRAIT,)), jpeg()), (target("2"), RuntimeError("SHA_MISMATCH"))], client, cfg())
+def test_model_error_is_failed_with_code_and_input_problems_keep_their_status():
+    client = FakeClient(trait=lambda: OpenRouterError("HTTP 400: bad schema", status=400))
+    sha_problem = rpt.InputProblem("SHA_MISMATCH", "sha_mismatch", {"s3_key": "k/2.jpg"})
+    outcomes, stop = rpt.tag_photos([(target("1", (TRAIT,)), jpeg()), (target("2"), sha_problem)], client, cfg())
     assert stop is None
-    assert outcomes[0].tasks[TRAIT].status == "FAILED"
-    assert {t.status for t in outcomes[1].tasks.values()} == {"FAILED"}
-    assert "SHA_MISMATCH" in outcomes[1].tasks[TRAIT].error
+    rows = log_rows_of(outcomes)
+    assert rows[("1", TRAIT)]["status"] == "FAILED" and rows[("1", TRAIT)]["last_error"] == "model_error:400"
+    assert "bad schema" in json.loads(rows[("1", TRAIT)]["detail"])["error"]
+    assert {rows[("2", TRAIT)]["status"], rows[("2", BREED)]["status"]} == {"SHA_MISMATCH"}
+    assert rows[("2", TRAIT)]["last_error"] == "sha_mismatch"
+
+
+def test_bad_answer_is_failed_with_exception_name():
+    client = FakeClient(breed=lambda: result_from("openrouter_breed_response.json", content="{not json"))
+    rows = log_rows_of(rpt.tag_photos([(target(), jpeg())], client, cfg())[0])
+    assert rows[("1", BREED)]["status"] == "FAILED"
+    assert rows[("1", BREED)]["last_error"] == "bad_answer:JSONDecodeError"
+    assert rows[("1", TRAIT)]["detail"] is None  # OK 는 detail 을 비운다
+
+
+def test_read_and_sha_problems_are_retried_every_run_but_bad_image_is_not():
+    sha = "a" * 64
+    for status, attempts, retried in (("READ_ERROR", 7, True), ("SHA_MISMATCH", 4, True), ("BAD_IMAGE", 1, False),
+                                      ("FAILED", 2, True), ("FAILED", 3, False)):
+        logs = [log_row(sha, TRAIT, TV, status, attempts), log_row(sha, BREED, BV, "OK")]
+        targets, _ = rpt.select_targets(["1"], [img_row("1", 1, sha)], logs)
+        assert bool(targets) == retried, (status, attempts)
 
 
 def test_inference_rows_count_attempts():
@@ -225,8 +254,20 @@ def test_fetch_image_checks_sha(tmp_path):
 
     ok = rpt.Target(hashlib.sha256(data).hexdigest(), "k", (TRAIT,), ("1",))
     assert rpt.fetch_image(S3(), "b", ok) == data
-    bad = rpt.Target("0" * 64, "k", (TRAIT,), ("1",))
-    assert "SHA_MISMATCH" in str(rpt.fetch_image(S3(), "b", bad))
+    bad = rpt.fetch_image(S3(), "b", rpt.Target("0" * 64, "k", (TRAIT,), ("1",)))
+    assert (bad.status, bad.last_error, bad.detail) == ("SHA_MISMATCH", "sha_mismatch", {"s3_key": "k"})
+
+
+def test_fetch_image_read_error_uses_s3_error_code():
+    class NoSuchKey(Exception):
+        response = {"Error": {"Code": "NoSuchKey"}}
+
+    class S3:
+        def get_object(self, Bucket, Key):
+            raise NoSuchKey()
+
+    got = rpt.fetch_image(S3(), "b", rpt.Target("0" * 64, "k", (TRAIT,), ("1",)))
+    assert (got.status, got.last_error, got.detail) == ("READ_ERROR", "read_error:NoSuchKey", {"s3_key": "k", "error": "NoSuchKey"})
 
 
 def test_local_sink_round_trip(tmp_path):

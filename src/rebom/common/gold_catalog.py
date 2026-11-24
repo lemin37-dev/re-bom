@@ -9,7 +9,7 @@
 
 공용 로그 (어떤 작업의 행인지는 task 로 구분. 읽기·교체 조건에 task 를 반드시 넣는다):
 - gold_inference_log     대상·작업·버전·입력당 한 행. (subject_type, subject_key, task, version, input_hash) 가 키.
-                         detail 은 판정 근거 JSON(빈 사진의 회색조 표준편차, 벡터를 만든 요청 등). 태깅은 비움
+                         detail 은 판정 근거 JSON(빈 사진의 회색조 표준편차, 벡터를 만든 요청, 실패 근거 등)
 - gold_model_request_log 모델 요청 한 번이 한 행. append 만, dt(요청 UTC 날짜) 파티션. batch_size 는 한 요청에 보낸 대상 수
                          (태깅은 비움 = 1). 묶어 보내면 subject_key = 첫 대상, 비용·토큰은 요청 전체 값
 태깅 결과 (docs/data_contract.md 13절):
@@ -146,7 +146,7 @@ def schemas():
         f(9, "last_error", StringType()),
         f(10, "gold_run_id", StringType()),
         f(11, "gold_updated_at", TimestamptzType()),
-        f(12, "detail", StringType()),  # 판정 근거 JSON. BLANK: {"gray_std": 1.2, "blank_std": 4.0}. 태깅은 비움
+        f(12, "detail", StringType()),  # 판정 근거 JSON. BLANK: {"gray_std": 1.2, "blank_std": 4.0}, 실패: {"s3_key", "error"}
         identifier_field_ids=[1, 2, 3, 4, 5],
     )
     request = Schema(
