@@ -92,6 +92,83 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     logs = catalog.load_table(gold.table(gc.INFERENCE_LOG_TABLE)).scan().to_arrow().to_pylist()
     assert len(logs) == 3 and {r["status"] for r in logs} == {"OK"}
 
+    from rebom.common.silver_input import load_ready
+    import io
+    import json
+
+    notice_table = catalog.load_table(silver.notice_table)
+    photo_table = catalog.load_table(silver.image_table)
+    record = {
+        "publish_id": "p1", "status": "READY", "bronze_run_id": "r1",
+        "notice_run_id": "r1", "photo_run_id": "photo-r1",
+        "notice_table": silver.notice_table, "photo_table": silver.image_table,
+        "notice_snapshot_id": notice_table.current_snapshot().snapshot_id,
+        "photo_snapshot_id": photo_table.current_snapshot().snapshot_id,
+    }
+    class S3:
+        def get_object(self, **kwargs):
+            assert kwargs == {"Bucket": "test", "Key": "publish/p1.json"}
+            return {"Body": io.BytesIO(json.dumps(record).encode())}
+
+    published = load_ready(S3(), "test", "publish", "p1")
+    notice_table.overwrite(pa.Table.from_pylist([
+        {"desertion_no": "new", "status_group": "PROTECTING", "breed_name_raw": "새 공고", "info_text": "새 글"},
+    ], schema=notice_table.schema().as_arrow()))
+    photo_table.overwrite(pa.Table.from_pylist([
+        {"desertion_no": "1", "image_slot": 1, "sha256": "new", "original_s3_key": "new-photo"},
+    ], schema=photo_table.schema().as_arrow()))
+    result = text_batch.run(catalog, gold, None, version, limit=10, write=True,
+                            published=published, embedder_factory=Embedder)
+    assert result["cards"] == 2 and result["written"] == 0
+    [run_input] = catalog.load_table(gold.table(gc.RUN_INPUT_TABLE)).scan().to_arrow().to_pylist()
+    assert run_input["publish_id"] == "p1" and run_input["gold_run_id"] == result["gold_run_id"]
+
+    candidate = "text_embedding@2"
+    assert register_version(catalog, gold, text_batch.TASK, candidate, {
+        "model_id": gemini.MODEL, "dim": gemini.DEFAULT_DIM, "template_version": "A2", "tag_versions": versions,
+    })
+    result = text_batch.run(catalog, gold, None, candidate, limit=10, write=True,
+                            published=published, embedder_factory=Embedder)
+    assert result["written"] == 2
+    rows = catalog.load_table(gold.table(gc.TEXT_EMBEDDING_TABLE)).scan().to_arrow().to_pylist()
+    written = [row for row in rows if row["version"] == candidate]
+    assert {row["subject_key"] for row in written} == {"1", "2"}
+    assert all(row["gold_run_id"] == result["gold_run_id"] for row in written)
+    assert "복슬복슬" in next(row["input_text"] for row in written if row["subject_key"] == "1")
+    runs = catalog.load_table(gold.table(gc.RUN_INPUT_TABLE)).scan().to_arrow().to_pylist()
+    [candidate_run] = [row for row in runs if row["gold_run_id"] == result["gold_run_id"]]
+    assert candidate_run["publish_id"] == "p1"
+    assert result["silver_snapshots"] == {
+        silver.notice_table: published.notice_snapshot_id,
+        silver.image_table: published.photo_snapshot_id,
+    }
+    from pyiceberg.expressions import EqualTo
+
+    run_filter = EqualTo("gold_run_id", result["gold_run_id"])
+    requests = catalog.load_table(gold.table(gc.REQUEST_LOG_TABLE)).scan(row_filter=run_filter).to_arrow().to_pylist()
+    logs = catalog.load_table(gold.table(gc.INFERENCE_LOG_TABLE)).scan(row_filter=run_filter).to_arrow().to_pylist()
+    [request] = requests
+    assert (request["task"], request["version"], request["batch_size"]) == (text_batch.TASK, candidate, 2)
+    assert {row["subject_key"] for row in logs} == {"1", "2"}
+    for row in logs:
+        assert (row["task"], row["version"], row["status"]) == (text_batch.TASK, candidate, "OK")
+        assert json.loads(row["detail"])["request_id"] == request["request_id"]
+        assert json.loads(row["detail"])["silver_snapshots"] == result["silver_snapshots"]
+
+    record["status"] = "BLOCKED"
+    with pytest.raises(ValueError, match="READY"):
+        load_ready(S3(), "test", "publish", "p1")
+
+
+def test_cli_rejects_two_silver_input_selectors(capsys):
+    from rebom.embedding.cli import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["embed-text", "--version", "text_embedding@1", "--limit", "2",
+              "--silver-as-of", "2026-11-23", "--publish-id", "p1"])
+    assert exc.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
+
 
 def test_tag_index_accepts_origin_source_and_legacy_jev_only():
     """source 는 출처(photo·text·rule). 글 태그는 바뀔 때까지 jev 도 받고, 다른 출처는 받지 않는다."""

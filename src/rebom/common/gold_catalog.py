@@ -72,10 +72,12 @@ EMBEDDING_CANARY_TABLE = "gold_embedding_canary"
 LEGACY_EMBEDDING_INFERENCE_LOG_TABLE = "gold_embedding_inference_log"
 LEGACY_EMBEDDING_REQUEST_LOG_TABLE = "gold_embedding_request_log"
 VERSION_REGISTRY_TABLE = "gold_version_registry"
+RUN_INPUT_TABLE = "gold_run_input"
 
 # --group: 한 묶음의 표만 만들 때. 로그는 태깅·임베딩이 같이 써서 따로 묶는다
 GROUPS = {
     "registry": (VERSION_REGISTRY_TABLE,),
+    "execution": (RUN_INPUT_TABLE,),
     "log": (INFERENCE_LOG_TABLE, REQUEST_LOG_TABLE),
     "tagging": (TAG_TABLE,),
     "embedding": (IMAGE_EMBEDDING_TABLE, TEXT_EMBEDDING_TABLE, EMBEDDING_CANARY_TABLE),
@@ -243,6 +245,14 @@ def schemas():
         identifier_field_ids=[1, 2],
     )
     return {
+        RUN_INPUT_TABLE: (Schema(
+            f(1, "gold_run_id", StringType(), True),
+            f(2, "publish_id", StringType(), True),
+            f(3, "task", StringType(), True),
+            f(4, "version", StringType(), True),
+            f(5, "started_at", TimestamptzType(), True),
+            identifier_field_ids=[1],
+        ), PartitionSpec()),
         VERSION_REGISTRY_TABLE: (version_registry, PartitionSpec()),
         TAG_TABLE: (tag, PartitionSpec()),
         INFERENCE_LOG_TABLE: (inference, PartitionSpec()),
