@@ -13,7 +13,8 @@
   그래서 대표 사진이 바뀌거나(sha256) 질문지 버전을 올릴 때만 다시 부른다.
 
 호출: OpenRouter google/gemini-3.1-flash-lite, 공급자 google-ai-studio 고정, reasoning low,
-media_resolution MEDIA_RESOLUTION_MEDIUM(평가와 같은 해상도), temperature 1.0. 키는 OPENROUTER_KEY_TAG_IMG.
+media_resolution MEDIA_RESOLUTION_MEDIUM(평가와 같은 해상도), temperature 1.0. 키는 OPENROUTER_KEY_TAG_IMG,
+OpenRouter 앱 이름은 rebom-tag-photo.
 - temperature: 평가는 값을 보내지 않아 Google 기본값(Gemini 3 는 1.0)으로 돌았다. 기본값이 바뀌어도 평가와 같게
   1.0 을 명시한다. seed 는 보내지 않는다. 2회 답이 같을 때만 태그를 붙이므로 두 회차는 서로 독립된 표본이어야 한다.
 - 키·계정 오류(AccountError: 키 무효·크레딧 부족·키 한도)면 그 배치까지 저장하고 실패로 끝낸다.
@@ -52,6 +53,8 @@ from rebom.tagging.image_input import prepare_image
 log = logging.getLogger("rebom.tagging.photo_tags")
 
 KEY_ENV = "OPENROUTER_KEY_TAG_IMG"
+APP_NAME = "rebom-tag-photo"  # OpenRouter 사용 기록에서 사진 태깅 호출만 골라 보는 앱 이름
+APP_URL = "https://github.com/lemin37-dev/re-bom/tree/develop/src/rebom/tagging"
 MODEL = version_config.MODEL
 PROVIDER = version_config.PROVIDER
 REASONING = version_config.REASONING
@@ -689,7 +692,7 @@ def cmd_run(args) -> int:
     print(f"태깅할 사진 {len(targets)}장")
     if args.dry_run or not targets:
         return 0
-    client = OpenRouterClient(KEY_ENV)
+    client = OpenRouterClient(KEY_ENV, app_name=APP_NAME, app_url=APP_URL)
     run_id = args.run_id or f"manual-{_now():%Y%m%dT%H%M%SZ}"
     cfg = TaggerConfig(run_id=run_id, concurrency=args.concurrency, max_trait_prompt_tokens=args.max_trait_prompt_tokens,
                        canonical_slug=client.canonical_slug(MODEL))

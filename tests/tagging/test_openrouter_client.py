@@ -48,6 +48,7 @@ def fixture(name):
 
 def client(session, slept=None, **kw):
     sleep = slept.append if slept is not None else (lambda s: None)
+    kw.setdefault("app_name", "rebom-test")
     return OpenRouterClient("OPENROUTER_KEY_TEST", key="test-key", session=session, sleep=sleep, **kw)
 
 
@@ -74,6 +75,15 @@ def test_chat_returns_usage_cost_provider():
     assert res.json()["fur"]["value"] == "매끈"
     assert (res.finish_reason, res.native_finish_reason) == ("stop", "STOP")
     assert s.posts[0]["headers"]["Authorization"] == "Bearer test-key"
+
+
+def test_headers_name_the_app_per_role():
+    s = FakeSession([FakeResponse(200, fixture("openrouter_trait_response.json"))])
+    client(s, app_name="rebom-tag-photo", app_url="https://example.test/tagging").chat(request())
+    h = s.posts[0]["headers"]
+    assert h["X-OpenRouter-Title"] == h["X-Title"] == "rebom-tag-photo"
+    assert h["HTTP-Referer"] == "https://example.test/tagging"
+    assert h["X-OpenRouter-App-Visibility"] == "hidden"
 
 
 def test_retries_429_then_succeeds():
@@ -140,4 +150,4 @@ def test_missing_key_names_env_only(monkeypatch, tmp_path):
 
     monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
     with pytest.raises(RuntimeError, match="OPENROUTER_KEY_NOPE"):
-        OpenRouterClient("OPENROUTER_KEY_NOPE")
+        OpenRouterClient("OPENROUTER_KEY_NOPE", app_name="rebom-test")

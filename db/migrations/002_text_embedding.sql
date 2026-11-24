@@ -15,7 +15,5 @@ CREATE TABLE IF NOT EXISTS text_embedding (
     PRIMARY KEY (desertion_no, text_kind, model_key)
 );
 
--- 코사인 HNSW 는 적재 뒤 db.t4g.micro 에서 인덱스 없이 전체 비교한 시간과 비교해 정한다 (10.3).
--- 쓰기로 하면 다음 번호 마이그레이션에 아래 문장을 넣는다.
--- CREATE INDEX IF NOT EXISTS text_embedding_hnsw_cos
---     ON text_embedding USING hnsw (embedding vector_cosine_ops);
+-- v0.1 은 글 벡터 인덱스 없이 전체 비교로 검색한다 (2026-11-24 결정. 사진 image_embedding 의 HNSW 는 백필이 끝나 그대로 둔다).
+-- HNSW 는 v0.1 실측 확인 후 v0.2 에서 도입을 고려한다. 도입하면 다음 번호 마이그레이션에 넣는다.

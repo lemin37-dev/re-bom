@@ -124,7 +124,7 @@ def test_select_and_run_pin_registered_tag_version(sink, monkeypatch):
     monkeypatch.setattr(rpt, "_write_json", lambda path, value, s3: target_file.update(value))
     monkeypatch.setattr(rpt, "_read_json", lambda *args: target_file)
     monkeypatch.setattr(rpt, "fetch_image", lambda *args: b"sample")
-    monkeypatch.setattr(rpt, "OpenRouterClient", lambda key: SimpleNamespace(canonical_slug=lambda model: None))
+    monkeypatch.setattr(rpt, "OpenRouterClient", lambda key, *, app_name, app_url: SimpleNamespace(canonical_slug=lambda model: None))
 
     def tag_once(items, client, config):
         [(target, _image)] = items

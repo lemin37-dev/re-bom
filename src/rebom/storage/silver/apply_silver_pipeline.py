@@ -53,12 +53,15 @@ def prepare_arrow(rows, table, keys, require_all_fields=False):
     return pa.Table.from_pylist(rows, schema=schema)
 
 
-def upsert_notice(table, arrow):
+def upsert_notice(table, arrow, run_id=None):
     """Upsert on main, projecting its rows onto the current schema after evolution."""
+    snapshot_properties = (
+        {"bronze_run_id": run_id} if run_id is not None else {}
+    )
     snapshot = table.current_snapshot()
     schema = table.schema()
     if snapshot is None or snapshot.schema_id in (None, schema.schema_id):
-        return table.upsert(arrow, join_cols=list(NOTICE_KEYS))
+        return table.upsert(arrow, join_cols=list(NOTICE_KEYS), snapshot_properties=snapshot_properties)
 
     if not arrow.schema.equals(schema.as_arrow(), check_metadata=False):
         raise ValueError("Notice upsert requires the current table schema")
@@ -88,9 +91,10 @@ def upsert_notice(table, arrow):
             tx.overwrite(
                 arrow.take(updates),
                 overwrite_filter=In(key_column, arrow[key_column].take(updates).to_pylist()),
+                snapshot_properties=snapshot_properties,
             )
         if inserts:
-            tx.append(arrow.take(inserts))
+            tx.append(arrow.take(inserts), snapshot_properties=snapshot_properties)
 
     return UpsertResult(rows_updated=len(updates), rows_inserted=len(inserts))
 
