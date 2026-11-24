@@ -12,7 +12,7 @@
 ## 사진 후보 버전 실행
 
 1. 관리자가 `gold_catalog --create --group registry`와 `--group log`, `--group tagging`, `--group embedding`을 각 환경에 적용합니다. 등록 버전으로 실행하기 전에 nullable `version` 컬럼이 필요합니다. 업데이트는 기존 행을 자동 이관하지 않습니다.
-2. 실행할 코드의 설정으로 버전을 등록합니다. 사진 임베딩 설정은 `model_id`, `dim`, `preprocess_version`, `blank_std`입니다. 사진 태깅 설정은 `model_id`, `prompt_version`, `provider`, `preprocess_version`, `media_resolution`, `reasoning_effort`, `temperature`입니다. 실행하는 코드와 등록 설정이 일치할 때만 후보를 처리할 수 있습니다. 모델이나 전처리를 바꾸는 후보는 그 설정을 지원하는 코드가 필요합니다.
+2. 실행할 코드의 설정으로 버전을 등록합니다. 사진 임베딩 설정은 `model_id`, `dim`, `preprocess_version`, `blank_std`입니다. 사진 태깅 설정은 `src/rebom/tagging/version_config.py` 의 `runtime_config(task)` 한 곳에서 만들며, `model_id`, `provider`, `prompt_version`, `prompt_sha256`(시스템·질문 문장·응답 형식), `preprocess_version`, `max_image_bytes`, `media_resolution`, `reasoning_effort`, `temperature`, `postprocess`(2회 일치 규칙, 품종은 강 신호 기준과 이름표·62종 목록 해시 `alias_sha256`)입니다. 등록용 JSON 은 `python -m rebom.tagging.version_config --task photo_trait` 로 출력합니다. 질문지 문장이나 이름표를 고치면 `prompt_version` 을 그대로 두어도 해시가 달라져 같은 버전으로는 실행되지 않습니다. 실행하는 코드와 등록 설정이 일치할 때만 후보를 처리할 수 있습니다. 모델이나 전처리를 바꾸는 후보는 그 설정을 지원하는 코드가 필요합니다.
 3. 사진 태깅은 `select --version photo_trait@1`로 대상 파일을 만들고 같은 대상 파일로 `run`을 실행합니다. 선택한 작업만 처리하며, 다른 작업도 필요하면 `--version`을 반복합니다. 사진 임베딩은 `embed --gold-env test --version image_embedding@1`과 기존 실행 옵션을 사용합니다. 후보 parquet과 실행 요약은 기존 배치가 읽는 경로 밖에 저장합니다.
 
 ## Jev 글 태깅과 A2 카드 연결
@@ -21,7 +21,7 @@
 
 | 테이블 | Jev 저장 단위와 소비에 필요한 필드 |
 | --- | --- |
-| `gold_animal_tag` | 공고의 태그 하나. `source=jev`, `subject_type=animal`, `subject_key=공고번호`. `task`는 `text_personality` 또는 `text_health`입니다. `tag_code`, `source_hash`, 태그 버전, `searchable`, `displayable`을 조회합니다. 별도 `gold_text_tag`는 현재 연결에 필요하지 않습니다. |
+| `gold_animal_tag` | 공고의 태그 하나. `source=text`(공고 글. 지금 적재 코드는 `jev` 로 쓰며, 바뀔 때까지 둘 다 읽음), `subject_type=animal`, `subject_key=공고번호`. `source` 는 출처(photo 사진 · text 공고 글 · rule 공고 칸)만 적고 모델 이름은 `model`·버전으로 구분합니다(11/24). `task`는 `text_personality` 또는 `text_health`입니다. `tag_code`, `source_hash`, 태그 버전, `searchable`, `displayable`을 조회합니다. 별도 `gold_text_tag`는 현재 연결에 필요하지 않습니다. |
 | `gold_inference_log` | 공고·작업·버전·입력별 처리 상태. `OK`, `NO_RESULT`(해당 결과 없음), `NO_TEXT`(호출할 글 없음), `FAILED`(호출·판정 실패)를 구분합니다. |
 | `gold_model_request_log` | Jev 모델 호출당 한 행. 응답 원문과 비용·토큰을 보관합니다. 같은 글을 여러 공고에서 재사용한 경우 태그의 `detail.request_id`로 실제 호출과 연결합니다. |
 

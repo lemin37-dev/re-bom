@@ -272,7 +272,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 
 그 밖에 `FAILED`(호출·답 형식 오류, 3번까지 다시 시도), `NO_PHOTO`(사진 없는 공고, `subject_type = animal`)가 있습니다.
 
-`gold_animal_tag` 칸: `subject_type`, `subject_key`, `tag_code`, `source`(photo), `tagger_version`, `task`, `model`, `prompt_version`, `source_hash`(입력 해시, 사진은 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
+`gold_animal_tag` 칸: `subject_type`, `subject_key`, `tag_code`, `source`(출처: photo 사진 · text 공고 글 · rule 공고 칸. 모델 이름은 넣지 않고 `model`·버전으로 구분, 11/24), `tagger_version`, `task`, `model`, `prompt_version`, `source_hash`(입력 해시, 사진은 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
 
 - 위치: test `s3://rebom-data-559987919299/gold/_test/iceberg/`, prod `s3://rebom-data-559987919299/gold/iceberg/`. 실행 중간 파일(대상 목록)은 `gold/_work_test/photo_tags/<run_id>/targets.json`.
 - 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. `subject_type`·`subject_key` 가 없는 옛 테이블(11/20 이전 `desertion_no` 키)은 칸 추가로 맞추지 않고 멈추며, test 는 `--create --recreate` 로 지우고 다시 만듭니다(옛 행은 버림, prod 는 거부). 파드(노드 역할)는 읽기·쓰기만 합니다.

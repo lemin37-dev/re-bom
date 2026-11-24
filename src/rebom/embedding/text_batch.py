@@ -23,10 +23,12 @@ PERSONALITY = {
     "active": "활발", "aggressive": "사나움", "sensitive": "예민", "curious": "호기심",
 }
 HEALTH = {"health.info": "있음", "health.none": "없음"}
+# 작업 → (받는 source 값, subject_type). source 는 출처(photo 사진 · text 공고 글 · rule 공고 칸)이고 모델 이름은
+# 넣지 않는다(11/24 결정). 글 태그는 지금 적재 코드가 jev 로 쓰고 있어, 바뀔 때까지 jev 도 받는다.
 TAG_SOURCES = {
-    "photo_trait": ("photo", "photo"),
-    "text_personality": ("jev", "animal"),
-    "text_health": ("jev", "animal"),
+    "photo_trait": (("photo",), "photo"),
+    "text_personality": (("text", "jev"), "animal"),
+    "text_health": (("text", "jev"), "animal"),
 }
 
 
@@ -46,7 +48,8 @@ def _tag_index(tags, versions: dict[str, str]):
         version = versions.get(task)
         if version is None or not row.get("searchable"):
             continue
-        if (row["source"], row["subject_type"]) != TAG_SOURCES[task]:
+        sources, subject_type = TAG_SOURCES[task]
+        if row["source"] not in sources or row["subject_type"] != subject_type:
             continue
         if (row.get("version") or row["prompt_version"]) != version:
             continue

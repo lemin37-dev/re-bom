@@ -74,7 +74,7 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     assert execute()["written"] == 0
 
     tags.append(pa.Table.from_pylist([
-        tag("jev", "animal", "1", current, "text_health", "health.none"),
+        tag("text", "animal", "1", current, "text_health", "health.none"),  # 출처 값(11/24). jev 도 받는다
     ], schema=tags.schema().as_arrow()))
     assert execute()["written"] == 1
     assert "건강정보 없음" in inputs[1][0]
@@ -88,3 +88,16 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     assert sorted(r["batch_size"] for r in requests) == [1, 2]
     logs = catalog.load_table(gold.table(gc.INFERENCE_LOG_TABLE)).scan().to_arrow().to_pylist()
     assert len(logs) == 3 and {r["status"] for r in logs} == {"OK"}
+
+
+def test_tag_index_accepts_origin_source_and_legacy_jev_only():
+    """source 는 출처(photo·text·rule). 글 태그는 바뀔 때까지 jev 도 받고, 다른 출처는 받지 않는다."""
+    from rebom.embedding import text_batch
+
+    def row(source, subject="animal", code="personality.gentle"):
+        return {"task": "text_personality", "source": source, "subject_type": subject, "subject_key": "1",
+                "source_hash": "h", "tag_code": code, "searchable": True, "version": None, "prompt_version": "v"}
+
+    index = text_batch._tag_index([row("text"), row("jev", code="personality.active"), row("photo", code="x"),
+                                   row("text", subject="photo", code="y")], {"text_personality": "v"})
+    assert index[("text_personality", "1", "h")] == {"personality.gentle", "personality.active"}

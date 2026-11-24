@@ -13,7 +13,7 @@ pytest.importorskip("pyiceberg")
 pytest.importorskip("sqlalchemy")
 
 from rebom.common import gold_catalog as gc
-from rebom.tagging import run_photo_tags as rpt
+from rebom.tagging import run_photo_tags as rpt, version_config
 
 
 @pytest.fixture()
@@ -114,11 +114,7 @@ def test_select_and_run_pin_registered_tag_version(sink, monkeypatch):
     env = gc.GoldEnvironment("unit", "rebom_gold", "_unit", "")
     task = rpt.trait_tags.TASK
     version = f"{task}@1"
-    assert register_version(catalog, env, task, version, {
-        "model_id": rpt.MODEL, "prompt_version": rpt.VERSIONS[task], "provider": rpt.PROVIDER,
-        "preprocess_version": "exif-jpeg92-v1", "media_resolution": rpt.MEDIA_RESOLUTION,
-        "reasoning_effort": rpt.REASONING, "temperature": rpt.TEMPERATURE,
-    })
+    assert register_version(catalog, env, task, version, version_config.runtime_config(task))
     sha = "a" * 64
     image = {"desertion_no": "1", "image_slot": 1, "sha256": sha, "original_s3_key": "pic"}
     target_file = {}
