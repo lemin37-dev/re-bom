@@ -1,0 +1,482 @@
+{
+ "generatedAt": "2026-11-23T06:34:20+00:00",
+ "model": "google/gemini-3.1-flash-lite",
+ "promptVersion": "trait-vision-v10",
+ "note": "scripts/serve/make_sample_photo_tags.py 로 만든 sample 모드용 사진 태그 (보호중 개 대표 사진)",
+ "items": [
+  {
+   "desertionNo": "413579202600266",
+   "imageSlot": 1,
+   "sourceHash": "d08782783b697ed031e9a69826d72c9f8df457ebd2c085a0fbcf2a35bab07f7b",
+   "tags": [
+    "fur.short",
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "413579202600321",
+   "imageSlot": 1,
+   "sourceHash": "2b82710de57708414ed7a9292fba7e65284976457d89484f3d9e9e0d5a6e515f",
+   "tags": [
+    "ear.prick"
+   ]
+  },
+  {
+   "desertionNo": "413579202601535",
+   "imageSlot": 1,
+   "sourceHash": "0a1db824e4228e9ad10f76a1335673d723e8af1be7435d40ceef5c0508adb8fe",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "413584202600301",
+   "imageSlot": 1,
+   "sourceHash": "991248e44650b2f93755df015fb3fa70b57a56bf248c64d4f79dfa84bb553aab",
+   "tags": [
+    "fur.short",
+    "ear.semi",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "413584202600377",
+   "imageSlot": 1,
+   "sourceHash": "6993fa4baa28a382687e1f96c9ab88dfc081198693ed9ce9b97e3f87bd71571b",
+   "tags": [
+    "ear.semi"
+   ]
+  },
+  {
+   "desertionNo": "413584202600459",
+   "imageSlot": 1,
+   "sourceHash": "9c9adfc505d5045f536a7d598071b85c1564558cad85cb898fd30320d4bfa0bd",
+   "tags": [
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "413587202600440",
+   "imageSlot": 1,
+   "sourceHash": "a34378a5c23da7c515ea18cd60dee7bb80e519e943aceb4141fa4c206310f05d",
+   "tags": [
+    "fur.short",
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "413588202600401",
+   "imageSlot": 1,
+   "sourceHash": "e0a10f7be37aaf66bc015c85038513f8fdc836279f62734490b0d3adb6e745c4",
+   "tags": [
+    "ear.prick"
+   ]
+  },
+  {
+   "desertionNo": "428351202600661",
+   "imageSlot": 1,
+   "sourceHash": "a1740229ae0c951edfa547ed0423635afdff4fa82ff9506d9360f718950ccc4d",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "428353202600949",
+   "imageSlot": 1,
+   "sourceHash": "8902a72de8c452a97bb644bd2f44f9564fa3609dff4e91da0efc614a9948c223",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "428356202600953",
+   "imageSlot": 1,
+   "sourceHash": "d3ddf60e9973809b3226393347b2eb107dee71bda9e5cf2a0bd46635d7f2fa3d",
+   "tags": [
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "431371202600531",
+   "imageSlot": 1,
+   "sourceHash": "0e8bfefaaabec959511cef30bb0903f9c08a511c513b43276a2de24a3176f077",
+   "tags": [
+    "ear.prick"
+   ]
+  },
+  {
+   "desertionNo": "431372202600720",
+   "imageSlot": 1,
+   "sourceHash": "3e8847a12f118ddb1067e2c1af696af8e7828027644a7bd7048c41bb5f064b0c",
+   "tags": [
+    "fur.short",
+    "ear.prick",
+    "eye.sharp"
+   ]
+  },
+  {
+   "desertionNo": "431373202601302",
+   "imageSlot": 1,
+   "sourceHash": "5358b5473538c9ef3dc96c84001970dc4ad37adf9be797da29288a69f6ab965e",
+   "tags": [
+    "fur.short",
+    "ear.prick"
+   ]
+  },
+  {
+   "desertionNo": "431373202601520",
+   "imageSlot": 1,
+   "sourceHash": "0ede416285104753d6e258f488d69d27dd17ab251cc12e737347440f0af041a8",
+   "tags": [
+    "fur.short",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "441378202601449",
+   "imageSlot": 1,
+   "sourceHash": "4dd90a347bc8a886d049be379437a2ec93f94752ff88d5efc419cbf01288dda2",
+   "tags": [
+    "fur.short"
+   ]
+  },
+  {
+   "desertionNo": "441386202601219",
+   "imageSlot": 1,
+   "sourceHash": "05ad5bade413251a0a8f344833520f26f568b11e8c38f43f6059f8e4ad90593d",
+   "tags": [
+    "fur.fluffy",
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "441391202601676",
+   "imageSlot": 1,
+   "sourceHash": "f285a23147d1041fed5aa0653097365687d21572b617a083240057f4049afb40",
+   "tags": [
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "441394202601386",
+   "imageSlot": 3,
+   "sourceHash": "8be965e12c02caa65739e8167a88ab4cbac2d2409cf1c44870eb82e1c4ef2fbb",
+   "tags": [
+    "fur.fluffy",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "441394202601427",
+   "imageSlot": 1,
+   "sourceHash": "1f176047a88dc468741b62aa41a583d3bf6bbaf91da3d6ae3353a93042cf5d61",
+   "tags": [
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "441408202601527",
+   "imageSlot": 1,
+   "sourceHash": "f9686d6ed1c4d80ed0ca524124ec290a03108dce1565f994207dc1234d336d79",
+   "tags": [
+    "fur.short",
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "441416202600479",
+   "imageSlot": 3,
+   "sourceHash": "9dfd8f35455774d07e1e94ad0b0a14bcf84eefc0e0babc75b8b5e86ec1d45c08",
+   "tags": [
+    "fur.short",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "441416202600575",
+   "imageSlot": 1,
+   "sourceHash": "23f466d8d923c04d124d8fbd9b23b044766afa0312798cd57488bf2a3bff1ffa",
+   "tags": [
+    "fur.short",
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "441553202602963",
+   "imageSlot": 1,
+   "sourceHash": "e543785ae4fda030c1a8eac69151414b57a727b268bcba14af3c97c14e46c8d3",
+   "tags": [
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "441554202601855",
+   "imageSlot": 1,
+   "sourceHash": "1fa4c47af659cdc0a2e0d9a89c0668ec96dc7f94b0103281c36c0d8e6011dc7a",
+   "tags": [
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "442430202600160",
+   "imageSlot": 1,
+   "sourceHash": "e81e3320c31f98a50f80d7af7e427579d845c00f92eed49edcc661dcb22d127d",
+   "tags": [
+    "fur.short",
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "442431202600273",
+   "imageSlot": 1,
+   "sourceHash": "81005f644d28ce4ad775598a5be3b53c19820d87f3af1e0dead63c1de8d6bffd",
+   "tags": [
+    "ear.semi"
+   ]
+  },
+  {
+   "desertionNo": "443445202600668",
+   "imageSlot": 1,
+   "sourceHash": "2118e8faebb5bca9bc896085b61b62b24ae44c83bb616eeb222c84a92a2b15c4",
+   "tags": [
+    "ear.prick",
+    "eye.sharp"
+   ]
+  },
+  {
+   "desertionNo": "443447202600372",
+   "imageSlot": 1,
+   "sourceHash": "22ec725de863892c4fc497488043cc38b909084d5e5489267b2ddb87a918306c",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "444452202601740",
+   "imageSlot": 1,
+   "sourceHash": "5a8dba705a7e7b938d75e7dcef01685e3d2ac8c7d3e1374502f395704192527c",
+   "tags": [
+    "fur.short",
+    "ear.prick"
+   ]
+  },
+  {
+   "desertionNo": "444452202602365",
+   "imageSlot": 1,
+   "sourceHash": "6e811b76133bbcabf2eebc2067d4849172fc474462c2d53baed4b0c713cb9bf4",
+   "tags": [
+    "fur.short",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "444453202601171",
+   "imageSlot": 1,
+   "sourceHash": "d4f0ad81901424d771e062ff502a951d64fdfe5d4820aeae1367d6006e748183",
+   "tags": [
+    "fur.short",
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "444454202601084",
+   "imageSlot": 1,
+   "sourceHash": "df0421fe79403e90b78d4d99231f897e438b7ca2deec43884214d7139d528ddb",
+   "tags": [
+    "fur.short",
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "445464202602293",
+   "imageSlot": 1,
+   "sourceHash": "d957422d65842de8232ff790bd56e9579f375513b3a8f370b4fa38205aeb12b1",
+   "tags": [
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "445464202602376",
+   "imageSlot": 1,
+   "sourceHash": "43e1b3049216472b7a47a4ff5b276290c53737de6e3349359d45ded871ed281e",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "445467202601598",
+   "imageSlot": 1,
+   "sourceHash": "15654d2aec5bf1bf50661ab89b6a4dd54808b88c947af133d151ee1ee07ce407",
+   "tags": [
+    "ear.prick"
+   ]
+  },
+  {
+   "desertionNo": "445470202601080",
+   "imageSlot": 1,
+   "sourceHash": "6a06a81dc236b0df92edd9821eaa807b42e22b8cc5a460137f3387eeec3a70b7",
+   "tags": [
+    "fur.short",
+    "ear.prick",
+    "eye.sharp"
+   ]
+  },
+  {
+   "desertionNo": "445470202601183",
+   "imageSlot": 1,
+   "sourceHash": "8148272d57558e607126b9000612a704ea956d748a7d9586a2d67bd49ea01b6c",
+   "tags": [
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "445470202601190",
+   "imageSlot": 1,
+   "sourceHash": "314dda20cd57803a3aaad5eea7e94ac62a91bf088b13be47adefd318bdcdcdff",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "445471202600251",
+   "imageSlot": 1,
+   "sourceHash": "215959a6141c56d53bed0c3a4a9333f2920052c516062d1e58ddd71c91799170",
+   "tags": [
+    "ear.semi"
+   ]
+  },
+  {
+   "desertionNo": "445479202600898",
+   "imageSlot": 1,
+   "sourceHash": "1fca2b5b062bc783586669e81ca03e1828182e9a8f36f49e95175c1f1a4765cd",
+   "tags": [
+    "fur.short",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "445479202600922",
+   "imageSlot": 1,
+   "sourceHash": "3b8f82d52dabbb788f3c984135119299e9a432018d8e741d2cc9897903d1a3e4",
+   "tags": [
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "445479202601183",
+   "imageSlot": 1,
+   "sourceHash": "d9660eff5e0cb9df039a299e385568d1cb9348b7b712b1746d3ec2751dd9b34a",
+   "tags": [
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "447513202600934",
+   "imageSlot": 1,
+   "sourceHash": "b2686bea03cda8ae40d6c656273b81e7db591ef8b3b3f5e7e0269aeb981960ee",
+   "tags": [
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "447521202600346",
+   "imageSlot": 1,
+   "sourceHash": "8cc3be6abe356e185a06b37880a2b894b96f81e147b83c51a9bc6c93e0c43a33",
+   "tags": [
+    "fur.fluffy",
+    "ear.prick"
+   ]
+  },
+  {
+   "desertionNo": "447525202600487",
+   "imageSlot": 1,
+   "sourceHash": "49f8e53fae62a449f14f9ea686dd787720980ac176baa0ce9a06fc06a638f789",
+   "tags": [
+    "ear.prick",
+    "eye.sharp"
+   ]
+  },
+  {
+   "desertionNo": "448535202601286",
+   "imageSlot": 1,
+   "sourceHash": "0a181393c873f08d51613e5cadf2f4c8d6d1bddc7d2855cab942ff31c6e67527",
+   "tags": [
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "448537202601526",
+   "imageSlot": 1,
+   "sourceHash": "3d1c4aff9297c943b0c31c883c5bb05a5dddc4722c1138e87dfbba05606588f6",
+   "tags": [
+    "ear.semi"
+   ]
+  },
+  {
+   "desertionNo": "448542202600842",
+   "imageSlot": 1,
+   "sourceHash": "7cf36addd74e707ea0b46a4fc14165eaef15bfe1262181fc36891f4ab5a6f9aa",
+   "tags": [
+    "ear.prick",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "448543202600189",
+   "imageSlot": 1,
+   "sourceHash": "104d4ab1244ec1e0abd96c68cfe28963da55079edb0a77473ce9407b1048dc7c",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop",
+    "eye.round"
+   ]
+  },
+  {
+   "desertionNo": "448545202600403",
+   "imageSlot": 1,
+   "sourceHash": "e594df988cb177b603ebab65f091e8a28413c197a47cc56befb19fe700683c33",
+   "tags": [
+    "fur.fluffy",
+    "ear.drop"
+   ]
+  },
+  {
+   "desertionNo": "448567202601490",
+   "imageSlot": 1,
+   "sourceHash": "1eb378a63cb7da248103543cfba96bbf9889f3b5e37ab633679a9a77e6fbd753",
+   "tags": [
+    "fur.short",
+    "ear.prick",
+    "eye.round"
+   ]
+  }
+ ]
+}

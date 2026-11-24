@@ -11,7 +11,7 @@ import { MobilePetCard } from './MobilePetCard'
 
 /** 앱 검색 결과: 제목·지도 전환 → 정렬 → 적용 조건 → (지도) → 세로 카드 목록 */
 export function MobileResults() {
-  const { visible, total, hasMore, searched, searching, loadingMore, error, retry, sort, setSort, availableFirst, toggleAvailableFirst, map, toggleMap, filters, openFilters, loadMore, resetAndSearch } = useSearch()
+  const { visible, total, hasMore, searched, searching, loadingMore, error, retry, sort, setSort, availableFirst, toggleAvailableFirst, map, toggleMap, filters, openFilters, loadMore, resetAndSearch, matched } = useSearch()
   const { openAnimal } = useExperience()
   // 지도 보기에서는 첫 한 마리만 카드로 보여 줍니다.
   const cards = map ? visible.slice(0, 1) : visible
@@ -19,6 +19,7 @@ export function MobileResults() {
   return <section className="mobile-results" aria-live="polite">
     <div className="mobile-results-heading"><div><span className="eyebrow">{searched ? '조건에 맞는 공고를 찾았어요' : '작은 관심이 새로운 시작으로'}</span><h2>{searched ? '나와 맞는 친구' : '기다리고 있는 친구'} <span>{total}</span></h2></div><button onClick={toggleMap} className={`mobile-map-toggle ${map ? 'active' : ''}`}><Icon name={map ? 'grid' : 'pin'} size={17} />{map ? '목록' : '지도'}</button></div>
     <div className="mobile-result-tools"><button className={availableFirst ? 'on' : ''} onClick={toggleAvailableFirst} aria-pressed={availableFirst}><span className="checkbox">{availableFirst && <Icon name="check" size={12} />}</span>입양 가능 먼저</button><label><span className="sr-only">결과 정렬</span><select value={sort} onChange={e => setSort(e.target.value as SortOption)}>{sortOptions.map(option => <option key={option}>{option}</option>)}</select></label></div>
+    {!searching && matched !== null && <p className="tag-match-note">고른 태그가 모두 맞는 아이 <b>{matched}마리</b>를 먼저 보여 드려요. 나머지 아이도 그 뒤에 이어져요.</p>}
     {searched && <div className="mobile-applied-filters">{(Object.keys(filters) as FilterKey[]).map(key => <button key={key} onClick={openFilters}><span>{filterLabels[key]}</span>{filters[key]}</button>)}</div>}
     {!searching && !error && map && visible.length > 0 && <div className="mobile-search-map">
       <IllustratedMap>
