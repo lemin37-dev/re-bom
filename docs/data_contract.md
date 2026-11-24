@@ -424,3 +424,101 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 
 - 빈(백지) 사진 측정값(`pixel_std` 등)은 나중에 칸을 더합니다. Bronze는 측정만, 판정은 Silver.
 - 주소가 옛 버전으로 돌아간 칸의 처리 규칙(지금은 건수만).
+
+## 15. 글 태그 — 성격·건강정보 (Gold, Jev 결과) [v1, test 환경, 2026-11-23]
+
+보호중 개·고양이 공고의 글에 성격 태그(8개 중 0개 이상)와 건강정보 태그(정보 있음/없음 1개)를 붙여 S3 Gold 에 씁니다.
+사진 태그(13절)와 같은 태깅 묶음 표 3개를 쓰고, 새 표는 만들지 않습니다. 코드는 `src/rebom/tagging/run_text_tags.py`(실행),
+`text_tags.py`(질문지·태그·판정), `jev_client.py`(Decisions API 호출), 질문 문구는 `src/rebom/tagging/data/text_questions_v1.json`.
+지금은 PC 에서 손으로 실행해 Gold test 에 씁니다. DAG·이미지는 다음 단계입니다.
+
+### 15.1 입력과 대상
+
+- 대상: Silver 공고 표에서 `status_group = PROTECTING`, `species_code` 개(417000)·고양이(422400). `--species` 로 바꿀 수 있습니다.
+- 글: `info_text`(= `sfe_soci` + `sfe_health` + `special_mark`, Silver 변환이 이어 붙인 값). 비어 있으면 `special_mark`.
+  sfe 칸이 있는 공고(보호중 약 2%)는 성격·건강 내용이 sfe 에만 있는 경우가 있어 `info_text` 를 씁니다(2026-11-23 Silver test 실측).
+- 보내기 전 정리: A2 글 카드의 특징 글(`rebom.embedding.text_card.persona`)과 같은 규칙입니다(2026-11-23 결정). 앞 관리번호를 지우고, 공백을 한 칸으로 줄이고, 전화번호를 `[번호]`로 가립니다. 정규식(`LEADING_ID`·`PHONE`)도 `text_card` 것을 그대로 가져다 씁니다.
+- 정리한 글이 비었거나 자리채움 값(`.`, `-`, `없음`, `해당없음`, `특이사항 없음` 등)이면 부르지 않고 `NO_TEXT` 로 기록합니다.
+  "이상 없음"은 건강정보가 있는 글이라 자리채움 값이 아닙니다.
+- `subject_type = animal`, `subject_key = 공고번호`, `input_hash` = 정리한 글의 sha256 (13.0 공용 키).
+
+### 15.2 다시 태깅하는 조건
+
+- 같은 (공고, 작업, 버전, `input_hash`) 가 `OK`·`NO_RESULT`·`NO_TEXT` 거나 `FAILED` 3번이면 건너뜁니다.
+  그래서 글이 바뀌거나(`input_hash`) 질문 버전을 올릴 때만 다시 부릅니다.
+- 같은 실행 안에서 글이 같은 공고들은 한 번만 부르고 결과를 나눠 씁니다(보호중 18,730건 중 서로 다른 글 약 12,500개, 11-23 실측).
+- 키·계정 오류(401, 402, 키 한도)면 그 배치까지 저장하고 멈춥니다(종료 코드 2). 공고 실패로 세지 않습니다.
+
+### 15.3 호출과 질문지 (v1)
+
+- OpenRouter Decisions API(`POST /api/alpha/decisions`), 모델 `typesafe/jev-1.14`, 공급자 TypeSafe 고정(`allow_fallbacks: false`).
+  키 `OPENROUTER_KEY_TAG_JEV`: PC 시험은 로컬 테스트 키, 서버는 k3s Secret `rebom-tag-jev-prod` 의 서버 키.
+- 글 1건당 요청 1번에 질문 9개를 함께 보냅니다: 성격 예/아니오(noul) 8개 + 건강정보 선택형(choice) 1개.
+  시험(402건)에서 입력 평균 3,919토큰, 1건당 약 $0.000165 였습니다(따로 보낼 때보다 약 7% 적음).
+- 질문 문구는 jev_final_test 에서 시험한 질문을 글자 그대로 옮겼습니다. 이 레포의 버전 이름은 v1 입니다.
+
+| 작업(`task`) | `prompt_version` | 옮겨 온 시험 질문 | 시험 결과 (태그 기준표) |
+|---|---|---|---|
+| `text_personality` | `text-personality-v1` | personality-v10 (= p12) | 새 표본 200건 완전 일치 0.905, 정밀도 0.989·재현율 0.944 |
+| `text_health` | `text-health-v1` | health-info-s4c | 새 표본 200건 정확도 0.965, 정보 있음 정밀도 0.940·재현율 1.000 |
+
+시험은 `special_mark` 로 했고, `info_text`(sfe 포함 글)로는 402건을 돌려 결과만 확인했습니다(정답 비교 전).
+질문 문구를 바꾸면 JSON 을 새 파일(v2)로 만들고 버전을 올립니다. 버전이 바뀌면 모든 공고를 다시 태깅합니다.
+
+### 15.4 태그와 판정 기준
+
+| 태그 코드 | 이름 | 판정 | 검색 | 화면 |
+|---|---|---|---|---|
+| `personality.gentle` | 순함 | 예 확률 0.75 이상 | O | O |
+| `personality.friendly` | 친화적 | 〃 ("경계심 없음"도 친화적) | O | O |
+| `personality.timid` | 겁많음 | 〃 | O | O |
+| `personality.wary` | 경계 | 〃 (겁 때문이라도 사람·손을 피하면 해당) | O | O |
+| `personality.active` | 활발 | 〃 | O | O |
+| `personality.aggressive` | 사나움 | 〃 (방어적이라고 적히지 않은 입질 포함) | O | O |
+| `personality.sensitive` | 예민 | 〃 | O | O |
+| `personality.curious` | 호기심 | 〃 | O | O |
+| `health.info` | 건강정보 있음 | 정보 있음 확률이 더 높음 | O | O |
+| `health.none` | 건강정보 없음 | 정보 없음 확률이 더 높음(건강하다는 뜻이 아님) | O | O |
+
+- 건강정보는 정보 있음·정보 없음 두 값을 모두 라벨로 검색·화면에 넘깁니다(2026-11-23 결정). 글이 없어 부르지 않은 공고(`NO_TEXT`)는 태그 행이 없습니다.
+- 성격 0.4~0.75 는 태그로 쓰지 않고 `detail.review` 에 남깁니다. 건강정보 1등 확률이 0.4 미만이면 `detail.review = true`.
+- 한 글에 여러 성격 태그가 붙을 수 있습니다. 순함+사나움처럼 뜻이 반대여도 글에 둘 다 적혀 있으면 둘 다 붙이고 따로 표시하지 않습니다(2026-11-23 결정).
+- 판정 근거: Jev 는 근거 구절을 돌려주지 않고 질문별 확률만 줍니다. 그래서 Jev 에 실제로 보낸 글(위 정리 규칙을 거친 글)을
+  모든 글 태그 행의 `detail.input_text` 에 남깁니다(2026-11-23 결정). 태그 표에 칸을 더하지 않고 판정 근거 JSON(`detail`)에 둡니다.
+- 해당·제외 문장의 근거는 "태그 기준표 — 성격 · 건강정보"(성격 1-3-4·1-3-10, 건강정보 2-0)입니다.
+
+### 15.5 Gold 에 쓰는 방식
+
+| 테이블 (test 는 `_test`) | 글 태그에서 쓰는 방식 |
+|---|---|
+| `gold_animal_tag` | `source = text`(태그를 만든 입력 칸. 사진 태그의 `photo` 와 같은 뜻. 처음 `jev` 였고 2026-11-24 PR 리뷰로 `text` 로 정함, 서비스 DB 로 옮길 때 값 대응 확인 필요). 성격은 태그마다 1행, 건강정보는 1행. `similarity` = 예 확률(성격)·1등 확률(건강) × 100, `source_hash` = `input_hash`, `tagger_version` = `typesafe/jev-1.14@<버전>`, `detail` = 확률 전체(`probs`)·`review`·`request_id`·`input_text`(Jev 에 보낸 가린 글). 교체 범위는 (`source`=text, animal, 공고번호, 작업, 버전, `source_hash`)입니다. 글이 바뀌거나 버전을 올리면 새 행이 더해지고 **이전 글·이전 버전 행은 남습니다**(13.3 이전 버전 보존과 같은 규칙, 2026-11-23). 같은 글을 다시 쓸 때(실패 재시도·끊긴 실행)만 그 글의 행을 교체해 중복을 막습니다. 사진 태그 행은 건드리지 않습니다. 글이 비게 되어도(`NO_TEXT`) 이전 행은 지우지 않습니다 |
+| `gold_inference_log` | 공고 × 작업 × 버전 × `input_hash` 1행 upsert. `status` = `OK`(태그 있음)·`NO_RESULT`(성격 태그 없음)·`FAILED`·`NO_TEXT` |
+| `gold_model_request_log` | Jev 요청 1번 = 1행, `task = text_jev`, `prompt_version = text-personality-v1+text-health-v1`. `subject_key` = 그 글을 쓰는 첫 공고, `raw_answer` = 응답 `answers` 전체(원 확률), `cost_usd` = `usage.cost`. 같은 글을 쓰는 다른 공고는 태그 `detail.request_id` 로 잇습니다 |
+
+- `version` 칸(13.6 버전 레지스트리): 글 태그는 아직 등록 버전(`task@N`)을 쓰지 않아 태그 표·요청 기록 표의 `version` 칸을 비워 둡니다. 13.6의 "기존 결과의 `version` 은 null 로 두고 기존 질문지 키로 계속 읽는다"와 같은 방식이며, 처리 기록의 키 `version` 에는 지금처럼 질문지 버전(`text-personality-v1`, `text-health-v1`)이 들어갑니다. 등록 버전 연결은 15.7 의 후속 작업입니다(2026-11-24).
+- 실행 중간 파일(대상 목록): `gold/_work_test/text_tags/<run_id>/targets.json`. 목록에는 정리한 글(전화번호 가림)이 들어 있습니다.
+- 서비스 DB 에 넣을 활성 태그(현재 태그): 아래를 모두 만족하는 행만 고릅니다. 이전 글·이전 버전 행이 남아 있으므로 이 조건이 꼭 필요합니다.
+  1. 공고 `status_group` 이 보호중
+  2. `prompt_version` 이 작업별 현재 버전(`text_tags.VERSIONS`: `text-personality-v1`, `text-health-v1`)
+  3. `source_hash` 가 그 공고·작업·버전의 처리 기록 중 `gold_updated_at` 이 가장 늦은 행의 `input_hash` 이고, 그 처리 기록 `status` 가 `OK`·`NO_RESULT`
+     (가장 늦은 기록이 `NO_TEXT` 면 현재 글에 내용이 없다는 뜻이라 활성 태그가 없습니다)
+
+### 15.6 실행 (PC, 레포 루트)
+
+```
+python -m rebom.tagging.run_text_tags select --profile <프로필> --limit 50 --targets data/tag_text/targets.json --dry-run
+python -m rebom.tagging.run_text_tags select --profile <프로필> --limit 50 --targets data/tag_text/targets.json
+python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/tag_text/targets.json --local-out data/tag_text/out
+python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/tag_text/targets.json      (Gold test 에 쓰기)
+```
+
+- `--local-out` 이 있으면 Gold 대신 로컬 JSONL 에 씁니다. 빼면 Gold test 표에 씁니다(표는 13.3 대로 이미 있음).
+- 보호중 전체는 요청 약 1.25만 번, 약 $2 입니다(추정). 동시 8개면 약 10분. 전체 적재는 `--batch-size 2000` 이상으로 돌려 저장 횟수(작은 파일)를 줄입니다(기본 200 이면 60번 넘게 나뉨).
+- 2026-11-23 시험 적재: Silver test 보호중 개·고양이 200건 → 요청 159번(같은 글 41건), 태그 384행, 처리 기록 1,538행(NO_TEXT 569 × 2 포함), 실패 0, 비용 $0.026.
+
+### 15.7 남은 일
+
+- Gold 버전 레지스트리 연결: `text_personality@1`·`text_health@1` 을 13.6 대로 등록하고, 태그·처리 기록·요청 기록에 등록 버전을 남기기(사진 태깅과 같은 방식).
+- DAG(`dags/text_tags.py`)와 실행 이미지: 사진 태깅처럼 Silver apply 전환 뒤 연결. 이미지·ECR·네임스페이스·Secret 은 사람이 만듭니다.
+- 같은 글 재사용을 실행 사이로 넓히기(지금은 한 실행 안에서만).
+- 기준 확인: sfe 의 "양호"(칸 이름 없이 붙어 정보 없음으로 판정), "밝은 성격"(활발 여부).
