@@ -46,18 +46,19 @@ from rebom.common.openrouter import (
     OpenRouterError,
 )
 from rebom.tagging import breed_tags, tag_codes, trait_tags
+from rebom.tagging import version_config
 from rebom.tagging.image_input import prepare_image
 
 log = logging.getLogger("rebom.tagging.photo_tags")
 
 KEY_ENV = "OPENROUTER_KEY_TAG_IMG"
-MODEL = "google/gemini-3.1-flash-lite"
-PROVIDER = "google-ai-studio"
-REASONING = "low"
-TEMPERATURE = 1.0
-MEDIA_RESOLUTION = "MEDIA_RESOLUTION_MEDIUM"
+MODEL = version_config.MODEL
+PROVIDER = version_config.PROVIDER
+REASONING = version_config.REASONING
+TEMPERATURE = version_config.TEMPERATURE
+MEDIA_RESOLUTION = version_config.MEDIA_RESOLUTION
 MAX_TRAIT_PROMPT_TOKENS = 1500
-REPEATS = 2
+REPEATS = version_config.REPEATS
 MAX_ATTEMPTS = 3
 DOG_SPECIES_CODE = "417000"
 PROTECTING = "PROTECTING"
@@ -628,11 +629,7 @@ def _sink(args, catalog, registered: dict[str, str] | None = None):
 
     env = get_gold_environment(args.gold_env)
     for task, version in (registered or {}).items():
-        verify_runtime_config(catalog, env, task, version, {
-            "model_id": MODEL, "prompt_version": VERSIONS[task], "provider": PROVIDER,
-            "preprocess_version": "exif-jpeg92-v1", "media_resolution": MEDIA_RESOLUTION,
-            "reasoning_effort": REASONING, "temperature": TEMPERATURE,
-        })
+        verify_runtime_config(catalog, env, task, version, version_config.runtime_config(task))
     return GoldSink(catalog, env, registered=bool(registered))
 
 

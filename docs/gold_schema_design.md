@@ -12,7 +12,7 @@
 ## 사진 후보 버전 실행
 
 1. 관리자가 `gold_catalog --create --group registry`와 `--group tagging`, `--group embedding`을 각 환경에 적용합니다. 등록 버전으로 실행하기 전에 nullable `version` 컬럼이 필요합니다. 업데이트는 기존 행을 자동 이관하지 않습니다.
-2. 실행할 코드의 설정으로 버전을 등록합니다. 사진 임베딩 설정은 `model_id`, `dim`, `preprocess_version`, `blank_std`입니다. 사진 태깅 설정은 `model_id`, `prompt_version`, `provider`, `preprocess_version`, `media_resolution`, `reasoning_effort`, `temperature`입니다. 실행하는 코드와 등록 설정이 일치할 때만 후보를 처리할 수 있습니다. 모델이나 전처리를 바꾸는 후보는 그 설정을 지원하는 코드가 필요합니다.
+2. 실행할 코드의 설정으로 버전을 등록합니다. 사진 임베딩 설정은 `model_id`, `dim`, `preprocess_version`, `blank_std`입니다. 사진 태깅 설정은 `src/rebom/tagging/version_config.py` 의 `runtime_config(task)` 한 곳에서 만들며, `model_id`, `provider`, `prompt_version`, `prompt_sha256`(시스템·질문 문장·응답 형식), `preprocess_version`, `max_image_bytes`, `media_resolution`, `reasoning_effort`, `temperature`, `postprocess`(2회 일치 규칙, 품종은 강 신호 기준과 이름표·62종 목록 해시 `alias_sha256`)입니다. 등록용 JSON 은 `python -m rebom.tagging.version_config --task photo_trait` 로 출력합니다. 질문지 문장이나 이름표를 고치면 `prompt_version` 을 그대로 두어도 해시가 달라져 같은 버전으로는 실행되지 않습니다. 실행하는 코드와 등록 설정이 일치할 때만 후보를 처리할 수 있습니다. 모델이나 전처리를 바꾸는 후보는 그 설정을 지원하는 코드가 필요합니다.
 3. 사진 태깅은 `select --version photo_trait@1`로 대상 파일을 만들고 같은 대상 파일로 `run`을 실행합니다. 선택한 작업만 처리하며, 다른 작업도 필요하면 `--version`을 반복합니다. 사진 임베딩은 `embed --gold-env test --version image_embedding@1`과 기존 실행 옵션을 사용합니다. 후보 parquet과 실행 요약은 기존 배치가 읽는 경로 밖에 저장합니다.
 
 ## Jev 글 태깅과 A2 카드 연결
