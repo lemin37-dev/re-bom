@@ -49,6 +49,7 @@ def build_publish_record(
     photo_completed,
     same_bronze_run,
     photo_needs_review,
+    source_fetched_at=None,
 ):
     """Build a Gold input record after readiness checks. No AWS writes."""
     assessed_status, reasons = assess_publish_readiness(
@@ -87,6 +88,11 @@ def build_publish_record(
         "notice_snapshot_id": notice_snapshot_id,
         "photo_snapshot_id": photo_snapshot_id,
         "status": "READY",
+        **(
+            {"source_fetched_at": source_fetched_at}
+            if source_fetched_at is not None
+            else {}
+        ),
     }
 
 
@@ -105,8 +111,17 @@ def save_publish_record_s3(s3, bucket, prefix, record):
         raise ValueError("INVALID_PUBLISH_PREFIX")
 
     key = f"{prefix.rstrip('/')}/{publish_id}.json"
+    from datetime import datetime, timezone
+
+    if "published_at" in record:
+        raise ValueError("PUBLISHED_AT_MUST_BE_SERVER_GENERATED")
+
+    first_record = {
+        **record,
+        "published_at": datetime.now(timezone.utc).isoformat(),
+    }
     body = json.dumps(
-        record, ensure_ascii=False, sort_keys=True
+        first_record, ensure_ascii=False, sort_keys=True
     ).encode("utf-8")
 
     try:
@@ -128,7 +143,16 @@ def save_publish_record_s3(s3, bucket, prefix, record):
         s3.get_object(Bucket=bucket, Key=key)["Body"].read()
     )
 
-    if existing != record:
+    if not isinstance(existing.get("published_at"), str):
+        raise RuntimeError("PUBLISH_RECORD_MISSING_PUBLISHED_AT")
+
+    comparable = {
+        key: value
+        for key, value in existing.items()
+        if key != "published_at"
+    }
+
+    if comparable != record:
         raise RuntimeError("PUBLISH_RECORD_CONFLICT")
 
     return "ALREADY_EXISTS"
@@ -195,6 +219,7 @@ def verify_photo_bronze_run(s3, bucket, photo_journal, bronze_run_id):
 
 def build_notice_snapshot_evidence(
     *, bronze_run_id, notice_table, notice_snapshot_id,
+    source_fetched_at=None,
 ):
     """Build a notice snapshot evidence record without writing to S3."""
     if not isinstance(bronze_run_id, str) or not bronze_run_id.strip():
@@ -208,6 +233,11 @@ def build_notice_snapshot_evidence(
         "bronze_run_id": bronze_run_id,
         "notice_table": notice_table,
         "notice_snapshot_id": notice_snapshot_id,
+        **(
+            {"source_fetched_at": source_fetched_at}
+            if source_fetched_at is not None
+            else {}
+        ),
     }
 
 
@@ -274,3 +304,60 @@ def find_completed_notice_snapshot_id(
     return find_run_final_snapshot_id(
         notice_table, bronze_run_id
     )
+
+
+
+def save_notice_completion_s3(s3, bucket, prefix, record):
+    """Save immutable notice-only completion evidence."""
+    import json
+    import re
+    from botocore.exceptions import ClientError
+
+    run_id = record["bronze_run_id"]
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", run_id):
+        raise ValueError("INVALID_NOTICE_RUN_ID")
+
+    if record.get("status") != "COMPLETED":
+        raise ValueError("NOTICE_NOT_COMPLETED")
+
+    if not record.get("source_fetched_at"):
+        raise ValueError("NOTICE_SOURCE_TIME_MISSING")
+
+    snapshot_id = record.get("notice_snapshot_id")
+
+    if type(snapshot_id) is not int or snapshot_id <= 0:
+        raise ValueError("INVALID_NOTICE_SNAPSHOT_ID")
+
+    if not prefix or prefix.startswith("/"):
+        raise ValueError("INVALID_NOTICE_COMPLETION_PREFIX")
+
+    key = f"{prefix.rstrip('/')}/{run_id}.json"
+    body = json.dumps(
+        record, ensure_ascii=False, sort_keys=True
+    ).encode("utf-8")
+
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType="application/json",
+            IfNoneMatch="*",
+        )
+        return "CREATED"
+
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] not in {
+            "PreconditionFailed", "412"
+        }:
+            raise
+
+    existing = json.loads(
+        s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    )
+
+    if existing != record:
+        raise RuntimeError("NOTICE_COMPLETION_CONFLICT")
+
+    return "ALREADY_EXISTS"
