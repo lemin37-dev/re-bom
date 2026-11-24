@@ -1,4 +1,6 @@
-"""공고 1건 → 글 카드 (A 템플릿). 규칙은 handoff_20261120/text_card_reference.py (LLM 인계 기준 구현) 와 글자까지 같다.
+"""공고 1건 → 글 카드. 문구·순서·포함 항목은 card_templates/<버전>.json, 값 계산은 이 파일에 있다 (card_template.py 가 합친다).
+
+A 템플릿 규칙은 handoff_20261120/text_card_reference.py (LLM 인계 기준 구현) 와 글자까지 같다.
 
 - Silver 칼럼 이름을 공공데이터 API 이름으로 바꿔 넣는다 (SILVER_TO_API).
 - Silver 의 color_tag·size 는 쓰지 않는다. 원래 값(color_raw·weight_raw)에서 같은 규칙으로 다시 계산한다.
@@ -16,9 +18,10 @@ import math
 import re
 from typing import Any, Iterable, Mapping
 
+from rebom.embedding import card_template
 from rebom.embedding.gemini import DEFAULT_DIM, MODEL, document_text, query_text
 
-TEMPLATE_VERSIONS = ("A1", "A2")
+TEMPLATE_VERSIONS = card_template.available()  # card_templates/ 에 있는 템플릿
 MODEL_KEY = f"{MODEL}:{DEFAULT_DIM}"  # 사진과 같은 값
 
 # Silver(silver_animal_notice_*) → API 이름. sfeSoci 는 아직 Silver 에 없음 (A2 포함 여부 결정 필요).
@@ -75,15 +78,17 @@ def kg(weight: Any) -> float | None:
     return val if 0 < val <= 100 else None
 
 
-SIZE_SMALL_MAX_INCLUSIVE = {"A1": True, "A2": False}  # A1: 10kg 이하 소형 (벤치마크) · A2: 10kg 미만 소형 (Silver)
+def size_label(k: float, small_max_inclusive: bool) -> str:
+    """몸무게(kg) → 소형/중형/대형. 정확히 10kg 은 small_max_inclusive 면 소형, 아니면 중형."""
+    small = k <= 10 if small_max_inclusive else k < 10
+    return "소형" if small else ("중형" if k < 25 else "대형")
 
 
 def size_of(k: float | None, template: str = "A2") -> str:
-    """몸무게(kg) → 소형/중형/대형. 기본은 Silver 규칙(A2). 정확히 10kg 은 A1 이면 소형, A2 면 중형."""
+    """템플릿의 크기 경계로 나눈다. 기본은 Silver 규칙(A2)."""
     if k is None or (isinstance(k, float) and math.isnan(k)):  # NaN 이 '대형'이 되는 것을 막음
         return ""
-    small = k <= 10 if SIZE_SMALL_MAX_INCLUSIVE[template] else k < 10
-    return "소형" if small else ("중형" if k < 25 else "대형")
+    return size_label(k, card_template.load(template).params["size_small_max_inclusive"])
 
 
 def birth_year(age: Any) -> int | None:
@@ -102,31 +107,9 @@ def persona(row: Mapping[str, Any], soci: bool = False) -> str:
 
 def build_card(row: Mapping[str, Any], template: str = "A2",
                tags: Iterable[tuple[str, Any]] | None = None, soci: bool = False) -> str:
-    """row: API 이름 dict · tags: [(이름표, 값), …] (A2 에서만, 확인불가·빈 값은 뺌) · soci: 사회성 포함 (A1 은 불가)"""
-    if template not in TEMPLATE_VERSIONS:
-        raise ValueError(f"template 은 {TEMPLATE_VERSIONS} 중 하나")
-    if template == "A1" and soci:
-        raise ValueError("A1(벤치마크 글)에는 사회성을 넣지 않음")
-    k = kg(row.get("weight"))
-    y = birth_year(row.get("age"))
-    ct = color_tag(row.get("colorCd"))
-    kind = row.get("kindNm")
-    color = row.get("colorCd")
-    parts = [kind if isinstance(kind, str) else "",
-             f"{y}년생" if y is not None else "",
-             {"M": "수컷", "F": "암컷"}.get(_s(row.get("sexCd")), ""),
-             {"Y": "중성화함", "N": "중성화 안 함"}.get(_s(row.get("neuterYn")), ""),
-             f"{k:g}kg {size_of(k, template)}" if k is not None else "",
-             ("털색 " + "·".join(ct)) if ct else "",
-             f"(공고 털색 {color})" if isinstance(color, str) else ""]
-    if template == "A2":
-        for label, val in (tags or []):
-            v = _s(val).strip()
-            if v.lower() not in UNKNOWN_TAG:
-                parts.append(f"{label} {v}")
-    text = ", ".join(p for p in parts if p)
-    p = persona(row, soci)
-    return text + (". 특징: " + p if p else "")
+    """row: API 이름 dict · tags: [(이름표, 값), …] (tags 항목이 있는 템플릿만, 확인불가·빈 값은 뺌) ·
+    soci: 사회성 포함 (allow_soci 인 템플릿만). 형식은 card_templates/<template>.json"""
+    return card_template.render(card_template.load(template), row, tags, soci)
 
 
 def from_silver(row: Mapping[str, Any], include_soci: bool = False) -> dict[str, Any]:

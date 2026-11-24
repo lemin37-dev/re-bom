@@ -31,7 +31,7 @@
 - 검색은 보호중과 `searchable=true`를 함께 확인하고, 상세는 공고 노출 정책과 `displayable=true`를 적용합니다. 상세에는 태그 이름을 전달합니다. `similarity`는 확률×100이고 `detail.probs`는 질문별 확률입니다. `detail.input_text`는 마스킹한 전체 입력이며, 구절 단위 근거는 제공되지 않습니다.
 - A2 후보 구현은 사진 태깅과 같은 기준으로 현재 사진 중 원본 키와 SHA-256이 있는 가장 작은 슬롯을 대표 사진으로 고릅니다. `photo_trait`의 외형 태그와 현재 글의 Jev 성격·건강 라벨을 가져옵니다. 카드에 들어가는 태그는 `searchable=true`로 제한하며 확률·검토 값은 포함하지 않습니다. 필요한 태그가 아직 없으면 공고 정보로 카드를 만들고, 태그가 준비되어 본문이 바뀌면 다음 실행에서 새 벡터가 생깁니다.
 - `gold_text_embedding`은 완성한 카드의 본문·본문 해시·템플릿 버전·사용한 태그 버전·글 벡터를 공고 단위로 저장합니다. 실행 명령은 `python -m rebom.embedding.cli embed-text --version text_embedding@1 --limit 20`입니다. 기본은 조회·계획이며 `--write`를 붙이면 호출하고 저장합니다.
-- 등록 설정 예시는 `{"model_id":"gemini-embedding-2","dim":768,"template_version":"A2","tag_versions":{"photo_trait":"photo_trait@1","text_personality":"text-personality-v1","text_health":"text-health-v1"}}`입니다. Gold test에 공통 등록 버전이 없는 비전 태그를 읽을 때는 해당 작업의 질문지 버전을 선택합니다. 레지스트리와 임베딩 표의 새 컬럼을 먼저 적용해야 합니다.
+- 등록 설정은 손으로 쓰지 않고 `python -m rebom.embedding.text_version config --template A2 --tag 작업=버전 …`으로 만들어 `text_version register`로 등록합니다. 템플릿 내용 전체와 지문, 작업별 태그 버전이 들어갑니다(`docs/card_templates.md`). Gold test에 공통 등록 버전이 없는 비전 태그를 읽을 때는 해당 작업의 질문지 버전을 선택합니다. 레지스트리와 임베딩 표의 새 컬럼을 먼저 적용해야 합니다.
 - 후보 명령은 현재 Silver test 입력을 사용합니다. `publish_id` 기반 공통 완료본 읽기, 정기 DAG, RDS 적재는 후속 연결입니다.
 
 ## Silver 완료본
