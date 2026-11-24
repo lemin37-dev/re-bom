@@ -5,6 +5,7 @@
 - 처리 기록은 (subject_type, subject_key, task, version, input_hash) 로 upsert 된다.
 - 키 칸이 없는 옛 테이블은 칸 추가로 맞추지 않고 멈추며, test 에서만 --recreate 로 다시 만든다.
 """
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -208,6 +209,72 @@ def test_read_silver_filters_protecting_dogs(tmp_path):
     assert [(t.desertion_nos, t.s3_key, t.sha256) for t in targets] == [(("1",), "k1", "a" * 64)] and no_photo == ["4"]
 
 
+def test_silver_cutoff_date_means_end_of_day_kst():
+    from datetime import datetime
+
+    at, inclusive = rpt.silver_cutoff("2026-11-23")
+    assert at == datetime(2026, 11, 24, tzinfo=rpt.KST) and inclusive is False
+    at, inclusive = rpt.silver_cutoff("2026-11-23T18:00:00")
+    assert at == datetime(2026, 11, 23, 18, tzinfo=rpt.KST) and inclusive is True
+    assert rpt.silver_cutoff("") is None and rpt.silver_cutoff(None) is None
+
+
+def test_read_silver_pins_snapshot_before_cutoff(tmp_path):
+    """11/23 기준으로 고르면 그 뒤에 들어온 공고·사진은 대상에 들지 않는다."""
+    import time
+    from datetime import UTC, datetime
+
+    import pyarrow as pa
+    from pyiceberg.catalog.sql import SqlCatalog
+
+    catalog = SqlCatalog("s", uri=f"sqlite:///{tmp_path}/s.db", warehouse=f"file://{tmp_path}/wh")
+    catalog.create_namespace("rebom_silver")
+    notice = lambda nos: pa.table({"desertion_no": nos, "species_code": ["417000"] * len(nos),
+                                   "status_group": ["PROTECTING"] * len(nos)})
+    image = lambda nos: pa.table({"desertion_no": nos, "image_slot": pa.array([1] * len(nos), pa.int32()),
+                                  "original_s3_key": [f"k{n}" for n in nos], "sha256": [n * 64 for n in nos]})
+    notices = catalog.create_table("rebom_silver.notice", schema=notice(["1"]).schema)
+    images = catalog.create_table("rebom_silver.image", schema=image(["1"]).schema)
+    notices.append(notice(["1"]))
+    images.append(image(["1"]))
+    first_ms = max(notices.current_snapshot().timestamp_ms, images.current_snapshot().timestamp_ms)
+    time.sleep(0.01)  # 두 번째 스냅샷이 확실히 뒤 밀리초에 커밋되게
+    notices.append(notice(["2"]))
+    images.append(image(["2"]))
+
+    class Env:
+        notice_table = "rebom_silver.notice"
+        image_table = "rebom_silver.image"
+
+    used: dict = {}
+    cutoff = (datetime.fromtimestamp(first_ms / 1000, UTC), True)  # 첫 스냅샷까지(포함)
+    dogs, rows = rpt.read_silver(catalog, Env, cutoff, used)
+    assert dogs == ["1"] and [r["desertion_no"] for r in rows] == ["1"]
+    assert set(used) == {"rebom_silver.notice", "rebom_silver.image"}
+    dogs, _ = rpt.read_silver(catalog, Env)
+    assert sorted(dogs) == ["1", "2"]
+
+
+def test_read_silver_fails_without_snapshot_before_cutoff(tmp_path):
+    from datetime import datetime
+
+    import pyarrow as pa
+    import pytest
+    from pyiceberg.catalog.sql import SqlCatalog
+
+    catalog = SqlCatalog("s", uri=f"sqlite:///{tmp_path}/s.db", warehouse=f"file://{tmp_path}/wh")
+    catalog.create_namespace("rebom_silver")
+    t = pa.table({"desertion_no": ["1"], "species_code": ["417000"], "status_group": ["PROTECTING"]})
+    catalog.create_table("rebom_silver.notice", schema=t.schema).append(t)
+
+    class Env:
+        notice_table = "rebom_silver.notice"
+        image_table = "rebom_silver.notice"
+
+    with pytest.raises(ValueError, match="이전 스냅샷이 없습니다"):
+        rpt.read_silver(catalog, Env, (datetime(2020, 1, 1, tzinfo=rpt.KST), False))
+
+
 def test_create_tables_adds_missing_columns_to_existing_table(tmp_path):
     from pyiceberg.catalog.sql import SqlCatalog
     from pyiceberg.schema import Schema
@@ -227,3 +294,30 @@ def test_create_tables_adds_missing_columns_to_existing_table(tmp_path):
     assert {"temperature", "finish_reason", "native_finish_reason"} <= fields
     assert gc.create_tables(env, catalog) == []
     assert isinstance(catalog.load_table(name).schema(), Schema)
+
+
+def test_read_inference_log_reads_only_photo_tagging_rows_and_keeps_detail(sink):
+    """처리 기록은 임베딩과 같이 쓰는 공용 로그다. 태깅은 자기 task 행만 읽고, 실패 근거는 detail 에 남는다.
+
+    detail 칸은 공용 로그(_test 는 이미 있음, 2026-11-24 Glue 확인)에만 있어, 여기서는 칸을 더한 표로 본다.
+    """
+    from pyiceberg.types import StringType
+
+    with sink.inference.update_schema() as update:
+        update.add_column("detail", StringType())
+    sink.inference.refresh()
+    ts = datetime.now(UTC)
+    embedding = {
+        "subject_type": "photo", "subject_key": "e" * 64, "task": "image_embedding", "version": "m/p",
+        "input_hash": "e" * 64, "status": "READ_ERROR", "attempts": 1, "tag_count": None,
+        "last_error": "read_error:NoSuchKey", "detail": '{"s3_key": "k", "error": "NoSuchKey"}',
+        "gold_run_id": "r", "gold_updated_at": ts,
+    }
+    failed = rpt.InputProblem("SHA_MISMATCH", "sha_mismatch", {"s3_key": "k/1.jpg"})
+    target = rpt.Target("1" * 64, "k/1.jpg", (rpt.trait_tags.TASK,), ("1",))
+    outcomes, _ = rpt.tag_photos([(target, failed)], client=None, cfg=rpt.TaggerConfig(run_id="r"))
+    sink.write([], [], [embedding, *rpt.inference_rows(outcomes, {}, "r", ts)], [])
+
+    rows = sink.read_inference_log()
+    assert [(r["task"], r["status"], r["last_error"]) for r in rows] == [(rpt.trait_tags.TASK, "SHA_MISMATCH", "sha_mismatch")]
+    assert json.loads(rows[0]["detail"]) == {"s3_key": "k/1.jpg"}
