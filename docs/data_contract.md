@@ -428,7 +428,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 
 | 테이블 (test 는 `_test`) | 글 태그에서 쓰는 방식 |
 |---|---|
-| `gold_animal_tag` | `source = jev`(서비스 DB `animal_tag.source` 값과 같음). 성격은 태그마다 1행, 건강정보는 1행. `similarity` = 예 확률(성격)·1등 확률(건강) × 100, `source_hash` = `input_hash`, `tagger_version` = `typesafe/jev-1.14@<버전>`, `detail` = 확률 전체(`probs`)·`review`·`request_id`·`input_text`(Jev 에 보낸 가린 글). 교체 범위는 (`source`=jev, animal, 공고번호, 작업, 버전, `source_hash`)입니다. 글이 바뀌거나 버전을 올리면 새 행이 더해지고 **이전 글·이전 버전 행은 남습니다**(13.3 이전 버전 보존과 같은 규칙, 2026-11-23). 같은 글을 다시 쓸 때(실패 재시도·끊긴 실행)만 그 글의 행을 교체해 중복을 막습니다. 사진 태그 행은 건드리지 않습니다. 글이 비게 되어도(`NO_TEXT`) 이전 행은 지우지 않습니다 |
+| `gold_animal_tag` | `source = info_text`(태그를 만든 입력 칸. 사진 태그의 `photo` 와 같은 뜻. 2026-11-23 `jev` 에서 바꿈, 서비스 DB 로 옮길 때 값 대응 확인 필요). 성격은 태그마다 1행, 건강정보는 1행. `similarity` = 예 확률(성격)·1등 확률(건강) × 100, `source_hash` = `input_hash`, `tagger_version` = `typesafe/jev-1.14@<버전>`, `detail` = 확률 전체(`probs`)·`review`·`request_id`·`input_text`(Jev 에 보낸 가린 글). 교체 범위는 (`source`=info_text, animal, 공고번호, 작업, 버전, `source_hash`)입니다. 글이 바뀌거나 버전을 올리면 새 행이 더해지고 **이전 글·이전 버전 행은 남습니다**(13.3 이전 버전 보존과 같은 규칙, 2026-11-23). 같은 글을 다시 쓸 때(실패 재시도·끊긴 실행)만 그 글의 행을 교체해 중복을 막습니다. 사진 태그 행은 건드리지 않습니다. 글이 비게 되어도(`NO_TEXT`) 이전 행은 지우지 않습니다 |
 | `gold_inference_log` | 공고 × 작업 × 버전 × `input_hash` 1행 upsert. `status` = `OK`(태그 있음)·`NO_RESULT`(성격 태그 없음)·`FAILED`·`NO_TEXT` |
 | `gold_model_request_log` | Jev 요청 1번 = 1행, `task = text_jev`, `prompt_version = text-personality-v1+text-health-v1`. `subject_key` = 그 글을 쓰는 첫 공고, `raw_answer` = 응답 `answers` 전체(원 확률), `cost_usd` = `usage.cost`. 같은 글을 쓰는 다른 공고는 태그 `detail.request_id` 로 잇습니다 |
 

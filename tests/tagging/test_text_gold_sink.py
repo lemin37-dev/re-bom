@@ -1,6 +1,6 @@
 """글 태그 Gold 쓰기: 로컬 SQLite 카탈로그 + 임시 폴더로 Iceberg 동작 확인(AWS 없음).
 
-- 글 태그 교체는 (source=jev, animal, 공고번호, 작업, 버전, source_hash) 범위만이다.
+- 글 태그 교체는 (source=info_text, animal, 공고번호, 작업, 버전, source_hash) 범위만이다.
   같은 공고의 이전 글 행·이전 버전 행·사진 태그 행·다른 공고 행은 남는다(Gold 이전 버전 보존, 2026-11-20 결정).
 - 같은 글을 다시 쓰면(실패 재시도·끊긴 실행) 그 글의 행만 교체되어 중복이 생기지 않는다.
 - 처리 기록은 (subject_type, subject_key, task, version, input_hash) 로 upsert 된다.
@@ -28,7 +28,7 @@ def sink(tmp_path):
     return rtt.TextGoldSink(catalog, env)
 
 
-def tag(key, code, h, ts, version=V, task=P, subject="animal", source="jev"):
+def tag(key, code, h, ts, version=V, task=P, subject="animal", source="info_text"):
     return {"subject_type": subject, "subject_key": key, "tag_code": code, "source": source, "tagger_version": "m",
             "task": task, "model": "m", "prompt_version": version, "source_hash": h, "searchable": True, "displayable": True,
             "rank": None, "similarity": 90, "detail": "{}", "gold_run_id": "r", "gold_updated_at": ts}
