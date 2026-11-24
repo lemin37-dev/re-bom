@@ -146,7 +146,89 @@ def new_task_body(pr, data_source_id, action, merged):
     }
     if start:
         props[DATE_PROP] = {"date": {"start": start, "end": end if end and end != start else None}}
-    return {"parent": {"type": "data_source_id", "data_source_id": data_source_id}, "properties": props}
+    return {
+        "parent": {"type": "data_source_id", "data_source_id": data_source_id},
+        "properties": props,
+        "children": summary_blocks(pr),
+    }
+
+
+SUMMARY_SECTIONS = ("요약", "변경 내용")
+SUMMARY_MAX_CHARS = 1500  # 페이지 본문에 옮길 PR 본문 최대 길이
+FALLBACK_CHARS = 800  # 템플릿 칸이 없는 본문은 앞부분만
+
+
+def pr_summary_lines(body):
+    """PR 본문에서 '요약'·'변경 내용' 칸만 뽑아 줄 목록으로. 칸이 없으면 본문 앞부분"""
+    text = re.sub(r"<!--.*?-->", "", body or "", flags=re.S).replace("\r\n", "\n")
+    if re.search(r"<(html|body|h[1-6]|ul|li|p)\b", text, re.I):
+        # 일부 팀원 PR 본문은 HTML 로 붙여 넣어져 있다. 제목·목록만 마크다운으로 바꾸고 나머지 태그는 뺀다
+        text = re.sub(r"<h[1-6][^>]*>", "\n## ", text, flags=re.I)
+        text = re.sub(r"<li[^>]*>", "\n- ", text, flags=re.I)
+        text = re.sub(r"</(h[1-6]|p|li|ul|ol|div)>|<br\s*/?>", "\n", text, flags=re.I)
+        text = re.sub(r"<(?!img\b)[^>]+>", "", text)
+    sections, current = {}, None
+    for line in text.split("\n"):
+        m = re.match(r"^#{1,6}\s*(.+?)\s*$", line)
+        if m:
+            current = m.group(1) if m.group(1) in SUMMARY_SECTIONS else None
+            continue
+        if current:
+            sections.setdefault(current, []).append(line)
+    lines = []
+    for name in SUMMARY_SECTIONS:
+        part = [l for l in sections.get(name, []) if l.strip() and l.strip() != "-"]
+        if part:
+            lines.append(f"## {name}")
+            lines += part
+    if not lines:
+        rest = [l for l in text.split("\n") if l.strip()]
+        lines, size = [], 0
+        for l in rest:
+            if size + len(l) > FALLBACK_CHARS:
+                lines.append("…")
+                break
+            lines.append(l)
+            size += len(l)
+    out, size = [], 0
+    for l in lines:
+        if size + len(l) > SUMMARY_MAX_CHARS:
+            out.append("…")
+            break
+        out.append(l.rstrip())
+        size += len(l)
+    return out
+
+
+def text_rt(text):
+    return [{"type": "text", "text": {"content": text[i:i + 2000]}} for i in range(0, len(text), 2000)] or [
+        {"type": "text", "text": {"content": ""}}
+    ]
+
+
+def summary_blocks(pr):
+    """새 작업 페이지 본문: 작성자·PR 링크 + PR 본문 요약"""
+    author = (pr.get("user") or {}).get("login") or "알 수 없음"
+    blocks = [{
+        "type": "callout",
+        "callout": {
+            "rich_text": text_rt(f"GitHub PR #{pr['number']} · 작성자 {author}") + [
+                {"type": "text", "text": {"content": " · PR 열기", "link": {"url": pr["html_url"]}}}
+            ],
+            "icon": {"type": "emoji", "emoji": "🔗"},
+        },
+    }]
+    for line in pr_summary_lines(pr.get("body")):
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            blocks.append({"type": "heading_3", "heading_3": {"rich_text": text_rt(stripped[3:])}})
+        elif re.match(r"^[-*] \[[ xX]\] ", stripped):
+            blocks.append({"type": "to_do", "to_do": {"rich_text": text_rt(stripped[6:]), "checked": stripped[3] in "xX"}})
+        elif re.match(r"^[-*] ", stripped):
+            blocks.append({"type": "bulleted_list_item", "bulleted_list_item": {"rich_text": text_rt(stripped[2:])}})
+        else:
+            blocks.append({"type": "paragraph", "paragraph": {"rich_text": text_rt(stripped)}})
+    return blocks[:100]  # 노션 API 한 번에 100블록까지
 
 
 def body_with_link(body, page_url):

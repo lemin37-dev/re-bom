@@ -255,3 +255,49 @@ def test_meeting_item_gets_link_but_not_status():
     meeting = page("진행 중")
     meeting["properties"]["구분"] = {"type": "select", "select": {"name": "회의"}}
     assert sync.build_update(meeting, PR_URL, "closed", True) == {"properties": {"GitHub PR": {"url": PR_URL}}}
+
+
+TEMPLATE_BODY = """<!--
+PR 제목: 안내
+-->
+
+## 요약
+<!-- 1~3줄 -->
+수정일 기준 증분 수집 추가
+
+## 변경 내용
+- src/rebom/ingestion/ 증분 로직
+- 
+
+## 확인한 것
+- [x] `pytest` 통과
+"""
+
+
+def test_pr_summary_lines_picks_template_sections():
+    assert sync.pr_summary_lines(TEMPLATE_BODY) == [
+        "## 요약", "수정일 기준 증분 수집 추가", "## 변경 내용", "- src/rebom/ingestion/ 증분 로직",
+    ]
+
+
+def test_pr_summary_lines_falls_back_to_head_and_truncates():
+    body = "\n".join(f"줄 {i} " + "가" * 100 for i in range(20))
+    lines = sync.pr_summary_lines(body)
+    assert lines[0].startswith("줄 0") and lines[-1] == "…"
+    assert sum(len(l) for l in lines) < sync.FALLBACK_CHARS + 200
+    assert sync.pr_summary_lines(None) == []
+
+
+def test_new_task_body_has_summary_children():
+    pr = {"number": 80, "html_url": PR_URL, "title": "t", "body": TEMPLATE_BODY,
+          "created_at": "2026-11-24T00:00:00Z", "user": {"login": "lemin37-dev"}}
+    children = sync.new_task_body(pr, DS, "opened", False)["children"]
+    assert children[0]["type"] == "callout"
+    assert "작성자 lemin37-dev" in children[0]["callout"]["rich_text"][0]["text"]["content"]
+    assert [b["type"] for b in children[1:]] == ["heading_3", "paragraph", "heading_3", "bulleted_list_item"]
+
+
+def test_pr_summary_lines_handles_html_body():
+    body = ("<html>\n<body>\n<h2><span>변경 내용</span></h2><ul><li><p><span>컬럼 4개 추가</span></p></li>"
+            "<li><p><span>테스트 보강</span></p></li></ul><h2><span>참고</span></h2><p>기타</p>")
+    assert sync.pr_summary_lines(body) == ["## 변경 내용", "- 컬럼 4개 추가", "- 테스트 보강"]
