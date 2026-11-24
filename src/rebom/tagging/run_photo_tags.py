@@ -36,7 +36,7 @@ import sys
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from rebom.common.openrouter import (
@@ -554,17 +554,58 @@ def tag_scope_filter(task: str, version: str, shas: Sequence[str], *,
 # ---------------------------------------------------------------- Silver 읽기·S3
 
 
-def read_silver(catalog, silver_env) -> tuple[list[str], list[dict]]:
-    """(보호중 개 공고번호, 이미지 현재 행)."""
+KST = timezone(timedelta(hours=9))
+
+
+def silver_cutoff(value: str | None) -> tuple[datetime, bool] | None:
+    """--silver-as-of 값 → (기준 시각, 그 시각 포함 여부). 날짜만 주면 그날 끝(다음날 00:00 KST 전)까지.
+
+    예: "2026-11-23" → 2026-11-24 00:00 KST 보다 앞선 마지막 스냅샷. 시각을 주면 그 시각까지(포함).
+    """
+    if not value:
+        return None
+    if len(value) == 10:
+        day = date.fromisoformat(value)
+        return datetime.combine(day + timedelta(days=1), time(), KST), False
+    at = datetime.fromisoformat(value)
+    return (at if at.tzinfo else at.replace(tzinfo=KST)), True
+
+
+def _snapshot_id(table, name: str, cutoff: tuple[datetime, bool] | None, used: dict | None) -> int | None:
+    if cutoff is None:
+        snap = table.current_snapshot()
+    else:
+        at, inclusive = cutoff
+        snap = table.snapshot_as_of_timestamp(int(at.timestamp() * 1000), inclusive=inclusive)
+        if snap is None:
+            raise ValueError(f"{name}: {at.isoformat()} 이전 스냅샷이 없습니다")
+    if used is not None and snap is not None:
+        used[name] = {
+            "snapshot_id": snap.snapshot_id,
+            "committed_at": datetime.fromtimestamp(snap.timestamp_ms / 1000, UTC).isoformat(),
+        }
+    return None if cutoff is None else snap.snapshot_id
+
+
+def read_silver(catalog, silver_env, cutoff: tuple[datetime, bool] | None = None,
+                used: dict | None = None) -> tuple[list[str], list[dict]]:
+    """(보호중 개 공고번호, 이미지 현재 행). cutoff 를 주면 두 표 모두 그 시각의 스냅샷을 읽는다.
+
+    used 를 주면 읽은 표별 snapshot_id·커밋 시각을 채운다(대상 목록에 남겨 어느 Silver 로 골랐는지 확인용).
+    """
     from pyiceberg.expressions import And, EqualTo
 
-    notices = catalog.load_table(silver_env.notice_table).scan(
+    notice_table = catalog.load_table(silver_env.notice_table)
+    notices = notice_table.scan(
         row_filter=And(EqualTo("species_code", DOG_SPECIES_CODE), EqualTo("status_group", PROTECTING)),
         selected_fields=("desertion_no",),
+        snapshot_id=_snapshot_id(notice_table, silver_env.notice_table, cutoff, used),
     ).to_arrow().to_pylist()
     dogs = [r["desertion_no"] for r in notices]
-    images = catalog.load_table(silver_env.image_table).scan(
+    image_table = catalog.load_table(silver_env.image_table)
+    images = image_table.scan(
         selected_fields=("desertion_no", "image_slot", "original_s3_key", "sha256"),
+        snapshot_id=_snapshot_id(image_table, silver_env.image_table, cutoff, used),
     ).to_arrow().to_pylist()
     wanted = set(dogs)
     return dogs, [r for r in images if r["desertion_no"] in wanted]
@@ -653,17 +694,22 @@ def cmd_select(args) -> int:
     registered = _registered_versions(getattr(args, "version", ()))
     versions = registered or VERSIONS
     sink = _sink(args, catalog, registered)
-    dogs, images = read_silver(catalog, get_silver_environment(args.silver_env))
+    cutoff = silver_cutoff(getattr(args, "silver_as_of", None))
+    snapshots: dict = {}
+    dogs, images = read_silver(catalog, get_silver_environment(args.silver_env), cutoff, snapshots)
     targets, no_photo = select_targets(dogs, images, sink.read_inference_log(), versions=versions, limit=args.limit or None)
     calls = sum(len(t.tasks) for t in targets) * REPEATS
     summary = {
         "run_id": args.run_id, "selected_at": _now().isoformat(), "silver_env": args.silver_env,
+        "silver_as_of": cutoff[0].isoformat() if cutoff else None, "silver_snapshots": snapshots,
         "protecting_dogs": len(set(dogs)), "targets": len(targets), "target_dogs": sum(len(t.desertion_nos) for t in targets),
         "no_photo_new": len(no_photo), "calls": calls,
         "prompt_versions": VERSIONS, "items": [asdict(t) for t in targets],
     }
     if registered:
         summary["versions"] = registered
+    for name, snap in snapshots.items():
+        print(f"Silver {name}: snapshot {snap['snapshot_id']} ({snap['committed_at']})")
     print(f"보호중 개 {summary['protecting_dogs']}마리, 대상 사진 {len(targets)}장({summary['target_dogs']}마리, 호출 {calls}번), "
           f"새 NO_PHOTO {len(no_photo)}마리")
     if args.dry_run:
@@ -732,6 +778,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--bucket", default="rebom-data-559987919299")
     ap.add_argument("--silver-env", default="test")
     ap.add_argument("--gold-env", default="test")
+    ap.add_argument("--silver-as-of", default="", help="select: 이 날짜(그날 끝, KST)나 시각 기준 Silver 스냅샷으로 고른다. "
+                    "예: 2026-11-23. 비우면 현재 Silver")
     ap.add_argument("--version", action="append", default=[], help="등록된 작업 버전, 예: photo_trait@1. 작업별 반복 지정")
     ap.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드에서는 비운다")
     ap.add_argument("--local-out", default=None, help="Gold 대신 이 폴더에 JSONL 로 쓴다 (PC 시험용)")
