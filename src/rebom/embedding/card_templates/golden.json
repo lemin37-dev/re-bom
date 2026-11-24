@@ -1,0 +1,32 @@
+{
+  "description": "카드 생성 코드가 바뀌었는지 보는 고정 예시 (실제 공고 아님). 이 예시로 만든 카드들의 지문이 golden_sha256 이다. 고치면 모든 실행 버전의 지문이 달라지므로 고치지 않는다.",
+  "notices": [
+    {"desertion_no": "1", "status_group": "PROTECTING", "breed_name_raw": "믹스견", "age_raw": "2026(60일미만)(년생)", "sex_code": "M", "neuter_code": "N", "weight_raw": "2.3(Kg)", "color_raw": "갈색&검정&흰색", "special_mark": "쓰지 않는 글", "info_text": "온순하고 사람을 좋아함. 전염병감염위험, 케어필요"},
+    {"desertion_no": "2", "status_group": "PROTECTING", "breed_name_raw": "진도견", "age_raw": "2021(년생)", "sex_code": "F", "neuter_code": "Y", "weight_raw": "3~4(Kg)", "color_raw": "흑갈색", "special_mark": "관리번호 12-345 순함 문의 010-1234-5678", "info_text": null},
+    {"desertion_no": "3", "status_group": "PROTECTING", "breed_name_raw": "코리안숏헤어", "age_raw": "", "sex_code": "Q", "neuter_code": "U", "weight_raw": "500g(60일미만)", "color_raw": "호피", "special_mark": null, "info_text": ""},
+    {"desertion_no": "4", "status_group": "PROTECTING", "breed_name_raw": null, "age_raw": null, "sex_code": null, "neuter_code": null, "weight_raw": "1,5(Kg)", "color_raw": "어두운색", "special_mark": "  여러   칸  공백  ", "info_text": "   "},
+    {"desertion_no": "5", "status_group": "PROTECTING", "breed_name_raw": "믹스견", "age_raw": "2019(년생)", "sex_code": "M", "neuter_code": "Y", "weight_raw": "10(Kg)", "color_raw": "흰색", "special_mark": "경계 몸무게", "info_text": "경계 몸무게 02-123-4567"},
+    {"desertion_no": "6", "status_group": "PROTECTING", "breed_name_raw": "믹스견", "age_raw": "2018(년생)", "sex_code": "F", "neuter_code": "N", "weight_raw": "25(Kg)", "color_raw": "치즈&회색", "special_mark": "", "info_text": "겁이 많음"},
+    {"desertion_no": "7", "status_group": "PROTECTING", "breed_name_raw": "한국 고양이", "age_raw": "2024(년생)", "sex_code": "F", "neuter_code": "U", "weight_raw": "0(Kg)", "color_raw": "", "special_mark": "활발", "info_text": "활발하고 호기심 많음"},
+    {"desertion_no": "8", "status_group": "CLOSED", "breed_name_raw": "나오면 안 됨", "age_raw": "2020(년생)", "sex_code": "M", "neuter_code": "N", "weight_raw": "5(Kg)", "color_raw": "흰색", "special_mark": "종료", "info_text": "종료"}
+  ],
+  "photos": [
+    {"desertion_no": "1", "image_slot": 2, "sha256": "bb", "original_s3_key": "k2"},
+    {"desertion_no": "1", "image_slot": 1, "sha256": "aa", "original_s3_key": "k1"},
+    {"desertion_no": "2", "image_slot": 1, "sha256": "cc", "original_s3_key": "k3"},
+    {"desertion_no": "6", "image_slot": 3, "sha256": "dd", "original_s3_key": "k4"},
+    {"desertion_no": "7", "image_slot": 1, "sha256": "ee", "original_s3_key": null}
+  ],
+  "photo_tags": {
+    "aa": ["fur.fluffy", "ear.drop", "eye.round"],
+    "bb": ["fur.short"],
+    "cc": ["fur.short", "ear.prick", "eye.sharp"],
+    "dd": ["ear.semi"]
+  },
+  "text_tags": {
+    "1": {"text_personality": ["personality.gentle", "personality.friendly"], "text_health": ["health.info"]},
+    "2": {"text_personality": ["personality.timid", "personality.wary", "personality.active"], "text_health": ["health.none"]},
+    "6": {"text_personality": ["personality.aggressive", "personality.sensitive"], "text_health": ["health.info", "health.none"]},
+    "7": {"text_personality": ["personality.curious"], "text_health": []}
+  }
+}

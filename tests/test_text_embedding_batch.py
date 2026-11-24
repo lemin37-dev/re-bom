@@ -5,7 +5,7 @@ import pytest
 
 from rebom.common import gold_catalog as gc
 from rebom.common.gold_version_registry import register_version
-from rebom.embedding import gemini, text_batch, text_card
+from rebom.embedding import gemini, text_batch, text_card, text_version
 
 
 def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_path):
@@ -33,9 +33,7 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     versions = {"photo_trait": "photo_trait@1", "text_personality": "text-personality-v1",
                 "text_health": "text-health-v1"}
     version = "text_embedding@1"
-    assert register_version(catalog, gold, text_batch.TASK, version, {
-        "model_id": gemini.MODEL, "dim": gemini.DEFAULT_DIM, "template_version": "A2", "tag_versions": versions,
-    })
+    assert register_version(catalog, gold, text_batch.TASK, version, text_version.runtime_config("A2", versions))
 
     def tag(source, subject, key, input_hash, task, code, *, selected=None):
         return {
@@ -124,9 +122,7 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     assert run_input["publish_id"] == "p1" and run_input["gold_run_id"] == result["gold_run_id"]
 
     candidate = "text_embedding@2"
-    assert register_version(catalog, gold, text_batch.TASK, candidate, {
-        "model_id": gemini.MODEL, "dim": gemini.DEFAULT_DIM, "template_version": "A2", "tag_versions": versions,
-    })
+    assert register_version(catalog, gold, text_batch.TASK, candidate, text_version.runtime_config("A2", versions))
     result = text_batch.run(catalog, gold, None, candidate, limit=10, write=True,
                             published=published, embedder_factory=Embedder)
     assert result["written"] == 2
@@ -217,8 +213,7 @@ def pinned(tmp_path):
     notices.overwrite(notice(("1", "CLOSED", "온순"), ("2", "PROTECTING", "글이 바뀜"), ("9", "PROTECTING", "새 공고")))
     images.overwrite(photo(("1", "new")))
     versions = {"photo_trait": "trait-vision-v10", "text_personality": "text-personality-v1", "text_health": "text-health-v1"}
-    register_version(catalog, gold, text_batch.TASK, "text_embedding@1", {
-        "model_id": gemini.MODEL, "dim": gemini.DEFAULT_DIM, "template_version": "A2", "tag_versions": versions})
+    register_version(catalog, gold, text_batch.TASK, "text_embedding@1", text_version.runtime_config("A2", versions))
 
     def add_tags(*tags):
         table = catalog.load_table(gold.table(gc.TAG_TABLE))
@@ -238,7 +233,8 @@ def pinned(tmp_path):
             return [[1.0] * self.dim for _ in texts], {"requested_at": datetime.now(UTC), "request_id": f"r{len(sent)}"}
 
     def run(**kwargs):
-        return text_batch.run(catalog, gold, silver, "text_embedding@1",
+        version = kwargs.pop("version", "text_embedding@1")
+        return text_batch.run(catalog, gold, silver, version,
                               **{"limit": 10, "write": True, "embedder_factory": Embedder, **kwargs})
 
     return SimpleNamespace(catalog=catalog, gold=gold, at=at, add_tags=add_tags, run=run, sent=sent, notices=notices, images=images)
@@ -295,3 +291,30 @@ def test_unknown_tag_source_stops_instead_of_dropping_tags(pinned):
     with pytest.raises(ValueError, match="info_text"):
         pinned.run(silver_as_of=pinned.at.isoformat())
     assert pinned.sent == []
+
+
+def test_changed_card_code_or_template_stops_before_api(pinned, monkeypatch):
+    """등록한 뒤 카드 생성 코드가 바뀌면 같은 버전으로 실행되지 않는다."""
+    from rebom.embedding import card_template
+
+    pinned.add_tags(*FULL)
+    plan = pinned.run(write=False, silver_as_of=pinned.at.isoformat())
+    assert plan["template"] == "A2" and plan["template_recorded"] is True and plan["template_sha256"] == card_template.load("A2").sha256
+    monkeypatch.setattr(text_batch, "HEALTH", {"health.info": "정보 있음", "health.none": "정보 없음"})
+    with pytest.raises(card_template.TemplateError, match="golden_sha256"):
+        pinned.run(silver_as_of=pinned.at.isoformat())
+    assert pinned.sent == []
+
+
+def test_versions_with_different_tags_are_kept_side_by_side(pinned):
+    """실행 버전을 올려도 이전 버전의 벡터는 그대로 남는다."""
+    pinned.add_tags(*FULL)
+    pinned.run(silver_as_of=pinned.at.isoformat())
+    config = text_version.runtime_config("A2", {"photo_trait": "photo_trait@9", "text_personality": "text-personality-v1",
+                                                "text_health": "text-health-v1"})
+    assert text_version.register(pinned.catalog, pinned.gold, "text_embedding@2", config)
+    pinned.run(version="text_embedding@2", silver_as_of=pinned.at.isoformat())
+    rows = pinned.catalog.load_table(pinned.gold.table(gc.TEXT_EMBEDDING_TABLE)).scan().to_arrow().to_pylist()
+    first = {r["version"]: r["input_text"] for r in rows if r["subject_key"] == "1"}
+    assert "복슬복슬" in first["text_embedding@1"] and "복슬복슬" not in first["text_embedding@2"]
+    assert len(rows) == 4 and {r["prompt_version"] for r in rows} == {"A2"}

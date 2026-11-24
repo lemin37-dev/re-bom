@@ -59,6 +59,8 @@ where = ["src"]
 [tool.setuptools.package-data]
 # 품종 후보 62종 목록 (src/rebom/tagging/breed_tags.py 가 읽는다)
 "rebom.tagging" = ["data/*.json"]
+# 글 카드 템플릿 (src/rebom/embedding/card_template.py 가 읽는다)
+"rebom.embedding" = ["card_templates/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

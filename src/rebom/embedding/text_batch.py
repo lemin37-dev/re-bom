@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from rebom.common import gold_catalog as gc
 from rebom.common.gold_version_registry import require_version_column, resolve_version
-from rebom.embedding import gemini, prep, text_card
+from rebom.embedding import card_template, gemini, prep, text_card
 from rebom.embedding.gold_store import load_logs, table_arrow
 from rebom.tagging.run_photo_tags import representative_photos
 from rebom.tagging.tag_codes import TAGS
@@ -95,8 +95,20 @@ def _tag_index(tags, versions: dict[str, str]):
     return index
 
 
+def _note_text(row):
+    """특징 글. info_text 가 비면 special_mark."""
+    raw = row.get("info_text")
+    return raw if raw and raw.strip() else row.get("special_mark")
+
+
+def text_tag_hash(row) -> str:
+    """글 태그의 source_hash 와 같은 값 (Jev v1 입력 정리 규칙)."""
+    return text_card.text_sha256(text_card.persona({"specialMark": _note_text(row)}))
+
+
 def build_cards(notices, photos, tags, template: str, versions: dict[str, str]) -> list[Card]:
     """Choose the current representative photo and Jev's current input per notice."""
+    spec = card_template.load(template)
     current_photos = representative_photos(photos)
     index = _tag_index(tags, versions)
     cards = []
@@ -106,13 +118,11 @@ def build_cards(notices, photos, tags, template: str, versions: dict[str, str]) 
         notice = str(row["desertion_no"])
         photo = current_photos.get(notice)
         photo_hash = str(photo["sha256"]).lower() if photo else ""
-        raw = row.get("info_text")
-        raw = raw if raw and raw.strip() else row.get("special_mark")
-        # Matches the Jev v1 input cleaning contract.
-        jev_hash = text_card.text_sha256(text_card.persona({"specialMark": raw}))
+        raw = _note_text(row)
+        jev_hash = text_tag_hash(row)
         values = []
         used_versions = {}
-        if template == "A2":
+        if spec.uses_tags:
             traits = sorted(index.get(("photo_trait", photo_hash, photo_hash), ()))
             for code in traits:
                 if code in TAGS:
@@ -130,7 +140,7 @@ def build_cards(notices, photos, tags, template: str, versions: dict[str, str]) 
                     values.append(("건강정보", label))
                     used_versions["text_health"] = versions["text_health"]
         card, source_hash = text_card.card_from_silver(
-            row | {"special_mark": raw} if template == "A2" else row, template, values,
+            row | {"special_mark": raw} if spec.note_from_info_text else row, template, values,
         )
         if card:
             cards.append(Card(notice, card, source_hash, row.get("source_updated_at_raw"), used_versions))
@@ -186,6 +196,13 @@ def write_cards(catalog, env, table, cards: list[Card], *, template: str, versio
     logs.upsert(table_arrow(logs, outcomes), join_cols=list(gc.INFERENCE_LOG_KEYS))
 
 
+def verify_template(catalog, gold, config: dict, *, write: bool) -> bool:
+    """등록된 템플릿 내용·지문과 지금 코드가 같은지 (text_version.py). 다르면 모델을 부르기 전에 멈춘다."""
+    from rebom.embedding import text_version
+
+    return text_version.verify(catalog, gold, config, write=write)
+
+
 def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedder_factory=gemini.GeminiEmbedder,
         silver_as_of: str | None = None, require_tags: tuple[str, ...] = (), show: int = 0, published=None) -> dict:
     from pyiceberg.expressions import And, EqualTo, In
@@ -198,15 +215,15 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
     versions = config.get("tag_versions", {})
     if config["model_id"] != gemini.MODEL or config.get("dim") != gemini.DEFAULT_DIM:
         raise ValueError("Text embedding version does not match the configured model and dimension")
-    if template not in text_card.TEMPLATE_VERSIONS:
-        raise ValueError(f"Unsupported text card template: {template}")
+    spec = card_template.load(template)
     if (
         not isinstance(versions, dict) or set(versions) - TAG_SOURCES.keys()
         or any(not isinstance(value, str) or not value for value in versions.values())
     ):
         raise ValueError("tag_versions must map supported tag tasks to version strings")
-    if template == "A2" and set(versions) != TAG_SOURCES.keys():
-        raise ValueError("A2 requires versions for photo_trait, text_personality and text_health")
+    if spec.uses_tags and set(versions) != TAG_SOURCES.keys():
+        raise ValueError(f"{template} requires versions for photo_trait, text_personality and text_health")
+    fingerprint = verify_template(catalog, gold, config, write=write)
     if limit < 1:
         raise ValueError("limit must be positive")
     if set(require_tags) - set(versions):
@@ -244,7 +261,7 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
         snapshot_id=snapshot_id(notices, notice_table),
     ).to_arrow().to_pylist()
     photos, tags = [], []
-    if template == "A2":
+    if spec.uses_tags:
         photo_table = published.photo_table if published else silver.image_table
         images = catalog.load_table(photo_table)
         photos = images.scan(
@@ -280,7 +297,8 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
             write_cards(catalog, gold, table, to_write[start:start + gemini.TEXT_BATCH],
                         template=template, version=version, run_id=run_id, embedder=embedder,
                         silver_snapshots=snapshots)
-    result = {"cards": len(cards), "with_tags": with_tags, "selected": len(selected), "planned": len(to_write),
+    result = {"template": template, "template_sha256": spec.sha256, "template_recorded": fingerprint,
+            "cards": len(cards), "with_tags": with_tags, "selected": len(selected), "planned": len(to_write),
             "written": len(to_write) if write else 0, "silver_as_of": cutoff[0].isoformat() if cutoff else None,
             "silver_snapshots": snapshots,
             "show": [{"notice": c.notice, "text": c.text, "tag_versions": c.tag_versions} for c in to_write[:show]]}
