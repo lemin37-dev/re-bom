@@ -197,6 +197,15 @@ def execute(args):
     state_s3 = None
     if args.s3_state_bucket:
         state_s3 = boto3.client("s3", region_name="ap-northeast-2")
+        if args.apply:
+            order = ensure_run_order(
+                state_s3,
+                args.s3_state_bucket,
+                args.s3_state_prefix,
+                run_id,
+            )
+            print("SILVER_RUN_ORDER_PRECHECK:", order)
+
         if not run_dir.exists():
             restored = restore_snapshot(
                 state_s3,
