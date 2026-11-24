@@ -354,7 +354,7 @@ def embed(args: argparse.Namespace) -> int:
         if kind == "sha_mismatch":
             return gold_store.log_row(sha, version, gold_store.SHA_MISMATCH, run_id, now, detail={"s3_key": key},
                                       last_error=reason)
-        return gold_store.log_row(sha, version, gold_store.FAILED, run_id, now, detail={"s3_key": key},
+        return gold_store.log_row(sha, version, gold_store.BAD_IMAGE, run_id, now, detail={"s3_key": key},
                                   last_error=reason)
 
     for p in plan.reuse:  # 이전 실행에서 만든 같은 sha256 벡터를 복사

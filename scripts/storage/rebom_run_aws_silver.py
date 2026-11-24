@@ -221,7 +221,7 @@ def execute(args):
         return
 
     if notice_arrow.num_rows and before["stage"] == "PREPARED":
-        result = upsert_notice(notice, notice_arrow)
+        result = upsert_notice(notice, notice_arrow, run_id=run_id)
         print("NOTICE_INSERTED:", result.rows_inserted)
         print("NOTICE_UPDATED:", result.rows_updated)
 

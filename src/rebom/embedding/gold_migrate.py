@@ -23,7 +23,7 @@ from typing import Any, Iterable
 
 from rebom.embedding import canary, prep, staging
 from rebom.embedding.gold_store import (  # noqa: F401 - 이 모듈 이름으로도 쓴다
-    BLANK, IMAGE_TASK, OK, SUBJECT_PHOTO, image_version_filter, log_version, model_id, table_arrow as _table_arrow, vectors_of,
+    IMAGE_TASK, OK, SUBJECT_PHOTO, image_version_filter, log_version, model_id, table_arrow as _table_arrow, vectors_of,
 )
 from rebom.embedding.manifest import Photo, list_keys
 
@@ -117,8 +117,8 @@ def build(runs: list[Run], model: str, dim: int, prep_version: str, canary_docs:
                   else {"reason": reason, "gray_std": None, "blank_std": prep.BLANK_STD})
         logs.append({
             "subject_type": SUBJECT_PHOTO, "subject_key": sha, "task": IMAGE_TASK, "version": version,
-            "input_hash": sha, "status": BLANK if reason == "blank" else reason.upper(), "attempts": 1,
-            "tag_count": None, "last_error": None, "gold_run_id": run_id, "gold_updated_at": _ts(at),
+            "input_hash": sha, "status": reason.partition(":")[0].upper(),  # blank → BLANK, bad_image:<오류> → BAD_IMAGE
+            "attempts": 1, "tag_count": None, "last_error": None, "gold_run_id": run_id, "gold_updated_at": _ts(at),
             "detail": json.dumps(detail, ensure_ascii=False),
         })
     canary_rows = [canary_row(key, doc, mid) for key, doc in canary_docs]

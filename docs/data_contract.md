@@ -132,7 +132,7 @@
     - 글(텍스트) 임베딩도 같은 구조(`gold/text_embedding/…`, 카드 해시 기준)로 합니다. 글도 사진과 같은 모델(`gemini-embedding-2`, 768)을 쓰고, 검색에서는 순위로 합칩니다. RDS 테이블 초안은 `db/migrations/002_text_embedding.sql`(`text_embedding`, 기본키 공고·`text_kind`·`model_key`, 아직 적용 안 함). 자세한 계획은 `docs/image_embedding_pipeline.md` 10절.
   - **키**: (`desertion_no`, `image_slot`, `model`). 같은 칸의 sha256이 바뀌면 그 행을 덮어씁니다(과거 버전 벡터는 남기지 않음).
   - **칼럼**: `photo_version`, `sha256`, `s3_key`(원본 키), `photo_run_id`, `embedding vector(768)`, `embedded_at`.
-  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스. 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
+  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스(`001_init.sql`, 사진 백필이 끝나 그대로 유지). **[확정, 11/24]** 새로 만드는 벡터 테이블(글 `text_embedding` 등)은 v0.1에서 인덱스 없이 전체 비교하고, HNSW는 v0.1 실측 확인 후 v0.2에서 도입을 고려합니다. 종·보호중 조건은 서비스 테이블 `animal`과 `desertion_no`로 JOIN해 거릅니다(벡터 테이블에 종 칼럼은 두지 않음). 사진 HNSW를 타는 검색은 조건으로 걸러진 만큼 결과가 모자랄 수 있으니 `hnsw.ef_search`를 LIMIT 이상으로 두고 `hnsw.iterative_scan`(pgvector 0.8)을 켭니다. 이 설정은 성능 비교 후 검색 코드에 넣습니다(지금 코드는 기본값). 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
   - **[확정, 11/19]** 종료 공고 사진의 벡터는 지우지 않고 검색에서 거릅니다. 종료 뒤 보호중으로 복귀하는 공고가 있기 때문입니다(3절). 검색은 기본으로 `processState`가 `보호중`인 공고 안에서만 찾습니다. 공고 상태는 B 서비스 테이블에서 읽습니다.
 
 ## 7. 컬럼 (A→B 인계 스키마 v0)
@@ -229,7 +229,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 대표 사진: Silver 이미지 테이블에서 `original_s3_key` 가 있는 가장 작은 `image_slot`. 키는 Silver 값을 그대로 쓰고(`_v002` 같은 교체 사진 포함), 받은 사진의 sha256 이 Silver 값과 다르면 그 사진은 실패(`SHA_MISMATCH`)로 둡니다.
 - 보호중 개들의 대표 사진을 sha256 으로 묶어 사진 단위로 부릅니다. 다른 공고에서 이미 태깅한 사진이면 부르지 않습니다.
 - 사진이 없는 개는 `NO_PHOTO` 로 한 번만 기록합니다(`subject_type = animal`, `subject_key` = 공고번호, `input_hash = "no-photo"`). 나중에 사진이 생기면 그 사진(sha256)이 새 대상이 됩니다.
-- 다시 부르는 경우는 둘뿐입니다. 공고의 대표 사진이 아직 태깅하지 않은 sha256 으로 바뀌었을 때, 질문지 버전(`version`)이 바뀌었을 때. 실패(`FAILED`)는 3번까지 다시 시도합니다.
+- 다시 부르는 경우는 둘뿐입니다. 공고의 대표 사진이 아직 태깅하지 않은 sha256 으로 바뀌었을 때, 질문지 버전(`version`)이 바뀌었을 때. 모델 실패(`FAILED`)는 3번까지, 사진을 못 읽었거나(`READ_ERROR`) sha256 이 다른(`SHA_MISMATCH`) 사진은 매 실행 다시 봅니다. 열리지 않는 사진(`BAD_IMAGE`)은 다시 보지 않습니다.
 - 모델: OpenRouter `google/gemini-3.1-flash-lite`, 공급자 `google-ai-studio` 고정(대체 공급자 없음), reasoning low, `media_resolution = MEDIA_RESOLUTION_MEDIUM`, temperature 1.0(평가 때 Google 기본값과 같은 값을 명시). seed 는 보내지 않습니다. 2회 답의 일치로 판정하므로 두 회차가 독립이어야 합니다.
 - 실행을 멈추는 경우: 특징 질문 하나의 prompt_tokens 가 1,500 을 넘을 때(해상도 설정이 빠진 것으로 봄, medium 약 1,294, high 약 1,818), 그리고 키·계정 오류(401, 402, 검열 표시가 없는 403, 키 한도)일 때. 계정 오류를 사진 실패로 세면 모든 대상의 시도 횟수가 쌓여 3번 뒤 영구히 건너뛰기 때문입니다.
 - 사진 크기: 10MB 를 넘는 원본은 보내지 않고 실패(`IMAGE_TOO_LARGE`)로 둡니다.
@@ -251,20 +251,42 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 | `eye.sharp` | 날카로운 눈매 | 눈이 가늘고 눈꼬리가 길거나 올라감. 2회 모두 '날카로움' | O | O |
 | `breed.<품종>` | 닮은 품종 | 두 회차 모두 Top3 에 든 품종을 한 행씩 둡니다(`rank`, `similarity` = 두 회차 평균). 평균 유사도 90 이상(강 신호)만 검색에 씁니다 | 강 신호만 | X |
 
-품종 이름은 3년치 공고 빈도로 고른 62종 표준 이름(`src/rebom/tagging/data/breed_candidates_3y.json`)으로 맞춥니다. 화면에는 보이지 않고 자연어 검색·챗봇에만 씁니다(11/17 결정).
+품종은 모델이 세계의 모든 품종 중에서 자기 지식으로 고릅니다(특징표 없음, 11/17 결정). 3년치 공고 빈도로 고른 62종(`src/rebom/tagging/data/breed_candidates_3y.json`)은 질문지의 참고 목록이고, 모델이 같은 품종을 다르게 쓴 이름(진돗개 → 진도견, 토이푸들 → 푸들 등)을 한 표기로 맞추는 데만 씁니다. 목록 밖 품종은 모델이 쓴 이름 그대로 태그가 됩니다. 같은 품종 안의 크기·계통 차이(푸들·닥스훈트 크기, 저먼 셰퍼드 독 → 셰퍼드 등)만 하나로 묶고, 테리어처럼 품종 그룹으로는 묶지 않습니다. 모델이 쓴 원래 이름은 `detail` 의 `raw_breed` 에 남습니다.
+
+품종 태그는 강 신호(믹스견 포함)라도 화면에 보이지 않고(`displayable = false`) 자연어 검색·챗봇에만 씁니다(11/17 결정). 화면의 품종은 보호소가 공고에 적은 `kindNm` 이며 태깅 결과가 아닙니다.
 
 ### 13.3 테이블
 
 | 테이블 (test 는 이름 뒤 `_test`) | 한 행 | 쓰는 방식 |
 |---|---|---|
 | `gold_animal_tag` | 대상 × 작업 × 질문지 버전 × 태그 | 같은 대상·같은 질문지 버전으로 다시 태깅했을 때만 (`subject_type`, `subject_key`, `task`, `prompt_version`) 범위의 행을 교체. 사진이 바뀌면 새 sha256 이 새 행이 되고, 질문지 버전을 올려도 이전 행은 남음(이전 버전 보존). 실패한 작업은 교체하지 않음 |
-| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO, `attempts`, `tag_count`, `last_error` |
-| `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분) |
+| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO·READ_ERROR·SHA_MISMATCH·BAD_IMAGE, `attempts`, `tag_count`, `last_error`, `detail`. 임베딩과 같은 공용 로그라 읽을 때 `task` 조건을 넣습니다. `status`·`tag_count` 뜻은 아래 표 |
+| `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분). 한 행 = API 호출 한 번. 사진 태깅은 늘 한 장씩 부르므로 `batch_size` 칸을 두지 않고 1장으로 읽습니다(`request_scope`·`item_count` 는 두지 않음, 11/23 결정) |
 
-`gold_animal_tag` 칸: `subject_type`, `subject_key`, `tag_code`, `source`(photo), `tagger_version`, `task`, `model`, `prompt_version`, `source_hash`(입력 해시, 사진은 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
+`gold_inference_log` 의 `status`·`tag_count` 뜻(OK·NO_RESULT 는 둘 다 끝난 것으로 보고 다시 부르지 않습니다):
+
+| 작업 | OK | NO_RESULT | `tag_count` |
+|---|---|---|---|
+| `photo_trait` | 태그 행이 하나 이상 | 2회 답이 맞는 요소가 하나도 없음(태그 행 없음) | 태그 행 수(모두 검색용) |
+| `photo_breed` | 강 신호(평균 유사도 90 이상) 품종이 하나 이상 | 강 신호 없음. 두 회차 모두 Top3 에 든 품종이 있으면 검색에 안 쓰는 품종 행(`searchable = false`)은 남아 있음 | 강 신호(검색용) 행 수 |
+
+그 밖의 상태는 아래와 같습니다. 사진 입력 문제 세 가지는 사진 임베딩과 같은 값·같은 `last_error`·`detail` 을 씁니다(공용 로그에서 같은 상황이 같은 값으로 보이게, 11/24).
+
+| `status` | 언제 | 모델 호출 | 다음 실행 | `last_error` | `detail` |
+|---|---|---|---|---|---|
+| `FAILED` | 모델 호출 오류, 답 형식 오류 | 했음 | 3번까지 다시 | `model_error:<HTTP 상태·코드>`, `bad_answer:<예외 이름>` | `{"error": …}` |
+| `READ_ERROR` | S3 에서 사진을 못 읽음 | 안 함 | 매번 다시 (`attempts` = 연속 실패 횟수) | `read_error:<오류 코드>` | `{"s3_key": …, "error": …}` |
+| `SHA_MISMATCH` | 받은 사진의 sha256 이 Silver 값과 다름 | 안 함 | 매번 다시 | `sha_mismatch` | `{"s3_key": …}` |
+| `BAD_IMAGE` | 이미지로 열리지 않거나 10MB 초과 | 안 함 | 다시 안 함 | `bad_image:<예외 이름>` | `{"s3_key": …}` |
+| `NO_PHOTO` | 사진 없는 공고 (`subject_type = animal`) | 안 함 | 다시 안 함 | 비움 | 비움 |
+
+`OK`·`NO_RESULT` 는 `detail` 을 비웁니다. 키·계정 오류나 해상도 감시로 실행이 멈추면 그 사진은 처리 기록을 남기지 않고 다음 실행에서 다시 부릅니다.
+
+`gold_animal_tag` 칸: `subject_type`, `subject_key`, `tag_code`, `source`(출처: photo 사진 · text 공고 글 · rule 공고 칸. 모델 이름은 넣지 않고 `model`·버전으로 구분, 11/24), `tagger_version`, `task`, `model`, `prompt_version`, `source_hash`(입력 해시, 사진은 sha256), `searchable`, `displayable`, `rank`, `similarity`, `detail`(근거 JSON), `gold_run_id`, `gold_updated_at`.
 
 - 위치: test `s3://rebom-data-559987919299/gold/_test/iceberg/`, prod `s3://rebom-data-559987919299/gold/iceberg/`. 실행 중간 파일(대상 목록)은 `gold/_work_test/photo_tags/<run_id>/targets.json`.
 - 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. `subject_type`·`subject_key` 가 없는 옛 테이블(11/20 이전 `desertion_no` 키)은 칸 추가로 맞추지 않고 멈추며, test 는 `--create --recreate` 로 지우고 다시 만듭니다(옛 행은 버림, prod 는 거부). 파드(노드 역할)는 읽기·쓰기만 합니다.
+- 요청 기록 표는 작업 묶음별로 따로 둡니다. 태깅은 `gold_model_request_log`, 임베딩은 `gold_embedding_request_log`(공통 칸 + `batch_size`, 13.4).
 - 서비스 DB 적재(pgvector 쪽 태그 테이블)는 별도 작업입니다.
 - 이전 버전 보존(2026-11-20 결정): `gold_animal_tag` 는 사진이 바뀌거나 질문지 버전을 올려도 이전 행을 지우지 않습니다. 오래된 버전 정리는 공고·이미지 정리 기준이 정해진 뒤에 따로 합니다.
 - 서비스 DB 에 넣을 행(활성 태그): Silver 에서 공고별 대표 사진을 구해 사진 태그와 잇습니다. 아래 조건을 모두 만족하는 행만 고릅니다.
@@ -293,7 +315,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 벡터는 `embedding list<float>`(768개, float32).
 - 공고–사진 연결(`desertion_no`, `image_slot`)은 Gold 에 두지 않습니다(13.0). 지금은 Bronze 사진 manifest, Silver 운영 뒤에는 Silver 현재 사진 테이블에서 합니다. RDS `image_embedding` 은 지금처럼 칸당 1행입니다.
 - 기록 표를 나눈 이유: 임베딩만 쓰는 칸(`detail`, `batch_size`)을 태깅 표에 더하지 않고, 묶음마다 표를 따로 만들고 고칠 수 있게 하기 위해서입니다. 칸 이름·타입은 태깅 기록 표와 같아서, 전체 비용 등은 Athena 에서 두 표를 `UNION ALL` 로 합쳐 봅니다.
-- 처리 기록(`gold_embedding_inference_log`): `version` = `<model>/<prompt_version>`(태깅 처리 기록과 같은 키라 모델 칸이 없어서 모델을 함께 넣음). `status` = OK·BLANK·SHA_MISMATCH·READ_ERROR·FAILED. 빈 사진은 `detail` 에 판정 점수 `{"gray_std": …, "blank_std": 4.0}` 를 남겨, 기준을 바꿔도 사진을 다시 받지 않고 다시 판정할 수 있게 합니다.
+- 처리 기록(`gold_embedding_inference_log`): `version` = `<model>/<prompt_version>`(태깅 처리 기록과 같은 키라 모델 칸이 없어서 모델을 함께 넣음). `status` = OK·BLANK·SHA_MISMATCH·READ_ERROR·BAD_IMAGE(열리지 않는 파일). READ_ERROR·SHA_MISMATCH 는 다음 실행에서 다시 시도하고, BLANK·BAD_IMAGE 는 같은 sha256 이면 다시 보내지 않습니다(사진이 바뀌어 sha256 이 달라지면 새로 보냄). 태깅의 FAILED(다시 시도하는 실패)와 뜻이 달라 이름을 나눴습니다(11-24). 빈 사진은 `detail` 에 판정 점수 `{"gray_std": …, "blank_std": 4.0}` 를 남겨, 기준을 바꿔도 사진을 다시 받지 않고 다시 판정할 수 있게 합니다.
 - 요청 기록(`gold_embedding_request_log`) [11-23 결정]: 태깅 요청 기록과 같은 뜻으로 **요청 1번 = 1행**입니다. 매일 실행(11-24 03:00부터)은 사진을 1장씩 보내 요청 1행 = 사진 1장이고, `batch_size` = 1, 비용·토큰은 요청 값 그대로입니다(장당 과금이라 묶어도 비용은 같음, 11-21 실측 장당 $0.000116). 전체 재임베딩처럼 시간이 중요할 때만 `--image-batch 6` 으로 묶고, 그때도 요청 1행(`subject_key` = 첫 사진, `batch_size` = 장수, 비용은 요청 전체)이며 사진 → 요청 연결은 처리 기록 OK 행의 `detail` `{"request_id", "batch_size"}` 로 합니다. canary 도 1장씩 6번 보내 6행입니다(`gold_run_id = canary-<시각>`).
 - 쓰는 곳(11-23 전환): `embed --gold-env prod` 가 결과·처리 기록·요청 기록 표에 쓰고, `load --gold-env prod` 가 결과 표를 읽어 RDS 에 넣고, `canary --gold-env prod` 가 canary 표와 요청 기록 표에 남깁니다(`src/rebom/embedding/gold_store.py`). embed 는 되돌릴 때를 위해 S3 parquet 도 같이 씁니다(읽지 않음). 처리 기록의 `READ_ERROR` 는 `detail` 에 Bronze 키를 두고 `attempts` 로 연속 실패 수를 셉니다.
 - 환경: DAG 매일 실행은 **prod 에만** 씁니다. test 는 표 구조·옮기기·조회 확인용이고 DAG 가 쓰지 않습니다. 임베딩 입력은 Bronze manifest 라 Silver prod 와 관계없이 Gold prod 를 만들 수 있습니다.
@@ -419,3 +441,101 @@ Canary 전용 테이블에는 점검 벡터와 식별 정보를 둡니다. 점�
 
 - 빈(백지) 사진 측정값(`pixel_std` 등)은 나중에 칸을 더합니다. Bronze는 측정만, 판정은 Silver.
 - 주소가 옛 버전으로 돌아간 칸의 처리 규칙(지금은 건수만).
+
+## 15. 글 태그 — 성격·건강정보 (Gold, Jev 결과) [v1, test 환경, 2026-11-23]
+
+보호중 개·고양이 공고의 글에 성격 태그(8개 중 0개 이상)와 건강정보 태그(정보 있음/없음 1개)를 붙여 S3 Gold 에 씁니다.
+사진 태그(13절)와 같은 태깅 묶음 표 3개를 쓰고, 새 표는 만들지 않습니다. 코드는 `src/rebom/tagging/run_text_tags.py`(실행),
+`text_tags.py`(질문지·태그·판정), `jev_client.py`(Decisions API 호출), 질문 문구는 `src/rebom/tagging/data/text_questions_v1.json`.
+지금은 PC 에서 손으로 실행해 Gold test 에 씁니다. DAG·이미지는 다음 단계입니다.
+
+### 15.1 입력과 대상
+
+- 대상: Silver 공고 표에서 `status_group = PROTECTING`, `species_code` 개(417000)·고양이(422400). `--species` 로 바꿀 수 있습니다.
+- 글: `info_text`(= `sfe_soci` + `sfe_health` + `special_mark`, Silver 변환이 이어 붙인 값). 비어 있으면 `special_mark`.
+  sfe 칸이 있는 공고(보호중 약 2%)는 성격·건강 내용이 sfe 에만 있는 경우가 있어 `info_text` 를 씁니다(2026-11-23 Silver test 실측).
+- 보내기 전 정리: A2 글 카드의 특징 글(`rebom.embedding.text_card.persona`)과 같은 규칙입니다(2026-11-23 결정). 앞 관리번호를 지우고, 공백을 한 칸으로 줄이고, 전화번호를 `[번호]`로 가립니다. 정규식(`LEADING_ID`·`PHONE`)도 `text_card` 것을 그대로 가져다 씁니다.
+- 정리한 글이 비었거나 자리채움 값(`.`, `-`, `없음`, `해당없음`, `특이사항 없음` 등)이면 부르지 않고 `NO_TEXT` 로 기록합니다.
+  "이상 없음"은 건강정보가 있는 글이라 자리채움 값이 아닙니다.
+- `subject_type = animal`, `subject_key = 공고번호`, `input_hash` = 정리한 글의 sha256 (13.0 공용 키).
+
+### 15.2 다시 태깅하는 조건
+
+- 같은 (공고, 작업, 버전, `input_hash`) 가 `OK`·`NO_RESULT`·`NO_TEXT` 거나 `FAILED` 3번이면 건너뜁니다.
+  그래서 글이 바뀌거나(`input_hash`) 질문 버전을 올릴 때만 다시 부릅니다.
+- 같은 실행 안에서 글이 같은 공고들은 한 번만 부르고 결과를 나눠 씁니다(보호중 18,730건 중 서로 다른 글 약 12,500개, 11-23 실측).
+- 키·계정 오류(401, 402, 키 한도)면 그 배치까지 저장하고 멈춥니다(종료 코드 2). 공고 실패로 세지 않습니다.
+
+### 15.3 호출과 질문지 (v1)
+
+- OpenRouter Decisions API(`POST /api/alpha/decisions`), 모델 `typesafe/jev-1.14`, 공급자 TypeSafe 고정(`allow_fallbacks: false`).
+  키 `OPENROUTER_KEY_TAG_JEV`: PC 시험은 로컬 테스트 키, 서버는 k3s Secret `rebom-tag-jev-prod` 의 서버 키.
+- 글 1건당 요청 1번에 질문 9개를 함께 보냅니다: 성격 예/아니오(noul) 8개 + 건강정보 선택형(choice) 1개.
+  시험(402건)에서 입력 평균 3,919토큰, 1건당 약 $0.000165 였습니다(따로 보낼 때보다 약 7% 적음).
+- 질문 문구는 jev_final_test 에서 시험한 질문을 글자 그대로 옮겼습니다. 이 레포의 버전 이름은 v1 입니다.
+
+| 작업(`task`) | `prompt_version` | 옮겨 온 시험 질문 | 시험 결과 (태그 기준표) |
+|---|---|---|---|
+| `text_personality` | `text-personality-v1` | personality-v10 (= p12) | 새 표본 200건 완전 일치 0.905, 정밀도 0.989·재현율 0.944 |
+| `text_health` | `text-health-v1` | health-info-s4c | 새 표본 200건 정확도 0.965, 정보 있음 정밀도 0.940·재현율 1.000 |
+
+시험은 `special_mark` 로 했고, `info_text`(sfe 포함 글)로는 402건을 돌려 결과만 확인했습니다(정답 비교 전).
+질문 문구를 바꾸면 JSON 을 새 파일(v2)로 만들고 버전을 올립니다. 버전이 바뀌면 모든 공고를 다시 태깅합니다.
+
+### 15.4 태그와 판정 기준
+
+| 태그 코드 | 이름 | 판정 | 검색 | 화면 |
+|---|---|---|---|---|
+| `personality.gentle` | 순함 | 예 확률 0.75 이상 | O | O |
+| `personality.friendly` | 친화적 | 〃 ("경계심 없음"도 친화적) | O | O |
+| `personality.timid` | 겁많음 | 〃 | O | O |
+| `personality.wary` | 경계 | 〃 (겁 때문이라도 사람·손을 피하면 해당) | O | O |
+| `personality.active` | 활발 | 〃 | O | O |
+| `personality.aggressive` | 사나움 | 〃 (방어적이라고 적히지 않은 입질 포함) | O | O |
+| `personality.sensitive` | 예민 | 〃 | O | O |
+| `personality.curious` | 호기심 | 〃 | O | O |
+| `health.info` | 건강정보 있음 | 정보 있음 확률이 더 높음 | O | O |
+| `health.none` | 건강정보 없음 | 정보 없음 확률이 더 높음(건강하다는 뜻이 아님) | O | O |
+
+- 건강정보는 정보 있음·정보 없음 두 값을 모두 라벨로 검색·화면에 넘깁니다(2026-11-23 결정). 글이 없어 부르지 않은 공고(`NO_TEXT`)는 태그 행이 없습니다.
+- 성격 0.4~0.75 는 태그로 쓰지 않고 `detail.review` 에 남깁니다. 건강정보 1등 확률이 0.4 미만이면 `detail.review = true`.
+- 한 글에 여러 성격 태그가 붙을 수 있습니다. 순함+사나움처럼 뜻이 반대여도 글에 둘 다 적혀 있으면 둘 다 붙이고 따로 표시하지 않습니다(2026-11-23 결정).
+- 판정 근거: Jev 는 근거 구절을 돌려주지 않고 질문별 확률만 줍니다. 그래서 Jev 에 실제로 보낸 글(위 정리 규칙을 거친 글)을
+  모든 글 태그 행의 `detail.input_text` 에 남깁니다(2026-11-23 결정). 태그 표에 칸을 더하지 않고 판정 근거 JSON(`detail`)에 둡니다.
+- 해당·제외 문장의 근거는 "태그 기준표 — 성격 · 건강정보"(성격 1-3-4·1-3-10, 건강정보 2-0)입니다.
+
+### 15.5 Gold 에 쓰는 방식
+
+| 테이블 (test 는 `_test`) | 글 태그에서 쓰는 방식 |
+|---|---|
+| `gold_animal_tag` | `source = text`(태그를 만든 입력 칸. 사진 태그의 `photo` 와 같은 뜻. 처음 `jev` 였고 2026-11-24 PR 리뷰로 `text` 로 정함, 서비스 DB 로 옮길 때 값 대응 확인 필요). 성격은 태그마다 1행, 건강정보는 1행. `similarity` = 예 확률(성격)·1등 확률(건강) × 100, `source_hash` = `input_hash`, `tagger_version` = `typesafe/jev-1.14@<버전>`, `detail` = 확률 전체(`probs`)·`review`·`request_id`·`input_text`(Jev 에 보낸 가린 글). 교체 범위는 (`source`=text, animal, 공고번호, 작업, 버전, `source_hash`)입니다. 글이 바뀌거나 버전을 올리면 새 행이 더해지고 **이전 글·이전 버전 행은 남습니다**(13.3 이전 버전 보존과 같은 규칙, 2026-11-23). 같은 글을 다시 쓸 때(실패 재시도·끊긴 실행)만 그 글의 행을 교체해 중복을 막습니다. 사진 태그 행은 건드리지 않습니다. 글이 비게 되어도(`NO_TEXT`) 이전 행은 지우지 않습니다 |
+| `gold_inference_log` | 공고 × 작업 × 버전 × `input_hash` 1행 upsert. `status` = `OK`(태그 있음)·`NO_RESULT`(성격 태그 없음)·`FAILED`·`NO_TEXT` |
+| `gold_model_request_log` | Jev 요청 1번 = 1행, `task = text_jev`, `prompt_version = text-personality-v1+text-health-v1`. `subject_key` = 그 글을 쓰는 첫 공고, `raw_answer` = 응답 `answers` 전체(원 확률), `cost_usd` = `usage.cost`. 같은 글을 쓰는 다른 공고는 태그 `detail.request_id` 로 잇습니다 |
+
+- `version` 칸(13.6 버전 레지스트리): 글 태그는 아직 등록 버전(`task@N`)을 쓰지 않아 태그 표·요청 기록 표의 `version` 칸을 비워 둡니다. 13.6의 "기존 결과의 `version` 은 null 로 두고 기존 질문지 키로 계속 읽는다"와 같은 방식이며, 처리 기록의 키 `version` 에는 지금처럼 질문지 버전(`text-personality-v1`, `text-health-v1`)이 들어갑니다. 등록 버전 연결은 15.7 의 후속 작업입니다(2026-11-24).
+- 실행 중간 파일(대상 목록): `gold/_work_test/text_tags/<run_id>/targets.json`. 목록에는 정리한 글(전화번호 가림)이 들어 있습니다.
+- 서비스 DB 에 넣을 활성 태그(현재 태그): 아래를 모두 만족하는 행만 고릅니다. 이전 글·이전 버전 행이 남아 있으므로 이 조건이 꼭 필요합니다.
+  1. 공고 `status_group` 이 보호중
+  2. `prompt_version` 이 작업별 현재 버전(`text_tags.VERSIONS`: `text-personality-v1`, `text-health-v1`)
+  3. `source_hash` 가 그 공고·작업·버전의 처리 기록 중 `gold_updated_at` 이 가장 늦은 행의 `input_hash` 이고, 그 처리 기록 `status` 가 `OK`·`NO_RESULT`
+     (가장 늦은 기록이 `NO_TEXT` 면 현재 글에 내용이 없다는 뜻이라 활성 태그가 없습니다)
+
+### 15.6 실행 (PC, 레포 루트)
+
+```
+python -m rebom.tagging.run_text_tags select --profile <프로필> --limit 50 --targets data/tag_text/targets.json --dry-run
+python -m rebom.tagging.run_text_tags select --profile <프로필> --limit 50 --targets data/tag_text/targets.json
+python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/tag_text/targets.json --local-out data/tag_text/out
+python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/tag_text/targets.json      (Gold test 에 쓰기)
+```
+
+- `--local-out` 이 있으면 Gold 대신 로컬 JSONL 에 씁니다. 빼면 Gold test 표에 씁니다(표는 13.3 대로 이미 있음).
+- 보호중 전체는 요청 약 1.25만 번, 약 $2 입니다(추정). 동시 8개면 약 10분. 전체 적재는 `--batch-size 2000` 이상으로 돌려 저장 횟수(작은 파일)를 줄입니다(기본 200 이면 60번 넘게 나뉨).
+- 2026-11-23 시험 적재: Silver test 보호중 개·고양이 200건 → 요청 159번(같은 글 41건), 태그 384행, 처리 기록 1,538행(NO_TEXT 569 × 2 포함), 실패 0, 비용 $0.026.
+
+### 15.7 남은 일
+
+- Gold 버전 레지스트리 연결: `text_personality@1`·`text_health@1` 을 13.6 대로 등록하고, 태그·처리 기록·요청 기록에 등록 버전을 남기기(사진 태깅과 같은 방식).
+- DAG(`dags/text_tags.py`)와 실행 이미지: 사진 태깅처럼 Silver apply 전환 뒤 연결. 이미지·ECR·네임스페이스·Secret 은 사람이 만듭니다.
+- 같은 글 재사용을 실행 사이로 넓히기(지금은 한 실행 안에서만).
+- 기준 확인: sfe 의 "양호"(칸 이름 없이 붙어 정보 없음으로 판정), "밝은 성격"(활발 여부).

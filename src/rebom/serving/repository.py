@@ -10,6 +10,7 @@ from typing import Any, Literal, Protocol
 
 from rebom.common.config import DataMode, Settings
 from rebom.serving.derive import age_years, sido, weight_kg
+from rebom.serving.tags import MATCH_RANK, TagGroups, count_tags, load_sample_tags, tag_match
 
 # 축종 코드 (docs/rescue_fields.md)
 SPECIES_CODES = {"dog": "417000", "cat": "422400", "etc": "429900"}
@@ -30,19 +31,31 @@ class AnimalQuery:
     age_max: int | None = None  # 이하
     weight_min: float | None = None  # kg, 이상
     weight_lt: float | None = None  # kg, 미만
+    tags: TagGroups = ()  # 사진 태그. 거르지 않고 맞는 아이를 앞에 둔다 (serving/tags.py)
     sort: SortKey = "latest"
     page: int = 1
     size: int = 20
 
 
+@dataclass(frozen=True)
+class SearchPage:
+    total: int
+    rows: list[dict[str, Any]]
+    matched: int | None = None  # 태그를 골랐을 때 모두 맞는(all) 아이 수
+
+
 class AnimalRepository(Protocol):
-    def search(self, query: AnimalQuery) -> tuple[int, list[dict[str, Any]]]: ...
+    def search(self, query: AnimalQuery) -> SearchPage: ...
 
     def get(self, desertion_no: str) -> dict[str, Any] | None: ...
 
     def shelters(self) -> list[tuple[dict[str, Any], int]]: ...
 
     def count(self) -> int: ...
+
+    def tag_counts(self) -> dict[str, int]: ...
+
+    def tags_of(self, desertion_no: str) -> frozenset[str]: ...
 
 
 def _words(q: str | None) -> list[str]:
@@ -105,9 +118,12 @@ def _sort_key(sort: SortKey, today: date):
 
 
 class SampleRepository:
-    """data/sample/ 의 구조동물 샘플을 메모리에 올려 두고 필터링한다."""
+    """data/sample/ 의 구조동물 샘플을 메모리에 올려 두고 필터링한다.
 
-    def __init__(self, path: Path):
+    사진 태그는 같은 폴더의 photo_tags.json(scripts/serve/make_sample_photo_tags.py 가 만든 실제 태거 결과)에서 읽는다.
+    """
+
+    def __init__(self, path: Path, tags_path: Path | None = None):
         with path.open(encoding="utf-8") as f:
             rows = json.load(f)
         # desertionNo 없는 빈 항목은 버린다. 혹시 남아 있을 대표자 실명은 메모리에도 두지 않는다
@@ -117,14 +133,22 @@ class SampleRepository:
             if r.get("desertionNo")
         ]
         self._by_id = {r["desertionNo"]: r for r in self._rows}
+        self._tags = load_sample_tags(tags_path or path.with_name("photo_tags.json"))
 
-    def search(self, query: AnimalQuery, today: date | None = None) -> tuple[int, list[dict[str, Any]]]:
+    def search(self, query: AnimalQuery, today: date | None = None) -> SearchPage:
         today = today or date.today()
         hits = [r for r in self._rows if _matches(r, query, today)]
         key, reverse = _sort_key(query.sort, today)
         hits.sort(key=key, reverse=reverse)
+        matched = None
+        if query.tags:
+            ranked = [(r, tag_match(self.tags_of(r["desertionNo"]), query.tags)) for r in hits]
+            ranked = [(r, m) for r, m in ranked if m is not None]
+            ranked.sort(key=lambda x: MATCH_RANK[x[1]])  # 안정 정렬이라 같은 단계 안에서는 고른 정렬이 유지된다
+            hits = [r for r, _ in ranked]
+            matched = sum(1 for _, m in ranked if m == "all")
         start = (query.page - 1) * query.size
-        return len(hits), hits[start : start + query.size]
+        return SearchPage(len(hits), hits[start : start + query.size], matched)
 
     def get(self, desertion_no: str) -> dict[str, Any] | None:
         return self._by_id.get(desertion_no)
@@ -146,6 +170,14 @@ class SampleRepository:
 
     def count(self) -> int:
         return len(self._rows)
+
+    def tags_of(self, desertion_no: str) -> frozenset[str]:
+        return self._tags.get(desertion_no, frozenset())
+
+    def tag_counts(self) -> dict[str, int]:
+        """태그별 보호중 동물 수 (검색 화면은 보호중만 보여 준다)."""
+        protected = {r["desertionNo"] for r in self._rows if r.get("processState") == "보호중"}
+        return dict(count_tags(tags for no, tags in self._tags.items() if no in protected))
 
 
 def build_repository(settings: Settings) -> AnimalRepository:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from array import array
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
@@ -60,11 +61,11 @@ def test_state_staged_marks_done_skipped_and_read_errors():
         "b": {"status": "BLANK", "attempts": 1, "detail": '{"gray_std": 0.1}'},
         "c": {"status": "READ_ERROR", "attempts": 2, "detail": '{"s3_key": "bronze/x.jpg", "error": "NoSuchKey"}'},
         "d": {"status": "SHA_MISMATCH", "attempts": 1, "detail": '{"s3_key": "bronze/y.jpg"}'},
-        "f": {"status": "FAILED", "attempts": 1, "detail": None},
+        "f": {"status": "BAD_IMAGE", "attempts": 1, "detail": None},
     })
     st = state.staged(current)
     assert set(st.rows) == {("n1", 1), ("n2", 1)} and st.rows[("n1", 1)]["sha256"] == "a"
-    assert st.skipped == {"b": "blank", "f": "failed"}  # 다시 보내지 않음
+    assert st.skipped == {"b": "blank", "f": "bad_image"}  # 다시 보내지 않음
     assert st.read_errors == {"bronze/x.jpg": 2}  # 다시 읽고, 연속 실패 수를 이어 센다 (sha 불일치도 다시 봄)
 
 
@@ -221,6 +222,43 @@ def test_read_error_attempts_count_up_then_ok(monkeypatch, gold):
     rows = [r for r in table(gc.EMBEDDING_INFERENCE_LOG_TABLE) if r["subject_key"] == sha]
     assert [r["status"] for r in rows] == ["OK"]  # 같은 키라 바뀌어 쓰임
     assert sha in {r["subject_key"] for r in table(gc.IMAGE_EMBEDDING_TABLE)}
+
+
+def test_bad_image_is_skipped_until_photo_changes(monkeypatch, gold):
+    """열리지 않는 사진은 BAD_IMAGE 로 남고 같은 sha256 이면 다시 보내지 않는다. 사진이 바뀌면(새 sha256) 새로 보낸다."""
+    from rebom.common import gold_catalog as gc
+
+    _, _, table = gold
+    s3 = make_world()
+    key = "bronze/rescue/images/411300202500002/popfile1.jpg"
+    good = hashlib.sha256(s3.objects[key]).hexdigest()
+    s3.objects[key] = b"not an image"
+    bad = hashlib.sha256(s3.objects[key]).hexdigest()
+    real = mf.latest_photos
+
+    def photos(sha):
+        def latest(manifests):
+            return {k: replace(p, sha256=sha) if p.s3_key == key else p for k, p in real(manifests).items()}
+        return latest
+
+    monkeypatch.setattr(mf, "latest_photos", photos(bad))
+    FakeEmbedder.calls = []
+    embed(monkeypatch, s3)
+    logs = {r["subject_key"]: r for r in table(gc.EMBEDDING_INFERENCE_LOG_TABLE)}
+    assert logs[bad]["status"] == "BAD_IMAGE" and logs[bad]["last_error"].startswith("bad_image:")
+    assert bad not in {r["subject_key"] for r in table(gc.IMAGE_EMBEDDING_TABLE)}
+    calls = list(FakeEmbedder.calls)
+    embed(monkeypatch, s3)
+    assert FakeEmbedder.calls == calls  # 같은 sha256 은 다시 보내지 않음
+
+    s3.objects[key] = jpeg(99)  # 사진이 바뀜
+    new = hashlib.sha256(s3.objects[key]).hexdigest()
+    assert new not in (good, bad)
+    monkeypatch.setattr(mf, "latest_photos", photos(new))
+    embed(monkeypatch, s3)
+    logs = {r["subject_key"]: r["status"] for r in table(gc.EMBEDDING_INFERENCE_LOG_TABLE)}
+    assert logs[new] == "OK" and logs[bad] == "BAD_IMAGE"
+    assert new in {r["subject_key"] for r in table(gc.IMAGE_EMBEDDING_TABLE)}
 
 
 def test_load_reads_gold(monkeypatch, gold):
