@@ -33,7 +33,7 @@
 | `lock.json`까지 함께 고침 | 테스트(A1·A2 지문 고정), 실행 전 레지스트리 비교 |
 | 체중·털색·가리기·태그 이름표 **코드**를 고침 | `golden_sha256` (고정 예시로 만든 카드가 달라짐) |
 | 이름은 A2인데 내용이 다른 등록이 있음 | 등록과 실행을 거부 |
-| 지문이 없는 옛 등록 (`text_embedding@1`) | 계획만 볼 수 있고 쓰기는 거부 |
+| 지문이 없는 옛 등록 (`text_embedding@1`·`@2`) | 계획만 볼 수 있고 쓰기는 거부 |
 
 모두 **모델을 부르기 전에** 멈춥니다. 코드를 일부러 고쳐야 했다면 새 `text_embedding@N`을 등록합니다.
 글이 달라지지 않는 정리(리팩터링)는 지문이 그대로라 막히지 않습니다.
@@ -59,10 +59,10 @@
 4. 테스트와 PR.
 5. `_test`에 등록합니다(사람이 실행).
    ```
-   python -m rebom.embedding.text_version config --template A3 --tag photo_trait=photo_trait@1 --tag text_personality=text-personality-v1 --tag text_health=text-health-v1 --out text_embedding@3.json
-   python -m rebom.embedding.text_version register --env test --version text_embedding@3 --config text_embedding@3.json --profile rebom
+   python -m rebom.embedding.text_version config --template A3 --tag photo_trait=photo_trait@1 --tag text_personality=text-personality-v1 --tag text_health=text-health-v1 --out text_embedding@4.json
+   python -m rebom.embedding.text_version register --env test --version text_embedding@4 --config text_embedding@4.json --profile rebom
    ```
-6. `embed-text --version text_embedding@3 --show 5`로 카드를 확인하고(호출 없음) `--write`로 만듭니다. 이전 버전의 벡터는 그대로 남습니다.
+6. `embed-text --version text_embedding@4 --show 5`로 카드를 확인하고(호출 없음) `--write`로 만듭니다. 이전 버전의 벡터는 그대로 남습니다.
 7. 검색 품질을 비교한 뒤 서비스 버전을 바꿉니다.
 
 ### 파일 형식

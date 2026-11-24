@@ -11,9 +11,9 @@
 
     # 등록용 JSON 만들기 (PC)
     python -m rebom.embedding.text_version config --template A2 --tag photo_trait=photo_trait@1 \\
-        --tag text_personality=text-personality-v1 --tag text_health=text-health-v1 > text_embedding@2.json
+        --tag text_personality=text-personality-v1 --tag text_health=text-health-v1 > text_embedding@3.json
     # 등록 (사람이 실행). 템플릿 이름이 같은데 내용이 다른 등록이 있으면 거부한다
-    python -m rebom.embedding.text_version register --env test --version text_embedding@2 --config text_embedding@2.json --profile rebom
+    python -m rebom.embedding.text_version register --env test --version text_embedding@3 --config text_embedding@3.json --profile rebom
     # 등록된 버전별 템플릿 이력 (읽기만)
     python -m rebom.embedding.text_version history --env test --profile rebom
 """
@@ -97,7 +97,7 @@ def check_template_history(catalog, env, config: dict[str, Any]) -> None:
 
 
 def verify(catalog, env, config: dict[str, Any], *, write: bool) -> bool:
-    """실행 전 검사. 지문이 없는 옛 등록(text_embedding@1)은 계획만 볼 수 있고 쓰지 못한다. 반환: 지문이 있는지."""
+    """실행 전 검사. 지문이 없는 옛 등록(text_embedding@1·@2)은 계획만 볼 수 있고 쓰지 못한다. 반환: 지문이 있는지."""
     if not has_fingerprint(config):
         if write:
             raise card_template.TemplateError(
