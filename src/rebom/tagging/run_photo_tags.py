@@ -239,8 +239,6 @@ def _request_row(target: Target, task: str, run_no: int, result: ChatResult | No
         "requested_at": requested_at,
         "gold_run_id": run_id,
         "dt": requested_at.astimezone(UTC).strftime("%Y-%m-%d"),
-        "request_scope": "single",  # 사진 한 장씩 부른다
-        "item_count": 1,
     }
 
 
