@@ -109,3 +109,179 @@ def write_stage(s3, bucket, prefix, run_id, stage):
         return "ALREADY_EXISTS"
 
     return "CREATED"
+
+
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from uuid import uuid4
+
+
+@contextmanager
+def silver_writer_lock(s3, bucket, environment, run_id):
+    if environment not in ("test", "prod"):
+        raise ValueError("Invalid Silver environment")
+
+    key = (
+        "bench_tmp/b-storage-test/locks/notice-history.lock.json"
+        if environment == "test"
+        else "silver/rebom/locks/notice-history.lock.json"
+    )
+
+    record = {
+        "run_id": run_id,
+        "owner": uuid4().hex,
+        "acquired_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        response = s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(record).encode("utf-8"),
+            ContentType="application/json",
+            IfNoneMatch="*",
+        )
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code")
+        if code in {
+            "PreconditionFailed", "412",
+            "ConditionalRequestConflict", "409",
+        }:
+            raise RuntimeError(
+                f"SILVER_WRITER_LOCKED: {key}"
+            ) from exc
+        raise
+
+    etag = response["ETag"]
+    print("S3_WRITER_LOCK: ACQUIRED", flush=True)
+
+    try:
+        yield
+    finally:
+        s3.delete_object(
+            Bucket=bucket,
+            Key=key,
+            IfMatch=etag,
+        )
+        print("S3_WRITER_LOCK: RELEASED", flush=True)
+
+
+def read_notice_snapshot(s3, bucket, prefix, run_id):
+    journal_path(run_id, ".")
+
+    key = f"{prefix.rstrip('/')}/run_id={run_id}/notice_snapshot.json"
+
+    try:
+        response = s3.get_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code")
+        if code in {"NoSuchKey", "404"}:
+            return None
+        raise
+
+    record = json.loads(response["Body"].read())
+
+    if (
+        record.get("run_id") != run_id
+        or not record.get("notice_table")
+        or type(record.get("notice_snapshot_id")) is not int
+        or record["notice_snapshot_id"] <= 0
+    ):
+        raise RuntimeError("INVALID_NOTICE_SNAPSHOT_EVIDENCE")
+
+    return record
+
+
+def save_notice_snapshot(
+    s3, bucket, prefix, run_id, notice_table, snapshot_id
+):
+    journal_path(run_id, ".")
+
+    if type(snapshot_id) is not int or snapshot_id <= 0:
+        raise ValueError("Invalid snapshot ID")
+
+    if not notice_table:
+        raise ValueError("Notice table is required")
+
+    key = f"{prefix.rstrip('/')}/run_id={run_id}/notice_snapshot.json"
+
+    record = {
+        "run_id": run_id,
+        "notice_table": notice_table,
+        "notice_snapshot_id": snapshot_id,
+    }
+
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(record).encode("utf-8"),
+            ContentType="application/json",
+            IfNoneMatch="*",
+        )
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code")
+
+        if code not in {"PreconditionFailed", "412"}:
+            raise
+
+        existing = read_notice_snapshot(s3, bucket, prefix, run_id)
+
+        if existing != record:
+            raise RuntimeError("NOTICE_SNAPSHOT_CONFLICT") from exc
+
+        return "ALREADY_EXISTS"
+
+    return "CREATED"
+
+
+def ensure_run_order(s3, bucket, prefix, run_id):
+    journal_path(run_id, ".")
+
+    base = prefix.rstrip("/") + "/"
+    pending = []
+    completed = []
+
+    paginator = s3.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(
+        Bucket=bucket,
+        Prefix=base + "run_id=",
+        Delimiter="/",
+    ):
+        for item in page.get("CommonPrefixes", []):
+            path = item["Prefix"]
+            other_run_id = path[len(base):].strip("/").removeprefix("run_id=")
+
+            stage = current_stage(
+                s3, bucket, prefix, other_run_id
+            )
+
+            if stage == "COMPLETED":
+                completed.append(other_run_id)
+            elif stage is not None:
+                pending.append(other_run_id)
+
+    other_pending = [
+        value for value in pending if value != run_id
+    ]
+
+    if other_pending:
+        raise RuntimeError(
+            f"UNFINISHED_SILVER_RUNS: {other_pending}"
+        )
+
+    if run_id in completed:
+        return "COMPLETED_RUN_RETRY"
+
+    newer_or_ambiguous = [
+        value for value in completed
+        if value[:15] >= run_id[:15]
+    ]
+
+    if newer_or_ambiguous:
+        raise RuntimeError(
+            f"STALE_OR_AMBIGUOUS_SOURCE_RUN: {newer_or_ambiguous}"
+        )
+
+    return "ALLOWED"
