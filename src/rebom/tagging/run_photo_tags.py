@@ -563,7 +563,7 @@ def read_silver(catalog, silver_env) -> tuple[list[str], list[dict]]:
         selected_fields=("desertion_no",),
     ).to_arrow().to_pylist()
     dogs = [r["desertion_no"] for r in notices]
-    images = catalog.load_table(silver_env.image_table).scan(
+    images = catalog.load_table(silver_env.photo_table).scan(
         selected_fields=("desertion_no", "image_slot", "original_s3_key", "sha256"),
     ).to_arrow().to_pylist()
     wanted = set(dogs)
