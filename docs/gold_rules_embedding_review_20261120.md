@@ -12,6 +12,7 @@
 고친 내력:
 - v3(11-20): PR #51에 맞춰 칸 이름을 태깅 표와 같게 하고, 실행 표(`gold_embedding_run`)는 만들지 않기로 함.
 - **v4(11-21): 처리 기록·요청 기록도 임베딩 묶음 안에 따로 둠**(`gold_embedding_inference_log`, `gold_embedding_request_log`). 태깅 기록 표는 PR #51 그대로 두고, v3에서 태깅 표에 더하려던 `detail`·`batch_size`는 임베딩 표로 옮김.
+- **v5(11-24): 로그를 다시 합침.** 처리·요청 기록은 태깅과 같은 공용 로그(`gold_inference_log`, `gold_model_request_log`)에 쓰고 `task`로 구분. 아래 본문에서 `gold_embedding_inference_log`·`gold_embedding_request_log`를 따로 둔다는 내용(2.1, 2.3, 7절)은 그때의 결정이며 지금은 `docs/data_contract.md` 13.4와 `docs/gold_log_unification_20261124.md`를 따름.
 
 ---
 
