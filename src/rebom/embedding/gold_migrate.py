@@ -4,10 +4,10 @@
 
 - gold_image_embedding  sha256 마다 1행. 벡터는 Gemini 를 실제로 부른 행(source=api) 중 가장 늦은 실행의 값
                         (다음 실행의 재사용(reuse)·RDS 적재가 쓰던 값과 같다). gold_run_id 는 그 실행.
-- gold_embedding_inference_log  sha256 마다 OK 1행. 빈 사진은 BLANK 1행 + detail {"gray_std", "blank_std"}
+- gold_inference_log(공용 로그, task = image_embedding)  sha256 마다 OK 1행. 빈 사진은 BLANK 1행 + detail {"gray_std", "blank_std"}
                         (Bronze 원본을 다시 읽어 점수를 잰다. 받지 못하면 사유만 남긴다)
 - gold_embedding_canary checks/ 의 확인 파일마다 1행
-- 요청 기록(gold_embedding_request_log)은 옛 실행에 요청별 기록이 없어 옮기지 않는다. 실행 합계는 각 summary.json 에 남아 있다.
+- 요청 기록(gold_model_request_log)은 옛 실행에 요청별 기록이 없어 옮기지 않는다. 실행 합계는 각 summary.json 에 남아 있다.
 
 다시 실행해도 같은 결과다: 이 모델·전처리 버전의 행을 통째로 바꿔 쓴다(overwrite). 다만 표에 옮기는 실행에 없는
 gold_run_id 가 있으면(전환 뒤 DAG 가 쓴 행) 지우지 않도록 멈춘다.
@@ -189,7 +189,7 @@ def write(catalog, env, plan: Plan) -> dict[str, int]:
 
     mid, pv = plan.stats["model"], plan.stats["prompt_version"]
     image_t = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))
-    log_t = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE))
+    log_t = catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE))
     canary_t = catalog.load_table(env.table(gc.EMBEDDING_CANARY_TABLE))
     image_f = image_version_filter(image_t, mid, pv, None)
     log_f = And(EqualTo("task", IMAGE_TASK), EqualTo("version", plan.stats["log_version"]))
@@ -232,7 +232,7 @@ def verify(catalog, env, plan: Plan) -> dict[str, Any]:
             vec_diff += 1
         if runs[i] != want["gold_run_id"]:
             run_diff += 1
-    log_t = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE))
+    log_t = catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE))
     logs = log_t.scan(row_filter=And(EqualTo("task", IMAGE_TASK), EqualTo("version", plan.stats["log_version"])),
                       selected_fields=("status",)).to_arrow().column("status").to_pylist()
     canary_n = catalog.load_table(env.table(gc.EMBEDDING_CANARY_TABLE)).scan(

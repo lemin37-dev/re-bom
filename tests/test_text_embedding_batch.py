@@ -84,9 +84,9 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     assert len(results) == 3
     assert {r["version"] for r in results} == {version}
     assert len({r["source_hash"] for r in results if r["subject_key"] == "1"}) == 2
-    requests = catalog.load_table(gold.table(gc.EMBEDDING_REQUEST_LOG_TABLE)).scan().to_arrow().to_pylist()
+    requests = catalog.load_table(gold.table(gc.REQUEST_LOG_TABLE)).scan().to_arrow().to_pylist()
     assert sorted(r["batch_size"] for r in requests) == [1, 2]
-    logs = catalog.load_table(gold.table(gc.EMBEDDING_INFERENCE_LOG_TABLE)).scan().to_arrow().to_pylist()
+    logs = catalog.load_table(gold.table(gc.INFERENCE_LOG_TABLE)).scan().to_arrow().to_pylist()
     assert len(logs) == 3 and {r["status"] for r in logs} == {"OK"}
 
     from rebom.common.silver_input import load_ready
@@ -135,10 +135,22 @@ def test_gold_text_batch_uses_current_tags_and_only_embeds_changed_cards(tmp_pat
     runs = catalog.load_table(gold.table(gc.RUN_INPUT_TABLE)).scan().to_arrow().to_pylist()
     [candidate_run] = [row for row in runs if row["gold_run_id"] == result["gold_run_id"]]
     assert candidate_run["publish_id"] == "p1"
+    from pyiceberg.expressions import EqualTo
+
+    run_filter = EqualTo("gold_run_id", result["gold_run_id"])
+    requests = catalog.load_table(gold.table(gc.REQUEST_LOG_TABLE)).scan(row_filter=run_filter).to_arrow().to_pylist()
+    logs = catalog.load_table(gold.table(gc.INFERENCE_LOG_TABLE)).scan(row_filter=run_filter).to_arrow().to_pylist()
+    [request] = requests
+    assert (request["task"], request["version"], request["batch_size"]) == (text_batch.TASK, candidate, 2)
+    assert {row["subject_key"] for row in logs} == {"1", "2"}
+    for row in logs:
+        assert (row["task"], row["version"], row["status"]) == (text_batch.TASK, candidate, "OK")
+        assert json.loads(row["detail"])["request_id"] == request["request_id"]
 
     record["status"] = "BLOCKED"
     with pytest.raises(ValueError, match="READY"):
         load_ready(S3(), "test", "publish", "p1")
+
 
 def test_tag_index_accepts_origin_source_and_legacy_jev_only():
     """source 는 출처(photo·text·rule). 글 태그는 바뀔 때까지 jev 도 받고, 다른 출처는 받지 않는다."""

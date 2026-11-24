@@ -78,6 +78,7 @@ def test_select_then_run_with_same_run_id():
         assert args[args.index("--gold-env") + 1] == "test"
     run = tasks["tag_photos"]
     assert run[run.index("--max-photos") + 1] == "{{ params.max_photos }}"
+    assert run[run.index("--concurrency") + 1] == "{{ params.concurrency }}"
     assert "select_targets >> tag_photos" in DAG_FILE.read_text(encoding="utf-8")
 
 

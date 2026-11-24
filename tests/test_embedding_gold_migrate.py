@@ -98,11 +98,12 @@ def test_write_and_verify_idempotent_and_refuses_foreign_rows(monkeypatch, tmp_p
     catalog = SqlCatalog("t", uri=f"sqlite:///{tmp_path}/c.db", warehouse=f"file://{tmp_path}/wh")
     env = gc.GoldEnvironment("unit", "rebom_gold", "_unit", f"file://{tmp_path}/wh/gold")
     gc.create_tables(env, catalog)
-    # 같은 임베딩 처리 기록 표의 다른 작업(글 임베딩) 행은 건드리지 않는다
-    log_t = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE))
+    # 공용 처리 기록의 다른 작업(글 임베딩·태깅) 행은 건드리지 않는다
+    log_t = catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE))
     text_row = {"subject_type": "animal", "subject_key": "1", "task": "text_embedding", "version": "v", "input_hash": "t",
                 "status": "OK", "gold_run_id": "text-run"}
-    log_t.append(gm._table_arrow(log_t, [text_row]))
+    tag_row = dict(text_row, subject_type="photo", task="photo_trait")
+    log_t.append(gm._table_arrow(log_t, [text_row, tag_row]))
 
     assert gm.write(catalog, env, plan) == {"image": len(plan.image), "log": len(plan.logs), "canary": 1}
     first = gm.verify(catalog, env, plan)
@@ -110,9 +111,8 @@ def test_write_and_verify_idempotent_and_refuses_foreign_rows(monkeypatch, tmp_p
     assert first["log_by_status"] == {"BLANK": 1, "OK": len(plan.image)}
     gm.write(catalog, env, plan)  # 다시 해도 같은 결과
     assert gm.verify(catalog, env, plan)["ok"]
-    tasks = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE)).scan().to_arrow().column("task").to_pylist()
-    assert tasks.count("text_embedding") == 1
-    assert catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE)).scan().to_arrow().num_rows == 0  # 태깅 표에는 안 씀
+    tasks = catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE)).scan().to_arrow().column("task").to_pylist()
+    assert tasks.count("text_embedding") == 1 and tasks.count("photo_trait") == 1
 
     # 전환 뒤 DAG 가 쓴 행이 있으면 지우지 않고 멈춘다
     image_t = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))

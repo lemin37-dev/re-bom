@@ -1,6 +1,6 @@
 # Gold 로그 통합: 결과 표는 따로, 로그는 하나로
 
-작성: 2026-11-24 (3차 정리) · 대상: Gold 담당, 태깅(사진·글), 임베딩 · 상태: **방향 확정, 로그 통합 구현 전** (PR #67 병합 뒤 진행. `BAD_IMAGE` 이름 변경만 먼저 PR)
+작성: 2026-11-24 (3차 정리) · 대상: Gold 담당, 태깅(사진·글), 임베딩 · 상태: **방향 확정, 코드 구현함 (표 생성·복사·배포 전)**. `BAD_IMAGE` 이름 변경은 PR #73
 
 > **한 줄 요약**
 > 태그·사진 벡터·글 벡터의 **결과 표는 지금처럼 따로** 두고,
@@ -50,14 +50,14 @@
 | 3 | test 태깅 로그(`NO_PHOTO` 포함) | **이번 범위에서 제외.** 태깅 DAG가 자동화되어 prod로 넘어갈 때 별도로 계획 (5절은 그때 참고) |
 | 4 | 임베딩 `FAILED` 이름 | **`BAD_IMAGE`로 변경** (코드·테스트 수정함, 6절) |
 | 5 | `task` 조건 | 공용 로그를 읽고 교체하는 모든 코드에 넣음 |
-| 6 | 구현 시작 시점 | PR #67 병합 후 |
+| 6 | 구현 시작 시점 | PR #67 병합 후 (11-24 병합됨) |
 | 7 | `batch_size` | 유지 (`request_scope`·`item_count`는 11-23 규칙에 따라 #58에서 되돌려짐) |
 
 ### 2.2 남은 것
 
 | # | 항목 | 제안 | 함께 정할 사람 |
 |---|---|---|---|
-| 1 | 데이터 계약 13.3~13.5, PR #67 문서의 "따로 둔다" 문구 수정 | 이번 통합 PR에서 함께 | Gold |
+| 1 | 데이터 계약 13.3~13.5, `gold_schema_design.md`의 로그 설명 | 통합 코드와 함께 고침. Gold 담당 확인 필요 | Gold |
 | 2 | 묶음 요청의 `subject_key` | 지금처럼 첫 번째 대상 + `batch_size` | Gold, 임베딩, 글 태깅 |
 | 3 | 옛 임베딩 로그 표 삭제 시점 | 전환 뒤 1~2주 보관 후 사람이 삭제 | Gold, 임베딩 |
 
@@ -94,15 +94,15 @@ SELECT task, sum(cost_usd) FROM gold_request_all GROUP BY task;   -- 조회는 �
 
 ## 4. PR #67 글 임베딩과의 관계 [코드]
 
-PR #67(Draft)은 최종 A2 카드의 벡터를 `gold_text_embedding`에 저장합니다. **이 부분은 그대로 둡니다.** 바꿀 것은 로그를 쓰는 곳뿐입니다.
+PR #67(11-24 병합)은 최종 A2 카드의 벡터를 `gold_text_embedding`에 저장합니다. **이 부분은 그대로 둡니다.** 바꿀 것은 로그를 쓰는 곳뿐입니다.
 
-| | PR #67 지금 | 통합 뒤 |
+| | PR #67 | 통합 뒤 |
 |---|---|---|
 | 글 벡터 | `gold_text_embedding` | **변경 없음** |
 | 처리 로그 | `gold_embedding_inference_log` | `gold_inference_log` (`task = text_embedding`) |
 | 요청 로그 | `gold_embedding_request_log` | `gold_model_request_log` (`task = text_embedding`) |
 
-- 고칠 위치: `embedding/text_batch.py`의 로그 표 이름과 데이터 계약 13.4·13.5의 설명
+- 고친 위치: `embedding/text_batch.py`의 로그 표와 데이터 계약 13.4·13.5의 설명
 - PR #67은 공통 요청 로그에 `version`도 더합니다. 통합 표에는 `batch_size`와 `version`이 함께 있어야 합니다.
 - 순서: **PR #67을 먼저 합치고, 그 뒤에 로그를 통합**합니다. PR #72는 #67 위에 쌓여 있습니다. PR #67이 글 임베딩을 prod에 쓰기 전이면 옮길 글 임베딩 로그가 없습니다(현재 test·prod 모두 글 벡터 0행 [실측]).
 
@@ -213,10 +213,10 @@ prod 로그에 "사진 없는 공고 14,828건"이라는 **잘못된 기록**이
 
 | 위치 | 지금 | 바꿀 것 |
 |---|---|---|
-| `tagging/run_photo_tags.py` 읽기 | 조건 없음 (전체) | `task` = `photo_trait`, `photo_breed` |
-| `tagging/run_text_tags.py` 읽기 (`feat/tag-text-jev`) | `subject_type = animal` (글 임베딩도 읽게 됨) | `task` = `text_personality`, `text_health` |
+| `tagging/run_photo_tags.py` 읽기 | 조건 없음 (전체) | `task` = `photo_trait`, `photo_breed` (**반영함**) |
+| `tagging/run_text_tags.py` 읽기 (`feat/tag-text-jev`) | `subject_type = animal` (글 임베딩도 읽게 됨) | `task` = `text_personality`, `text_health` (그 브랜치에서 반영 필요) |
 | `embedding/gold_store.py` 읽기·교체 | `task` 있음 | 변경 없음 |
-| `embedding/text_batch.py` 쓰기 (PR #67) | 키에 `task`를 포함한 upsert | 변경 없음 |
+| `embedding/text_batch.py` 쓰기 | 키에 `task`를 포함한 upsert | 변경 없음 (표만 공용으로) |
 
 지금도 키에 `task`가 있어 결과가 틀리지는 않습니다. 속도도 현재는 문제가 아니며(3만여 행에 0.5~0.8초 [실측]), 구분을 분명히 하고 데이터가 늘 때를 대비하는 것입니다.
 
@@ -280,7 +280,9 @@ ORDER BY 1, 2;
 |---|---|
 | 태깅과 임베딩이 같은 표에 동시에 쓰면 커밋이 충돌. 로컬에서는 자동 재시도로 둘 다 성공했으나 [시험] **Glue에서는 미확인** | 전환 전 test 표에서 확인. 태깅 백필(약 6~7시간 예상)은 03:00 전후를 피함 |
 | 옛 표로 되돌리면 전환 뒤 로그가 빠짐 | 복사 도구에 역방향 포함, 옛 표 1~2주 보관 |
-| 다시 복사하다 새 기록을 덮어씀 | 복사는 **없는 행만 추가** |
+| 다시 복사하다 새 기록을 덮어씀 | **없는 행만 추가**. 처리 기록은 같은 키에서 원본이 더 최신(`gold_updated_at`)일 때만 바꾸고, 대상이 더 최신이면 그대로 둠 |
+| 공용 로그에 칸이 없는 채 배포되면 값이 오류 없이 버려짐 | canary·embed·load가 모델을 부르거나 쓰기 전에 칸을 확인하고 멈춤 |
+| 표를 만들기 전에 배포되면 03:00 실행이 멈춤 (데이터는 안전, 새 사진 벡터만 늦어짐) | **표 생성·복사(4·5번)를 병합 전에** 끝냄 |
 
 ---
 
@@ -288,8 +290,8 @@ ORDER BY 1, 2;
 
 | 순서 | 작업 | 담당 | 확인 |
 |---|---|---|---|
-| 1 | PR #67·#72 병합 | Gold, 태깅 | 병합 완료 |
-| 2 | 코드·테스트·문서 PR: 공용 로그 사용, `task` 조건, 복사 도구 (`BAD_IMAGE`는 수정함) | 임베딩 (태깅 코드는 담당과 확인) | 관련 테스트 통과 |
+| 1 | PR #67 병합 | Gold | ✅ 11-24 |
+| 2 | 코드·테스트·문서: 공용 로그 사용, `task` 조건, 복사 도구 | 임베딩 (태깅 코드는 담당과 확인) | 전체 테스트 통과 |
 | 3 | test 공용 로그에 칸 추가, 복사·동시 쓰기 시험 | 사람 실행 | 행 수·키·비용 일치 |
 | 4 | prod 공용 로그 2개 만들기 | 사람 실행 | 표 있음 |
 | 5 | prod 임베딩 로그 복사 | 사람 실행 | 아래 기준 |
@@ -305,16 +307,62 @@ ORDER BY 1, 2;
 
 하나라도 다르거나 공용 로그에 예상하지 못한 `task`가 있으면 전환하지 않습니다.
 
+### 명령 (PC 관리자 프로필, 사람이 실행)
+
+```
+# 3. test: 칸 추가 → 복사 확인 → 복사
+python -m rebom.common.gold_catalog --env test --create --group log --profile rebom
+python -m rebom.embedding.log_copy --gold-env test --profile rebom
+python -m rebom.embedding.log_copy --gold-env test --profile rebom --write
+
+# 4·5. prod: 공용 로그 만들기 → 복사 확인 → 복사 (6번 직전에 마지막 줄을 한 번 더)
+python -m rebom.common.gold_catalog --env prod --create --group log --profile rebom
+python -m rebom.embedding.log_copy --gold-env prod --profile rebom
+python -m rebom.embedding.log_copy --gold-env prod --profile rebom --write
+
+# 되돌릴 때: 코드 revert 뒤 공용 로그의 임베딩 행을 옛 표로
+python -m rebom.embedding.log_copy --gold-env prod --profile rebom --reverse --write
+```
+
+- `--write` 없이 실행하면 확인만 합니다. 예상하지 못한 `task`, 키 중복, 사라질 칸이 있으면 쓰지 않고 멈춥니다.
+- 복사는 03:00 실행과 겹치지 않게 합니다.
+
 ### 바뀌는 파일
 
 | 구분 | 위치 |
 |---|---|
 | 표 정의 | `common/gold_catalog.py` |
-| 임베딩 | `embedding/gold_store.py`, `gold_migrate.py`, `cli.py`, `text_batch.py`(PR #67) |
-| 태깅 | `tagging/run_photo_tags.py`, `run_text_tags.py`(`feat/tag-text-jev`) |
-| 새 파일 | 로그 복사 도구 |
-| 테스트 | `test_gold_catalog_embedding.py`, `test_embedding_gold_store.py`, `test_embedding_gold_migrate.py`, `tagging/test_gold_sink.py` |
+| 임베딩 | `embedding/gold_store.py`, `gold_migrate.py`, `cli.py`, `text_batch.py` |
+| 태깅 | `tagging/run_photo_tags.py` (`run_text_tags.py`는 `feat/tag-text-jev`에서) |
+| 새 파일 | `embedding/log_copy.py` (로그 복사 도구) |
+| 테스트 | `test_gold_catalog_embedding.py`, `test_embedding_gold_store.py`, `test_embedding_gold_migrate.py`, `test_text_embedding_batch.py`, `test_embedding_log_copy.py`(새 파일) |
 | 문서 | `data_contract.md` 13절, `gold_rules_embedding_review_20261120.md` 2.3 |
+
+---
+
+## 10-1. v0.1 검증용 `_test` 고정 시점 (11-24)
+
+v0.1은 `_test` 표로 **11/23 시점 데이터**를 보고 판단합니다(11/24 결정: v0.1 백필은 11/23 Silver 기준). prod는 매일 적재를 그대로 이어 갑니다. 그래서 **prod 공용 로그 만들기와 통합 코드 병합(10절 4~7번)은 v0.1 뒤로 미룹니다.**
+
+| | prod | 기준 시각 전 (2026-11-24 00:00 KST) | 복사 전 `_test` |
+|---|---|---|---|
+| 사진 벡터 | 37,311 | **36,779** | 36,589 |
+| 처리 로그 | 37,314 | **36,782** | 0 (공용 로그) |
+| 요청 로그 | 538 | **0** (기록이 11-24 03:00부터 시작) | 0 |
+| canary | 5 | **4** | 2 |
+
+Silver 11/23 13:20 스냅샷의 고유 사진 34,581장 중 34,577장이 이 벡터에 있습니다. 나머지 4장은 빈 사진 3장, Silver가 교체 전 사진(v1)을 가리키는 칸 1장입니다(`441374202601281` 1번 칸, Bronze 현재 사진은 v2). [실측]
+
+```
+# 확인만 → 복사 (test 공용 로그의 칸 추가는 11-24에 마침). prod는 읽기만 한다
+python -m rebom.embedding.gold_snapshot --until 2026-11-24T00:00:00+09:00 --profile rebom
+python -m rebom.embedding.gold_snapshot --until 2026-11-24T00:00:00+09:00 --profile rebom --write
+```
+
+- **11-24 복사 완료:** 사진 벡터 36,779 / 처리 로그 36,782 / 요청 로그 0 / canary 4. prod 같은 시점과 빠진 행·더 들어간 행·값 차이 0, 태깅 기존 행 31,594 그대로. [실측] 전체 현황과 상태값 정리는 `docs/embedding_gold_status_20261124.md`
+- 10절의 test `log_copy`(11/21까지)는 이 복사로 대신합니다.
+- Silver test 표는 11/23 뒤에도 갱신됩니다. 태깅·글 임베딩이 11/23 시점만 보려면 읽을 Iceberg 스냅샷을 고정해야 합니다.
+- RDS 사진 벡터는 prod에서 매일 들어가므로 11/23 시점과 다릅니다.
 
 ---
 
@@ -326,7 +374,9 @@ ORDER BY 1, 2;
 | 공통 칸·파티션 비교 | 같음 |
 | 로컬 통합 시험 | 같은 사진의 태깅·임베딩 공존, 임베딩을 다시 써도 태깅 행 유지 |
 | `BAD_IMAGE` 변경 뒤 테스트 | 해당 PR에 기록 |
-| Glue 동시 쓰기, 실제 복사 | **못 함** (쓰기가 필요) |
+| 실제 규모 복사 시험 | prod 로그 37,314행·538행을 로컬로 읽어 와 복사. 차이 0, 비용 합계 $0.062462, 다시 실행해도 추가 0, 1.6초 |
+| AWS에서 복사 도구 확인 모드 | 표·칸을 만들기 전이라 test(`detail` 칸 없음)·prod(표 없음) 모두 쓰지 않고 멈춤 = 의도한 동작 |
+| Glue 동시 쓰기, AWS에 실제 복사 | **못 함** (쓰기가 필요) |
 | 팀 노션의 Gold 확정 규칙 원문 | **못 봄** (접근 권한 없음). 브랜치·PR에 적힌 내용만 확인 |
 
 관련: `docs/data_contract.md` 13절 · `docs/gold_rules_embedding_review_20261120.md` · PR #67 https://github.com/lemin37-dev/re-bom/pull/67

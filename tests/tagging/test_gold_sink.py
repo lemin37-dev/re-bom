@@ -297,15 +297,7 @@ def test_create_tables_adds_missing_columns_to_existing_table(tmp_path):
 
 
 def test_read_inference_log_reads_only_photo_tagging_rows_and_keeps_detail(sink):
-    """처리 기록은 임베딩과 같이 쓰는 공용 로그다. 태깅은 자기 task 행만 읽고, 실패 근거는 detail 에 남는다.
-
-    detail 칸은 공용 로그(_test 는 이미 있음, 2026-11-24 Glue 확인)에만 있어, 여기서는 칸을 더한 표로 본다.
-    """
-    from pyiceberg.types import StringType
-
-    with sink.inference.update_schema() as update:
-        update.add_column("detail", StringType())
-    sink.inference.refresh()
+    """처리 기록은 임베딩과 같이 쓰는 공용 로그다. 태깅은 자기 task 행만 읽고, 실패 근거는 detail 에 남는다."""
     ts = datetime.now(UTC)
     embedding = {
         "subject_type": "photo", "subject_key": "e" * 64, "task": "image_embedding", "version": "m/p",

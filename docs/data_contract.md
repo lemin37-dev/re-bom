@@ -214,7 +214,7 @@
 
 ### 13.0 공용 키 (subject_type, subject_key) [2026-11-20 결정]
 
-Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지**를 두 칸으로 가리킵니다. 사진 태깅·글 태깅·임베딩이 이 키를 같이 씁니다. 처리 기록·요청 기록 테이블은 묶음마다 따로 둡니다(태깅 13.3, 임베딩 13.4. 2026-11-21 결정).
+Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지**를 두 칸으로 가리킵니다. 사진 태깅·글 태깅·임베딩이 이 키를 같이 씁니다. 결과 테이블은 작업별로 따로 두고, 처리 기록·요청 기록은 **태깅·임베딩이 공용 로그 2개를 같이** 씁니다(2026-11-24 결정, `docs/gold_log_unification_20261124.md`). 어떤 작업의 행인지는 `task`로 구분하고, 읽기·교체 조건에 `task`를 반드시 넣습니다.
 
 | `subject_type` | `subject_key` | 쓰는 곳 |
 |---|---|---|
@@ -222,7 +222,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 | `animal` | 공고번호(`desertion_no`) | 글(특이사항) 태깅·글 임베딩, 사진 없음(`NO_PHOTO`) 기록 |
 
 - 사진은 sha256 단위라 **같은 사진이 여러 공고에 올라와도 한 번만 부릅니다.** 공고–사진 연결은 Gold 에 두지 않고 Silver 현재 사진 테이블(`desertion_no`, `image_slot`, `sha256`)에서 합니다.
-- 비용은 요청 기록의 `cost_usd` 에 OpenRouter 가 돌려준 `usage.cost` 를 그대로 넣습니다(태깅 `gold_model_request_log`, 임베딩 `gold_embedding_request_log`. 같은 칸).
+- 비용은 요청 기록의 `cost_usd` 에 OpenRouter 가 돌려준 `usage.cost` 를 그대로 넣습니다(태깅·임베딩 모두 공용 `gold_model_request_log`).
 
 ### 13.1 대상과 다시 태깅하는 조건
 
@@ -260,8 +260,8 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 | 테이블 (test 는 이름 뒤 `_test`) | 한 행 | 쓰는 방식 |
 |---|---|---|
 | `gold_animal_tag` | 대상 × 작업 × 질문지 버전 × 태그 | 같은 대상·같은 질문지 버전으로 다시 태깅했을 때만 (`subject_type`, `subject_key`, `task`, `prompt_version`) 범위의 행을 교체. 사진이 바뀌면 새 sha256 이 새 행이 되고, 질문지 버전을 올려도 이전 행은 남음(이전 버전 보존). 실패한 작업은 교체하지 않음 |
-| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO·READ_ERROR·SHA_MISMATCH·BAD_IMAGE, `attempts`, `tag_count`, `last_error`, `detail`. 임베딩과 같은 공용 로그라 읽을 때 `task` 조건을 넣습니다. `status`·`tag_count` 뜻은 아래 표 |
-| `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분). 한 행 = API 호출 한 번. 사진 태깅은 늘 한 장씩 부르므로 `batch_size` 칸을 두지 않고 1장으로 읽습니다(`request_scope`·`item_count` 는 두지 않음, 11/23 결정) |
+| `gold_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | (`subject_type`, `subject_key`, `task`, `version`, `input_hash`) 로 upsert. 사진은 `input_hash` = sha256. `status` = OK·NO_RESULT·FAILED·NO_PHOTO·READ_ERROR·SHA_MISMATCH·BAD_IMAGE, `attempts`, `tag_count`, `last_error`, `detail`(판정 근거 JSON). 임베딩이 쓰는 값은 13.4. 임베딩과 같은 공용 로그라 읽을 때 `task` 조건을 넣습니다. `status`·`tag_count` 뜻은 아래 표 |
+| `gold_model_request_log` | 모델 요청 한 번 | append 만. 대상은 `subject_type`·`subject_key`. `dt`(요청 UTC 날짜) 파티션. 토큰·비용·지연·공급자·응답 모델·원문 답, `temperature`·`reasoning_effort`, `finish_reason`·`native_finish_reason`(빈 답·안전 차단·잘림 구분). 한 행 = API 호출 한 번. `batch_size` = 한 요청에 보낸 대상 수. 사진 태깅은 늘 한 장씩 불러 비워 두고 1장으로 읽습니다(`request_scope`·`item_count` 는 두지 않음, 11/23 결정) |
 
 `gold_inference_log` 의 `status`·`tag_count` 뜻(OK·NO_RESULT 는 둘 다 끝난 것으로 보고 다시 부르지 않습니다):
 
@@ -286,7 +286,7 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 
 - 위치: test `s3://rebom-data-559987919299/gold/_test/iceberg/`, prod `s3://rebom-data-559987919299/gold/iceberg/`. 실행 중간 파일(대상 목록)은 `gold/_work_test/photo_tags/<run_id>/targets.json`.
 - 테이블 만들기는 클라우드 리소스를 만드는 일이라 사람이 직접 실행합니다: `python -m rebom.common.gold_catalog --env test --create --profile rebom`. 이미 있는 테이블에는 빠진 칸을 더합니다. 칸이 없으면 새 값이 소리 없이 버려지므로, 칸을 늘린 코드를 돌리기 전에 먼저 실행합니다. `subject_type`·`subject_key` 가 없는 옛 테이블(11/20 이전 `desertion_no` 키)은 칸 추가로 맞추지 않고 멈추며, test 는 `--create --recreate` 로 지우고 다시 만듭니다(옛 행은 버림, prod 는 거부). 파드(노드 역할)는 읽기·쓰기만 합니다.
-- 요청 기록 표는 작업 묶음별로 따로 둡니다. 태깅은 `gold_model_request_log`, 임베딩은 `gold_embedding_request_log`(공통 칸 + `batch_size`, 13.4).
+- 처리·요청 기록은 임베딩과 같이 쓰는 공용 로그입니다(11-24 결정). 만들 때는 `--group log`, 태그 표는 `--group tagging` 입니다. 사진 태깅은 처리 기록에서 자기 `task`(`photo_trait`·`photo_breed`) 행만 읽습니다.
 - 서비스 DB 적재(pgvector 쪽 태그 테이블)는 별도 작업입니다.
 - 이전 버전 보존(2026-11-20 결정): `gold_animal_tag` 는 사진이 바뀌거나 질문지 버전을 올려도 이전 행을 지우지 않습니다. 오래된 버전 정리는 공고·이미지 정리 기준이 정해진 뒤에 따로 합니다.
 - 서비스 DB 에 넣을 행(활성 태그): Silver 에서 공고별 대표 사진을 구해 사진 태그와 잇습니다. 아래 조건을 모두 만족하는 행만 고릅니다.
@@ -296,17 +296,17 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 남아 있는 태그: `gold_animal_tag` 는 이전 사진·이전 버전·보호가 끝난 공고의 사진 태그를 지우지 않습니다. 위 조건으로 걸러서 씁니다.
 
 
-### 13.4 임베딩 결과와 전용 로그 [현재 구현]
+### 13.4 임베딩 묶음 [2026-11-20 결정, 11-21 test·prod 표 만들고 옛 parquet 옮김, 11-23 DAG 쓰기 전환, 11-24 공용 로그로 통합]
 
-사진·글 임베딩 결과도 Iceberg `rebom_gold` 로 옮깁니다. 태깅(Jev·vLLM)과는 다른 표 묶음이고, **처리 기록·요청 기록도 임베딩 묶음 안에 따로** 둡니다(11-21 결정). 칸 이름은 태깅 표를 따릅니다. 기존 쓰기 경로는 전환 전까지 아래 표를 사용합니다. 전환 후 쓰기 규격은 13.5절을 따릅니다. 표 정의는 `src/rebom/common/gold_catalog.py`, 검토 문서는 `docs/gold_rules_embedding_review_20261120.md`.
+사진·글 임베딩 결과도 Iceberg `rebom_gold` 로 옮깁니다. 결과 표는 태깅(Jev·vLLM)과 따로 두고, **처리 기록·요청 기록은 태깅과 같은 공용 로그**(13.3)에 씁니다(11-24 결정. 11-21 에 나눴던 것을 합침). 칸 이름은 태깅 표를 따릅니다. 표 정의는 `src/rebom/common/gold_catalog.py`, 검토 문서는 `docs/gold_rules_embedding_review_20261120.md`.
 
 | 테이블 (test 는 이름 뒤 `_test`) | 한 행 | 키 (upsert) |
 |---|---|---|
 | `gold_image_embedding` | 사진 1장(sha256) × 모델 × 전처리 버전 | `subject_type`(photo), `subject_key`(sha256), `task`(image_embedding), `model`, `prompt_version` |
 | `gold_text_embedding` | 공고 글 카드 × 모델 × 템플릿 버전 × 카드 해시 | `subject_type`(animal), `subject_key`(공고번호), `task`(text_embedding), `model`, `prompt_version`, `source_hash` |
 | `gold_embedding_canary` | 모델 변화 확인(canary) 1번 | `gold_run_id`(`canary-<시각>`) |
-| `gold_embedding_inference_log` | 대상 × 작업 × 버전 × 입력 해시 | `gold_inference_log` 와 같은 칸·키 + `detail` |
-| `gold_embedding_request_log` | 요청 1번 (매일 실행은 사진 1장씩이라 = 사진 1장) | `gold_model_request_log` 와 같은 칸(append, `dt` 파티션) + `batch_size` |
+| `gold_inference_log` (공용) | 대상 × 작업 × 버전 × 입력 해시 | 13.3 과 같음. 임베딩은 `task` = `image_embedding`·`text_embedding`, `detail` 을 채움 |
+| `gold_model_request_log` (공용) | 요청 1번 (매일 실행은 사진 1장씩이라 = 사진 1장) | 13.3 과 같음(append, `dt` 파티션). `batch_size` 를 채움 |
 
 - `model` = 모델 이름과 차원, 예 `gemini-embedding-2:768`(코드의 `MODEL_KEY`). 이름의 숫자가 모델 버전이고, 새 버전(`gemini-embedding-3`)은 다른 모델이라 따로 백필·검증·전환합니다. 같은 이름 안의 변화는 canary 로 봅니다. 파티션은 `model`.
 - `prompt_version`: 사진은 전처리 버전(`exif-rgb-max1024-jpeg90`), 글은 템플릿 버전(`A2`).
@@ -314,20 +314,21 @@ Gold 모델 결과 테이블은 공고번호 대신 **무엇을 처리했는지*
 - 글은 모델에 넣은 가린 카드 본문을 `input_text` 로 남깁니다(글 벡터 성능 평가에 씀). 카드를 만든 Silver 행의 `source_updated_at_raw` 를 `source_update_dt` 로 둡니다. 카드가 바뀌면 새 행이 생기고 이전 행은 남습니다.
 - 벡터는 `embedding list<float>`(768개, float32).
 - 공고–사진 연결(`desertion_no`, `image_slot`)은 Gold 에 두지 않습니다(13.0). 지금은 Bronze 사진 manifest, Silver 운영 뒤에는 Silver 현재 사진 테이블에서 합니다. RDS `image_embedding` 은 지금처럼 칸당 1행입니다.
-- 기록 표를 나눈 이유: 임베딩만 쓰는 칸(`detail`, `batch_size`)을 태깅 표에 더하지 않고, 묶음마다 표를 따로 만들고 고칠 수 있게 하기 위해서입니다. 칸 이름·타입은 태깅 기록 표와 같아서, 전체 비용 등은 Athena 에서 두 표를 `UNION ALL` 로 합쳐 봅니다.
-- 처리 기록(`gold_embedding_inference_log`): `version` = `<model>/<prompt_version>`(태깅 처리 기록과 같은 키라 모델 칸이 없어서 모델을 함께 넣음). `status` = OK·BLANK·SHA_MISMATCH·READ_ERROR·BAD_IMAGE(열리지 않는 파일). READ_ERROR·SHA_MISMATCH 는 다음 실행에서 다시 시도하고, BLANK·BAD_IMAGE 는 같은 sha256 이면 다시 보내지 않습니다(사진이 바뀌어 sha256 이 달라지면 새로 보냄). 태깅의 FAILED(다시 시도하는 실패)와 뜻이 달라 이름을 나눴습니다(11-24). 빈 사진은 `detail` 에 판정 점수 `{"gray_std": …, "blank_std": 4.0}` 를 남겨, 기준을 바꿔도 사진을 다시 받지 않고 다시 판정할 수 있게 합니다.
-- 요청 기록(`gold_embedding_request_log`) [11-23 결정]: 태깅 요청 기록과 같은 뜻으로 **요청 1번 = 1행**입니다. 매일 실행(11-24 03:00부터)은 사진을 1장씩 보내 요청 1행 = 사진 1장이고, `batch_size` = 1, 비용·토큰은 요청 값 그대로입니다(장당 과금이라 묶어도 비용은 같음, 11-21 실측 장당 $0.000116). 전체 재임베딩처럼 시간이 중요할 때만 `--image-batch 6` 으로 묶고, 그때도 요청 1행(`subject_key` = 첫 사진, `batch_size` = 장수, 비용은 요청 전체)이며 사진 → 요청 연결은 처리 기록 OK 행의 `detail` `{"request_id", "batch_size"}` 로 합니다. canary 도 1장씩 6번 보내 6행입니다(`gold_run_id = canary-<시각>`).
+- 로그를 합친 이유(11-24): 비용과 처리 상태를 한 표에서 보고 한 규칙으로 관리하기 위해서입니다. `detail`·`batch_size` 는 비울 수 있는 칸입니다. 이 칸이 없는 표에 쓰면 값이 버려지므로, 임베딩은 모델을 부르기 전에 확인하고 멈춥니다(`gold_store.load_logs`).
+- 옛 임베딩 로그 `gold_embedding_inference_log`·`gold_embedding_request_log` 는 더 쓰지 않고 만들지도 않습니다. `python -m rebom.embedding.log_copy --gold-env prod --profile rebom [--write]` 로 공용 로그에 복사하고(사람이 실행), 보관한 뒤 사람이 지웁니다. 되돌릴 때는 `--reverse` 입니다.
+- 처리 기록(`gold_inference_log`, `task` = `image_embedding`): `version` = `<model>/<prompt_version>`(태깅 처리 기록과 같은 키라 모델 칸이 없어서 모델을 함께 넣음). `status` = OK·BLANK·SHA_MISMATCH·READ_ERROR·BAD_IMAGE(열리지 않는 파일). READ_ERROR·SHA_MISMATCH 는 다음 실행에서 다시 시도하고, BLANK·BAD_IMAGE 는 같은 sha256 이면 다시 보내지 않습니다(사진이 바뀌어 sha256 이 달라지면 새로 보냄). 태깅의 FAILED(다시 시도하는 실패)와 뜻이 달라 이름을 나눴습니다(11-24). 빈 사진은 `detail` 에 판정 점수 `{"gray_std": …, "blank_std": 4.0}` 를 남겨, 기준을 바꿔도 사진을 다시 받지 않고 다시 판정할 수 있게 합니다.
+- 요청 기록(`gold_model_request_log`) [11-23 결정]: 태깅 요청 기록과 같은 뜻으로 **요청 1번 = 1행**입니다. 매일 실행(11-24 03:00부터)은 사진을 1장씩 보내 요청 1행 = 사진 1장이고, `batch_size` = 1, 비용·토큰은 요청 값 그대로입니다(장당 과금이라 묶어도 비용은 같음, 11-21 실측 장당 $0.000116). 전체 재임베딩처럼 시간이 중요할 때만 `--image-batch 6` 으로 묶고, 그때도 요청 1행(`subject_key` = 첫 사진, `batch_size` = 장수, 비용은 요청 전체)이며 사진 → 요청 연결은 처리 기록 OK 행의 `detail` `{"request_id", "batch_size"}` 로 합니다. canary 도 1장씩 6번 보내 6행입니다(`gold_run_id = canary-<시각>`).
 - 쓰는 곳(11-23 전환): `embed --gold-env prod` 가 결과·처리 기록·요청 기록 표에 쓰고, `load --gold-env prod` 가 결과 표를 읽어 RDS 에 넣고, `canary --gold-env prod` 가 canary 표와 요청 기록 표에 남깁니다(`src/rebom/embedding/gold_store.py`). embed 는 되돌릴 때를 위해 S3 parquet 도 같이 씁니다(읽지 않음). 처리 기록의 `READ_ERROR` 는 `detail` 에 Bronze 키를 두고 `attempts` 로 연속 실패 수를 셉니다.
 - 환경: DAG 매일 실행은 **prod 에만** 씁니다. test 는 표 구조·옮기기·조회 확인용이고 DAG 가 쓰지 않습니다. 임베딩 입력은 Bronze manifest 라 Silver prod 와 관계없이 Gold prod 를 만들 수 있습니다.
-- 표 만들기(사람이 실행): test `python -m rebom.common.gold_catalog --env test --create --profile rebom`, prod `python -m rebom.common.gold_catalog --env prod --create --group embedding --profile rebom`(임베딩 묶음 표 5개만. 태깅 표는 만들거나 바꾸지 않음).
+- 표 만들기(사람이 실행): test `python -m rebom.common.gold_catalog --env test --create --profile rebom`, prod 는 묶음별로 `python -m rebom.common.gold_catalog --env prod --create --group log --profile rebom`(공용 로그 2개), `--group embedding`(임베딩 결과 표 3개). 다른 묶음의 표는 만들거나 바꾸지 않습니다.
 - 종료 공고(11-20 결정): 종료 뒤 **30일**이 지나면 `load` 가 RDS 벡터를 지웁니다. Bronze·Gold 에는 남아 있어 복귀하면 Gemini 를 다시 부르지 않고 다시 넣습니다. RDS 쓰기라 승인 뒤에 켭니다.
 - 활성 버전: 코드 상수(`gemini.MODEL`·`DEFAULT_DIM`, `prep.PREP_VERSION`, 글 템플릿). 바꾸면 PR 로 남깁니다.
 
-### 13.5 Gold 공용 기록 스키마 [합의됨 · 전환 예정]
+### 13.5 Gold 공용 기록 스키마
 
-태그·사진 벡터·글 벡터는 각 결과 테이블에 저장합니다. 공용 규격 전환 후에는 태깅·임베딩·Canary의 처리 상태를 `gold_inference_log`에, API 호출당 한 행을 `gold_model_request_log`에 저장합니다. 조회와 쓰기 경로를 함께 전환하며, 기존 호출 이력과 대상별 요청 연결을 보존합니다.
+태그·사진 벡터·글 벡터는 각 결과 테이블에 저장합니다. 태깅·임베딩의 처리 상태를 `gold_inference_log`에, API 호출당 한 행을 `gold_model_request_log`에 저장합니다. 조회와 쓰기 경로를 함께 전환하며, 기존 호출 이력과 대상별 요청 연결을 보존합니다.
 
-Canary 전용 테이블에는 점검 벡터와 식별 정보를 둡니다. 점검 상태는 전용 `task`로 공용 처리 로그에 실행별로 남기고, `gold_run_id`로 벡터와 호출을 연결합니다. 임베딩에서 열 수 없는 사진의 상태는 `BAD_IMAGE`로 구분합니다. 태깅의 `FAILED`는 재시도 기준이 있는 별도 상태입니다.
+Canary 점검 결과는 전용 테이블에 저장하고 공용 요청 로그의 호출 기록과 `gold_run_id`로 연결합니다. 점검 상태를 공용 처리 로그로 옮기는 것은 후속 작업입니다. 임베딩에서 열 수 없는 사진의 상태는 `BAD_IMAGE`로 구분합니다. 태깅의 `FAILED`는 재시도 기준이 있는 별도 상태입니다.
 
 태깅·임베딩의 대상은 Silver에서 고릅니다. 사진은 Silver 현재 사진에 기록된 S3 키로 Bronze 원본을 읽습니다. 사진 임베딩에서 manifest를 직접 읽는 방식은 임시입니다.
 
@@ -350,7 +351,7 @@ Canary 전용 테이블에는 점검 벡터와 식별 정보를 둡니다. 점�
 **호출별 요청 기록 [11/23 결정]**
 
 - 호출당 한 행에 비용·토큰·지연을 기록합니다. 사진 태깅은 한 장씩 호출합니다. 임베딩은 매일 한 장씩 보내고 재임베딩에서 최대 여섯 장을 묶을 수 있습니다.
-- 임베딩 요청은 `subject_type=photo`, `subject_key=첫 사진의 SHA-256`, `batch_size=실제 전송 수`를 저장합니다. 사진별 처리 행의 `detail.request_id`로 해당 호출을 연결합니다. 태깅 요청 로그는 `batch_size`가 없으므로 한 장으로 해석합니다.
+- 임베딩 요청은 `subject_type=photo`, `subject_key=첫 사진의 SHA-256`, `batch_size=실제 전송 수`를 저장합니다. 사진별 처리 행의 `detail.request_id`로 해당 호출을 연결합니다. 사진 태깅은 `batch_size`를 비우므로 한 장으로 해석합니다(공용 로그, 11-24).
 - 두 요청 로그의 기존 `response_model`과 `provider`는 응답에서 확인한 값이 있을 때 기록합니다. SDK 재시도를 별도 호출로 집계하는 정책은 후속 협의 사항입니다.
 
 ### 13.6 Gold 버전 레지스트리
@@ -369,7 +370,7 @@ Canary 전용 테이블에는 점검 벡터와 식별 정보를 둡니다. 점�
 
 ### 13.7 Gold 실행 입력
 
-**검증 범위** · AWS 테스트 발행본 `silver_20261124T030012-f65718`을 직접 지정해 S3 READY JSON을 읽고, 공고 스냅샷 `5620324469304075651`과 현재 사진 스냅샷 `800755379067985557`에서 각각 샘플 1행을 조회했습니다. 같은 발행본으로 사진 외형·Jev 성격·Jev 건강 태그가 모두 포함된 A2 카드 2건을 Gemini로 임베딩했습니다. Gold test에서 카드 본문과 768차원 벡터 2건 및 `gold_run_id` → `publish_id` 연결을 조회해 확인했습니다. 검증 실행 ID는 `text-737c35ecc0d64f5794b454e01ee8776c`입니다.
+**검증 범위** · AWS 테스트 발행본 `silver_20261124T030012-f65718`을 직접 지정해 S3 READY JSON을 읽고, 공고 스냅샷 `5620324469304075651`과 현재 사진 스냅샷 `800755379067985557`에서 각각 샘플 1행을 조회했습니다. 같은 발행본으로 사진 외형·Jev 성격·Jev 건강 태그가 모두 포함된 A2 카드 2건을 Gemini로 임베딩했습니다. Gold test에서 카드 본문과 768차원 벡터 2건 및 `gold_run_id` → `publish_id` 연결을 조회해 확인했습니다. 검증 실행 ID는 `text-737c35ecc0d64f5794b454e01ee8776c`입니다. 이 실행은 #74 통합 전 AWS 검증입니다. #74 통합 뒤에는 공용 처리·요청 로그와 실행 입력의 연결을 로컬 테스트로 검증합니다.
 
 **자동화 전 적용할 기준**
 

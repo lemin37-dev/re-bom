@@ -1,9 +1,9 @@
 """매일 사진 임베딩의 Gold 표 읽기·쓰기. embed·load·canary 에 --gold-env 를 주면 S3 parquet 대신 이 표가 원본이다.
 
-규칙: docs/data_contract.md 13.4, 표 정의: rebom.common.gold_catalog (임베딩 묶음).
+규칙: docs/data_contract.md 13.4, 표 정의: rebom.common.gold_catalog. 처리·요청 기록은 태깅과 같이 쓰는 공용 로그다.
 
 - 읽기 (read_state): gold_image_embedding 에서 이 모델·전처리 버전의 sha256 → 벡터,
-  gold_embedding_inference_log 에서 다시 보내지 않을 사진(BLANK·BAD_IMAGE)과 다시 읽을 사진(READ_ERROR).
+  gold_inference_log(task = image_embedding) 에서 다시 보내지 않을 사진(BLANK·BAD_IMAGE)과 다시 읽을 사진(READ_ERROR).
   State.staged(current) 가 그 내용을 embed·load 가 쓰던 staging.Staged 모양으로 바꿔 준다(계획 코드는 그대로).
 - 쓰기 (write_run): embed 실행 1번의 결과. 요청 기록 append → 결과 표·처리 기록은 이 사진들만 교체(overwrite).
   같은 실행을 다시 써도 결과가 같다.
@@ -124,11 +124,30 @@ def image_version_filter(table, mid: str, prep_version: str, version: str | None
     return previous
 
 
+class LogSchemaError(RuntimeError):
+    """공용 로그에 임베딩이 쓰는 칸이 없다. 그대로 쓰면 값이 오류 없이 버려진다."""
+
+
+def load_logs(catalog, env):
+    """(처리 기록 표, 요청 기록 표). 임베딩 칸이 없으면 모델을 부르거나 쓰기 전에 멈춘다."""
+    from rebom.common import gold_catalog as gc
+
+    tables = []
+    for base, column in ((gc.INFERENCE_LOG_TABLE, "detail"), (gc.REQUEST_LOG_TABLE, "batch_size")):
+        table = catalog.load_table(env.table(base))
+        if not any(f.name == column for f in table.schema().fields):
+            raise LogSchemaError(f"{env.table(base)}: {column} 칸이 없습니다. "
+                                 f"gold_catalog --env {env.name} --create --group log 를 먼저 실행해 주세요.")
+        tables.append(table)
+    return tuple(tables)
+
+
 def read_state(catalog, env, model: str, dim: int, prep_version: str, *, version: str | None = None) -> State:
     from pyiceberg.expressions import And, EqualTo
 
     from rebom.common import gold_catalog as gc
 
+    inference_log, _ = load_logs(catalog, env)
     mid = model_id(model, dim)
     image_table = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))
     image = image_table.scan(
@@ -136,7 +155,7 @@ def read_state(catalog, env, model: str, dim: int, prep_version: str, *, version
         selected_fields=("subject_key", "embedding"),
     ).to_arrow()
     state = State(vectors=dict(zip(image.column("subject_key").to_pylist(), vectors_of(image))))
-    logs = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE)).scan(
+    logs = inference_log.scan(
         row_filter=And(EqualTo("task", IMAGE_TASK), EqualTo("version", version or log_version(mid, prep_version))),
         selected_fields=("subject_key", "status", "attempts", "detail"),
     ).to_arrow().to_pylist()
@@ -192,32 +211,32 @@ def _scope(version_filter, rows: Iterable[dict]):
 
 def write_run(catalog, env, *, mid: str, prep_version: str, images: list[dict], logs: list[dict],
               requests: list[dict], version: str | None = None) -> dict[str, int]:
-    """요청 기록(비용) 먼저 append, 그다음 결과·처리 기록을 이 사진들 범위만 교체한다."""
+    """요청 기록(비용) 먼저 append, 그다음 결과·처리 기록을 이 사진들 범위만 교체한다.
+    처리 기록은 공용 로그라 교체 조건에 task 를 넣어(_scope) 태깅·글 임베딩 행을 건드리지 않는다."""
     from pyiceberg.expressions import EqualTo
 
     from rebom.common import gold_catalog as gc
     from rebom.common.gold_version_registry import require_version_column
 
+    inference_log, request_log = load_logs(catalog, env)
     image_table = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE)) if images else None
-    request_table = catalog.load_table(env.table(gc.EMBEDDING_REQUEST_LOG_TABLE)) if requests else None
     if version is not None:
-        for table in (image_table, request_table):
+        for table in (image_table, request_log if requests else None):
             if table is not None:
                 require_version_column(table)
         images = [row | {"version": version} for row in images]
         logs = [row | {"version": version} for row in logs]
         requests = [row | {"version": version} for row in requests]
 
-    if request_table is not None:
-        request_table.append(table_arrow(request_table, requests))
+    if requests:
+        request_log.append(table_arrow(request_log, requests))
     if image_table is not None:
         image_table.overwrite(
             table_arrow(image_table, images, vector=True),
             overwrite_filter=_scope(image_version_filter(image_table, mid, prep_version, version), images),
         )
     if logs:
-        t = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE))
-        t.overwrite(table_arrow(t, logs), overwrite_filter=_scope(
+        inference_log.overwrite(table_arrow(inference_log, logs), overwrite_filter=_scope(
             EqualTo("version", version or log_version(mid, prep_version)), logs,
         ))
     return {"image": len(images), "log": len(logs), "request": len(requests)}
@@ -229,8 +248,8 @@ def write_canary(catalog, env, row: dict, requests: list[dict]) -> dict[str, int
     from rebom.common import gold_catalog as gc
 
     if requests:
-        t = catalog.load_table(env.table(gc.EMBEDDING_REQUEST_LOG_TABLE))
-        t.append(table_arrow(t, requests))
+        _, request_log = load_logs(catalog, env)
+        request_log.append(table_arrow(request_log, requests))
     t = catalog.load_table(env.table(gc.EMBEDDING_CANARY_TABLE))
     t.overwrite(table_arrow(t, [row]), overwrite_filter=EqualTo("gold_run_id", row["gold_run_id"]))
     return {"canary": 1, "request": len(requests)}

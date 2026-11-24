@@ -1,8 +1,8 @@
 """Gold 임베딩 묶음 표 (11-20 결정): 로컬 SQLite 카탈로그 + 임시 폴더로 확인한다(AWS 없음).
 
 - 사진 벡터는 sha256(subject_key) × 모델 × 전처리 버전당 한 행, 768차원 list<float> 그대로 읽힌다.
-- --group embedding 은 임베딩 묶음 표만 만들고 태깅 묶음 표는 만들거나 바꾸지 않는다.
-- 임베딩 처리·요청 기록 표는 태깅 기록 표와 같은 칸 + detail·batch_size (11-21 결정, UNION ALL 가능).
+- --group embedding 은 임베딩 결과 표만 만들고 태깅 결과·공용 로그는 만들거나 바꾸지 않는다.
+- 처리·요청 기록은 태깅·임베딩이 같이 쓰는 공용 로그 2개다 (11-24 결정). 옛 임베딩 로그는 만들지 않는다.
 """
 from datetime import UTC, datetime
 
@@ -36,15 +36,17 @@ def test_group_embedding_creates_only_embedding_tables(world):
     made = gc.create_tables(env, catalog, group="embedding")
     assert sorted(made) == sorted(f"만듦 {env.table(b)}" for b in gc.GROUPS["embedding"])
     names = {".".join(t) for t in catalog.list_tables(env.database)}
-    assert not {env.table(b) for b in gc.GROUPS["tagging"]} & names
-    assert not set(gc.GROUPS["tagging"]) & set(gc.GROUPS["embedding"])  # 묶음끼리 겹치는 표가 없다
-    # 태깅 묶음을 나중에 만들면 태깅 표 3개만 새로 생긴다. canary 표는 대상 칸이 없어도 옛 스키마로 보지 않는다
-    assert sorted(gc.create_tables(env, catalog, group="tagging")) == sorted(
-        f"만듦 {env.table(b)}" for b in gc.GROUPS["tagging"])
-    assert gc.create_tables(env, catalog) == [
-        f"만듦 {env.table(gc.RUN_INPUT_TABLE)}",
-        f"만듦 {env.table(gc.VERSION_REGISTRY_TABLE)}",
-    ]
+    assert not {env.table(b) for g in ("tagging", "log") for b in gc.GROUPS[g]} & names
+    bases = [b for g in gc.GROUPS.values() for b in g]
+    assert sorted(bases) == sorted(gc.schemas()) and len(bases) == len(set(bases))  # 묶음끼리 겹치거나 빠진 표가 없다
+    # 다른 묶음을 나중에 만들면 그 묶음의 표만 생긴다. canary 표는 대상 칸이 없어도 옛 스키마로 보지 않는다
+    for group in ("tagging", "log"):
+        assert sorted(gc.create_tables(env, catalog, group=group)) == sorted(
+            f"만듦 {env.table(b)}" for b in gc.GROUPS[group])
+    for group in ("execution", "registry"):
+        assert gc.create_tables(env, catalog, group=group) == [
+            f"만듦 {env.table(b)}" for b in gc.GROUPS[group]
+        ]
     assert gc.create_tables(env, catalog) == []
     with pytest.raises(ValueError, match="UNKNOWN_GOLD_GROUP"):
         gc.create_tables(env, catalog, group="nope")
@@ -117,44 +119,59 @@ def test_text_embedding_keeps_masked_card_and_history(world):
     assert rows[0]["input_text"] == "연락 [번호]"
 
 
-def test_embedding_logs_are_separate_and_union_compatible(world):
-    """11-21 결정: 임베딩은 처리·요청 기록 표를 태깅과 따로 둔다. 칸은 태깅 표와 같고 임베딩 칸만 더한다."""
+def test_shared_logs_have_embedding_columns_and_no_legacy_tables(world):
+    """11-24 결정: 처리·요청 기록은 태깅·임베딩이 같이 쓴다. 임베딩 칸은 비울 수 있고, 옛 임베딩 로그는 만들지 않는다."""
     catalog, env = world
     gc.create_tables(env, catalog)
-    tables = {b: catalog.load_table(env.table(b)) for b in gc.schemas()}
+    inference, request = (catalog.load_table(env.table(b)) for b in (gc.INFERENCE_LOG_TABLE, gc.REQUEST_LOG_TABLE))
+    assert inference.schema().identifier_field_names() == set(gc.INFERENCE_LOG_KEYS)
+    assert [f.name for f in request.spec().fields] == ["dt"]
+    assert not inference.schema().find_field("detail").required
+    assert not request.schema().find_field("batch_size").required and not request.schema().find_field("version").required
+    names = {t[-1] for t in catalog.list_tables(env.database)}
+    assert not names & {gc.LEGACY_EMBEDDING_INFERENCE_LOG_TABLE + env.suffix, gc.LEGACY_EMBEDDING_REQUEST_LOG_TABLE + env.suffix}
 
-    def cols(base):
-        return [(f.name, str(f.field_type)) for f in tables[base].schema().fields]
 
-    inf, einf = cols(gc.INFERENCE_LOG_TABLE), cols(gc.EMBEDDING_INFERENCE_LOG_TABLE)
-    req, ereq = cols(gc.REQUEST_LOG_TABLE), cols(gc.EMBEDDING_REQUEST_LOG_TABLE)
-    assert einf[:len(inf)] == inf and [n for n, _ in einf[len(inf):]] == ["detail"]
-    assert ereq[:len(req)] == req and [n for n, _ in ereq[len(req):]] == ["batch_size"]
-    # 태깅 기록 표는 PR #51 그대로 (임베딩 칸이 없다)
-    assert "detail" not in dict(inf) and "batch_size" not in dict(req)
-    assert tables[gc.EMBEDDING_INFERENCE_LOG_TABLE].schema().identifier_field_names() == set(gc.INFERENCE_LOG_KEYS)
-    assert [f.name for f in tables[gc.EMBEDDING_REQUEST_LOG_TABLE].spec().fields] == ["dt"]
+def test_existing_tagging_logs_get_embedding_columns(world):
+    """이미 있는 태깅 로그(되돌린 request_scope·item_count 가 남은 표 포함)에 칸만 더하고 행은 그대로 둔다."""
+    from pyiceberg.schema import Schema
+    from pyiceberg.types import IntegerType, NestedField, StringType
 
-    ts = datetime.now(UTC)
-    log = tables[gc.EMBEDDING_INFERENCE_LOG_TABLE]
-    log.upsert(_arrow(log, [{
-        "subject_type": "photo", "subject_key": SHA, "task": "image_embedding",
-        "version": "gemini-embedding-2:768/exif-rgb-max1024-jpeg90", "input_hash": SHA, "status": "BLANK",
-        "attempts": 1, "tag_count": None, "last_error": None, "gold_run_id": "r1", "gold_updated_at": ts,
-        "detail": '{"gray_std": 1.2, "blank_std": 4.0}',
-    }]), join_cols=list(gc.INFERENCE_LOG_KEYS))
-    assert log.scan().to_arrow().to_pylist()[0]["detail"].startswith('{"gray_std"')
-    assert catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE)).scan().to_arrow().num_rows == 0
+    catalog, env = world
+    catalog.create_namespace(env.database)
+    schemas = gc.schemas()
+    inference, spec = schemas[gc.INFERENCE_LOG_TABLE]
+    request, request_spec = schemas[gc.REQUEST_LOG_TABLE]
+    old_inference = Schema(*[f for f in inference.fields if f.name != "detail"], identifier_field_ids=[1, 2, 3, 4, 5])
+    old_request = Schema(*[f for f in request.fields if f.field_id <= 27],
+                         NestedField(28, "request_scope", StringType(), required=False),
+                         NestedField(29, "item_count", IntegerType(), required=False))
+    catalog.create_table(env.table(gc.INFERENCE_LOG_TABLE), schema=old_inference, partition_spec=spec)
+    old = catalog.create_table(env.table(gc.REQUEST_LOG_TABLE), schema=old_request, partition_spec=request_spec)
+    old.append(_arrow(old, [{"request_id": "q", "task": "photo_trait", "cost_usd": 0.1,
+                             "requested_at": datetime.now(UTC), "dt": "2026-11-23"}]))
+    assert gc.create_tables(env, catalog, group="log") == [
+        f"칸 추가 {env.table(gc.INFERENCE_LOG_TABLE)}: detail",
+        f"칸 추가 {env.table(gc.REQUEST_LOG_TABLE)}: batch_size, version"]
+    table = catalog.load_table(env.table(gc.REQUEST_LOG_TABLE))
+    table.append(_arrow(table, [{"request_id": "e", "task": "image_embedding", "cost_usd": 0.2, "batch_size": 1,
+                                 "requested_at": datetime.now(UTC), "dt": "2026-11-24"}]))
+    rows = {r["request_id"]: r for r in table.scan().to_arrow().to_pylist()}
+    assert rows["q"]["batch_size"] is None and rows["e"]["batch_size"] == 1
+    assert rows["e"]["request_scope"] is None and rows["e"]["item_count"] is None  # 남은 칸과 섞이지 않음
+    assert gc.create_tables(env, catalog, group="log") == []
 
 
 def test_group_embedding_does_not_touch_existing_tagging_tables(world):
     """태깅이 먼저 만든 test 표가 있어도 --group embedding 은 그 표를 바꾸지 않는다."""
     catalog, env = world
-    gc.create_tables(env, catalog, group="tagging")
-    before = {b: catalog.load_table(env.table(b)).metadata_location for b in gc.GROUPS["tagging"]}
+    existing = gc.GROUPS["tagging"] + gc.GROUPS["log"]
+    for group in ("tagging", "log"):
+        gc.create_tables(env, catalog, group=group)
+    before = {b: catalog.load_table(env.table(b)).metadata_location for b in existing}
     changed = gc.create_tables(env, catalog, group="embedding")
     assert sorted(changed) == sorted(f"만듦 {env.table(b)}" for b in gc.GROUPS["embedding"])
-    assert {b: catalog.load_table(env.table(b)).metadata_location for b in gc.GROUPS["tagging"]} == before
+    assert {b: catalog.load_table(env.table(b)).metadata_location for b in existing} == before
 
 
 def test_prod_and_test_locations():
