@@ -58,34 +58,18 @@ def stored_rows(conn, model: str, limit: int | None = None) -> list[tuple[str, i
     return [(no, slot, sha, key, parse_vector(vec)) for no, slot, sha, key, vec in conn.execute(sql, params)]
 
 
-HNSW_EF_SEARCH_MIN = 40  # pgvector 기본값
-HNSW_ITERATIVE_SCAN = "relaxed_order"  # 조건으로 걸러져 모자라면 더 훑는다 (pgvector 0.8, RDS 0.8.2)
-
-
-def hnsw_settings(conn, limit: int) -> None:
-    """이번 트랜잭션에만 HNSW 검색 폭을 넓힌다 (2026-11-24 결정, docs/image_search_similarity.md 2절).
-    기본 ef_search(40)는 LIMIT 보다 작으면 결과가 40개로 잘리고, 조건(model 등)으로 거른 뒤 더 모자란다."""
-    conn.execute(
-        "SELECT set_config('hnsw.ef_search', %s, true), set_config('hnsw.iterative_scan', %s, true)",
-        (str(min(max(limit, HNSW_EF_SEARCH_MIN), 1000)), HNSW_ITERATIVE_SCAN),
-    )
-
-
 def nearest(conn, model: str, vector: Sequence[float], k: int = 1) -> list[tuple[str, int, str, float]]:
-    """코사인 거리 순 이웃 (desertion_no, image_slot, sha256, 코사인 유사도).
-    relaxed_order 는 순서가 조금 어긋날 수 있어 받은 뒤 유사도 순으로 다시 정렬한다."""
+    """코사인 거리 순 이웃 (desertion_no, image_slot, sha256, 코사인 유사도)."""
     lit = to_vector_literal(vector)
-    hnsw_settings(conn, k)
     rows = conn.execute(
         f"SELECT desertion_no, image_slot, sha256, 1 - (embedding <=> %s::vector) FROM {TABLE} "
         f"WHERE model = %s ORDER BY embedding <=> %s::vector LIMIT %s",
         (lit, model, lit, k),
     )
-    hits = [(no, slot, sha, float(sim)) for no, slot, sha, sim in rows]
-    return sorted(hits, key=lambda h: (-h[3], h[0], h[1]))
+    return [(no, slot, sha, float(sim)) for no, slot, sha, sim in rows]
 
 
-SEARCH_CANDIDATES = 200  # 공고로 묶기 전에 뽑는 사진 칸 수. 한 공고가 여러 칸을 차지하고 보호중 필터로 빠지는 만큼 넉넉히
+SEARCH_CANDIDATES = 200  # 공고로 묶기 전에 뽑는 사진 칸 수. 보호중 필터로 빠지는 만큼 넉넉히
 
 
 def best_per_notice(hits: Iterable[tuple[str, int, str, float]], k: int,

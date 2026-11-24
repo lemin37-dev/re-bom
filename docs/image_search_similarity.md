@@ -21,7 +21,7 @@
 질의 사진
  → 저장할 때와 같은 전처리(JPEG, 긴 변 1024) → gemini-embedding-2 768 벡터
  → ① 보호중·같은 종 공고의 사진 칸만 (서비스 테이블 animal JOIN)
- → ② 그중 가까운 것 200개 (HNSW, `hnsw.ef_search` ≥ 200 + `hnsw.iterative_scan`)
+ → ② 그중 가까운 것 200개 (HNSW. `hnsw.ef_search` ≥ 200 + `hnsw.iterative_scan` 은 성능 비교 후 적용)
  → ③ 공고별로 묶어 가장 높은 유사도만 남김 (= 공고 점수, 그 칸 = best_slot)
  → ④ 점수 높은 순 정렬 → 상위 k개 공고
 ```
@@ -29,7 +29,8 @@
 - 같은 점수면 앞 칸을 대표로 씁니다.
 - ②에서 200개를 넉넉히 뽑는 이유: 한 공고가 여러 칸을 차지하기 때문입니다.
 - 지금 코드(`store.py`)는 아직 서비스 테이블이 없어 200개를 먼저 뽑은 뒤 파이썬에서 보호중 공고만 남깁니다. `animal` 테이블이 생기면 ①처럼 SQL에서 거릅니다.
-- HNSW는 가까운 순으로 뽑은 뒤 조건을 거르므로, 기본 `ef_search`(40)로는 200개가 채워지지 않거나 고양이처럼 적은 종이 덜 나올 수 있습니다. 그래서 `store.nearest`가 쿼리 앞에 이번 트랜잭션에만 `hnsw.ef_search` = LIMIT(최소 40, 최대 1000)과 `hnsw.iterative_scan = relaxed_order`를 둡니다(`SET LOCAL`과 같은 `set_config(…, true)`, RDS pgvector 0.8.2). `relaxed_order`는 순서가 조금 어긋날 수 있어 받은 뒤 유사도 순으로 다시 정렬합니다.
+- HNSW는 가까운 순으로 뽑은 뒤 조건을 거르므로, 기본 `ef_search`(40)로는 200개가 채워지지 않거나 고양이처럼 적은 종이 덜 나올 수 있습니다. 그래서 쿼리 앞에 `SET LOCAL hnsw.ef_search = 200`과 `SET LOCAL hnsw.iterative_scan = relaxed_order`를 두는 안으로 정했습니다(RDS pgvector 0.8.2).
+- **지금 검색 코드(`store.py`)에는 이 설정을 넣지 않았습니다.** 기본값과 위 설정의 결과 수·지연을 먼저 비교한 뒤 적용합니다(11/24).
 
 ## 3. 예시
 

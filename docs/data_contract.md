@@ -132,7 +132,7 @@
     - 글(텍스트) 임베딩도 같은 구조(`gold/text_embedding/…`, 카드 해시 기준)로 합니다. 글도 사진과 같은 모델(`gemini-embedding-2`, 768)을 쓰고, 검색에서는 순위로 합칩니다. RDS 테이블 초안은 `db/migrations/002_text_embedding.sql`(`text_embedding`, 기본키 공고·`text_kind`·`model_key`, 아직 적용 안 함). 자세한 계획은 `docs/image_embedding_pipeline.md` 10절.
   - **키**: (`desertion_no`, `image_slot`, `model`). 같은 칸의 sha256이 바뀌면 그 행을 덮어씁니다(과거 버전 벡터는 남기지 않음).
   - **칼럼**: `photo_version`, `sha256`, `s3_key`(원본 키), `photo_run_id`, `embedding vector(768)`, `embedded_at`.
-  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스(`001_init.sql`, 사진 백필이 끝나 그대로 유지). **[확정, 11/24]** 새로 만드는 벡터 테이블(글 `text_embedding` 등)은 v0.1에서 인덱스 없이 전체 비교하고, HNSW는 v0.1 실측 확인 후 v0.2에서 도입을 고려합니다. 종·보호중 조건은 서비스 테이블 `animal`과 `desertion_no`로 JOIN해 거릅니다(벡터 테이블에 종 칼럼은 두지 않음). 사진 HNSW를 타는 검색은 조건으로 걸러진 만큼 결과가 모자랄 수 있으니 `hnsw.ef_search`를 LIMIT 이상으로 두고 `hnsw.iterative_scan`(pgvector 0.8)을 켭니다. 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
+  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스(`001_init.sql`, 사진 백필이 끝나 그대로 유지). **[확정, 11/24]** 새로 만드는 벡터 테이블(글 `text_embedding` 등)은 v0.1에서 인덱스 없이 전체 비교하고, HNSW는 v0.1 실측 확인 후 v0.2에서 도입을 고려합니다. 종·보호중 조건은 서비스 테이블 `animal`과 `desertion_no`로 JOIN해 거릅니다(벡터 테이블에 종 칼럼은 두지 않음). 사진 HNSW를 타는 검색은 조건으로 걸러진 만큼 결과가 모자랄 수 있으니 `hnsw.ef_search`를 LIMIT 이상으로 두고 `hnsw.iterative_scan`(pgvector 0.8)을 켭니다. 이 설정은 성능 비교 후 검색 코드에 넣습니다(지금 코드는 기본값). 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
   - **[확정, 11/19]** 종료 공고 사진의 벡터는 지우지 않고 검색에서 거릅니다. 종료 뒤 보호중으로 복귀하는 공고가 있기 때문입니다(3절). 검색은 기본으로 `processState`가 `보호중`인 공고 안에서만 찾습니다. 공고 상태는 B 서비스 테이블에서 읽습니다.
 
 ## 7. 컬럼 (A→B 인계 스키마 v0)
