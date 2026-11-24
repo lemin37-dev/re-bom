@@ -371,6 +371,36 @@ def execute(args):
 
         return result
 
+    if state_s3 is not None:
+        from rebom.storage.silver.s3_run_journal import ensure_run_order
+
+        order = ensure_run_order(
+            state_s3,
+            args.s3_state_bucket,
+            args.s3_state_prefix,
+            run_id,
+        )
+
+        print("SILVER_RUN_ORDER:", order)
+
+        if order == "COMPLETED_RUN_RETRY":
+            from rebom.storage.silver.publish_log import (
+                find_completed_notice_snapshot_id,
+            )
+
+            snapshot_id = find_completed_notice_snapshot_id(
+                state_s3,
+                args.s3_state_bucket,
+                args.s3_state_prefix,
+                run_id,
+                catalog.load_table(NOTICE_NAME),
+            )
+
+            print("NOTICE_SNAPSHOT_ID:", snapshot_id)
+            print("ICEBERG_WRITE: FALSE")
+            print("AWS_SILVER_APPLY: REUSED_ALREADY_VERIFIED")
+            return
+
     before = reconcile()
     if before["stage"] == "COMPLETED":
         print("AWS_SILVER_APPLY: REUSED_ALREADY_VERIFIED")

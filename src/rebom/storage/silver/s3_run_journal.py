@@ -233,3 +233,55 @@ def save_notice_snapshot(
         return "ALREADY_EXISTS"
 
     return "CREATED"
+
+
+def ensure_run_order(s3, bucket, prefix, run_id):
+    journal_path(run_id, ".")
+
+    base = prefix.rstrip("/") + "/"
+    pending = []
+    completed = []
+
+    paginator = s3.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(
+        Bucket=bucket,
+        Prefix=base + "run_id=",
+        Delimiter="/",
+    ):
+        for item in page.get("CommonPrefixes", []):
+            path = item["Prefix"]
+            other_run_id = path[len(base):].strip("/").removeprefix("run_id=")
+
+            stage = current_stage(
+                s3, bucket, prefix, other_run_id
+            )
+
+            if stage == "COMPLETED":
+                completed.append(other_run_id)
+            elif stage is not None:
+                pending.append(other_run_id)
+
+    other_pending = [
+        value for value in pending if value != run_id
+    ]
+
+    if other_pending:
+        raise RuntimeError(
+            f"UNFINISHED_SILVER_RUNS: {other_pending}"
+        )
+
+    if run_id in completed:
+        return "COMPLETED_RUN_RETRY"
+
+    newer_or_ambiguous = [
+        value for value in completed
+        if value[:15] >= run_id[:15]
+    ]
+
+    if newer_or_ambiguous:
+        raise RuntimeError(
+            f"STALE_OR_AMBIGUOUS_SOURCE_RUN: {newer_or_ambiguous}"
+        )
+
+    return "ALLOWED"
