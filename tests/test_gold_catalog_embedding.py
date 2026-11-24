@@ -41,9 +41,34 @@ def test_group_embedding_creates_only_embedding_tables(world):
     # 태깅 묶음을 나중에 만들면 태깅 표 3개만 새로 생긴다. canary 표는 대상 칸이 없어도 옛 스키마로 보지 않는다
     assert sorted(gc.create_tables(env, catalog, group="tagging")) == sorted(
         f"만듦 {env.table(b)}" for b in gc.GROUPS["tagging"])
+    assert gc.create_tables(env, catalog) == [f"만듦 {env.table(gc.VERSION_REGISTRY_TABLE)}"]
     assert gc.create_tables(env, catalog) == []
     with pytest.raises(ValueError, match="UNKNOWN_GOLD_GROUP"):
         gc.create_tables(env, catalog, group="nope")
+
+
+def test_register_gold_versions_without_replacing_history(world):
+    from rebom.common.gold_version_registry import register_version, resolve_version
+
+    catalog, env = world
+    name = env.table(gc.VERSION_REGISTRY_TABLE)
+    assert gc.create_tables(env, catalog, group="registry") == [f"만듦 {name}"]
+    assert {".".join(table) for table in catalog.list_tables(env.database)} == {name}
+
+    task = "image_embedding"
+    v1 = {"model_id": "gemini-embedding-2", "dim": 768, "preprocess_version": "prep-v1"}
+    v2 = dict(v1, preprocess_version="prep-v2")
+    assert register_version(catalog, env, task, "image_embedding@1", v1)
+    assert not register_version(catalog, env, task, "image_embedding@1", dict(reversed(list(v1.items()))))
+    with pytest.raises(ValueError, match="different config"):
+        register_version(catalog, env, task, "image_embedding@1", v2)
+    assert register_version(catalog, env, task, "image_embedding@2", v2)
+    assert resolve_version(catalog, env, task, "image_embedding@1") == v1
+    assert resolve_version(catalog, env, task, "image_embedding@2") == v2
+    with pytest.raises(ValueError, match="Unregistered"):
+        resolve_version(catalog, env, task, "image_embedding@3")
+    with pytest.raises(ValueError, match="task@N"):
+        register_version(catalog, env, task, "photo_trait@1", v1)
 
 
 def test_image_embedding_vector_round_trip_and_upsert(world):

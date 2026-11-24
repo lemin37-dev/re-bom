@@ -13,7 +13,8 @@
   그래서 대표 사진이 바뀌거나(sha256) 질문지 버전을 올릴 때만 다시 부른다.
 
 호출: OpenRouter google/gemini-3.1-flash-lite, 공급자 google-ai-studio 고정, reasoning low,
-media_resolution MEDIA_RESOLUTION_MEDIUM(평가와 같은 해상도), temperature 1.0. 키는 OPENROUTER_KEY_TAG_IMG.
+media_resolution MEDIA_RESOLUTION_MEDIUM(평가와 같은 해상도), temperature 1.0. 키는 OPENROUTER_KEY_TAG_IMG,
+OpenRouter 앱 이름은 rebom-tag-photo.
 - temperature: 평가는 값을 보내지 않아 Google 기본값(Gemini 3 는 1.0)으로 돌았다. 기본값이 바뀌어도 평가와 같게
   1.0 을 명시한다. seed 는 보내지 않는다. 2회 답이 같을 때만 태그를 붙이므로 두 회차는 서로 독립된 표본이어야 한다.
 - 키·계정 오류(AccountError: 키 무효·크레딧 부족·키 한도)면 그 배치까지 저장하고 실패로 끝낸다.
@@ -46,18 +47,21 @@ from rebom.common.openrouter import (
     OpenRouterError,
 )
 from rebom.tagging import breed_tags, tag_codes, trait_tags
+from rebom.tagging import version_config
 from rebom.tagging.image_input import prepare_image
 
 log = logging.getLogger("rebom.tagging.photo_tags")
 
 KEY_ENV = "OPENROUTER_KEY_TAG_IMG"
-MODEL = "google/gemini-3.1-flash-lite"
-PROVIDER = "google-ai-studio"
-REASONING = "low"
-TEMPERATURE = 1.0
-MEDIA_RESOLUTION = "MEDIA_RESOLUTION_MEDIUM"
+APP_NAME = "rebom-tag-photo"  # OpenRouter 사용 기록에서 사진 태깅 호출만 골라 보는 앱 이름
+APP_URL = "https://github.com/lemin37-dev/re-bom/tree/develop/src/rebom/tagging"
+MODEL = version_config.MODEL
+PROVIDER = version_config.PROVIDER
+REASONING = version_config.REASONING
+TEMPERATURE = version_config.TEMPERATURE
+MEDIA_RESOLUTION = version_config.MEDIA_RESOLUTION
 MAX_TRAIT_PROMPT_TOKENS = 1500
-REPEATS = 2
+REPEATS = version_config.REPEATS
 MAX_ATTEMPTS = 3
 DOG_SPECIES_CODE = "417000"
 PROTECTING = "PROTECTING"
@@ -399,17 +403,18 @@ def _photo_outcome(target: Target, got: list, cfg: TaggerConfig, ts: datetime) -
     return PhotoOutcome(target, tasks, requests_rows)
 
 
-def inference_rows(outcomes: Sequence[PhotoOutcome], previous: dict[tuple, dict], run_id: str, ts: datetime) -> list[dict]:
+def inference_rows(outcomes: Sequence[PhotoOutcome], previous: dict[tuple, dict], run_id: str, ts: datetime,
+                   versions: dict[str, str] = VERSIONS) -> list[dict]:
     rows = []
     for o in outcomes:
         for task, t in o.tasks.items():
-            key = _photo_key(o.target.sha256, task, VERSIONS[task])
+            key = _photo_key(o.target.sha256, task, versions[task])
             attempts = int((previous.get(key) or {}).get("attempts") or 0) + 1
             rows.append({
                 "subject_type": SUBJECT_PHOTO,
                 "subject_key": o.target.sha256,
                 "task": task,
-                "version": VERSIONS[task],
+                "version": versions[task],
                 "input_hash": o.target.sha256,
                 "status": t.status,
                 "attempts": attempts,
@@ -421,7 +426,8 @@ def inference_rows(outcomes: Sequence[PhotoOutcome], previous: dict[tuple, dict]
     return rows
 
 
-def no_photo_rows(nos: Iterable[str], run_id: str, ts: datetime) -> list[dict]:
+def no_photo_rows(nos: Iterable[str], run_id: str, ts: datetime,
+                  versions: dict[str, str] = VERSIONS) -> list[dict]:
     return [
         {
             "subject_type": SUBJECT_ANIMAL, "subject_key": no, "task": task, "version": version,
@@ -429,22 +435,27 @@ def no_photo_rows(nos: Iterable[str], run_id: str, ts: datetime) -> list[dict]:
             "gold_updated_at": ts,
         }
         for no in nos
-        for task, version in VERSIONS.items()
+        for task, version in versions.items()
     ]
 
 
-def replaced_tag_rows(outcomes: Sequence[PhotoOutcome]) -> tuple[list[tuple[str, str, str]], list[dict]]:
+def replaced_tag_rows(outcomes: Sequence[PhotoOutcome],
+                      registered: dict[str, str] | None = None) -> tuple[list[tuple[str, str, str]], list[dict]]:
     """((사진 sha256, 작업, 질문지 버전) 교체 범위, 새 태그 행).
 
     교체는 같은 사진·같은 질문지 버전으로 다시 태깅한 경우만이다. 공고의 사진이 바뀌면 새 sha256 이 새 행이 되고,
     질문지 버전을 올려도 이전 행은 그대로 남는다(이전 버전 보존, 2026-11-20 결정). FAILED 인 작업은 교체하지 않는다.
     """
     scope, rows = [], []
+    versions = registered or VERSIONS
     for o in outcomes:
         for task, t in o.tasks.items():
             if t.status in (OK, NO_RESULT):
-                scope.append((o.target.sha256, task, VERSIONS[task]))
-                rows.extend(t.tag_rows)
+                scope.append((o.target.sha256, task, versions[task]))
+                if registered:
+                    rows.extend(r | {"version": versions[task]} for r in t.tag_rows)
+                else:
+                    rows.extend(t.tag_rows)
     return scope, rows
 
 
@@ -485,13 +496,19 @@ class GoldSink:
     처리 기록은 upsert, 요청 기록은 append.
     """
 
-    def __init__(self, catalog, env):
+    def __init__(self, catalog, env, *, registered: bool = False):
         from rebom.common import gold_catalog as gc
+        from rebom.common.gold_version_registry import require_version_column
 
         self.gc = gc
         self.tag = catalog.load_table(env.table(gc.TAG_TABLE))
         self.inference = catalog.load_table(env.table(gc.INFERENCE_LOG_TABLE))
         self.requests = catalog.load_table(env.table(gc.REQUEST_LOG_TABLE))
+        self.registered = registered
+        self.has_version = any(field.name == "version" for field in self.tag.schema().fields)
+        if registered:
+            require_version_column(self.tag)
+            require_version_column(self.requests)
 
     def read_inference_log(self) -> list[dict]:
         return self.inference.scan().to_arrow().to_pylist()
@@ -510,19 +527,27 @@ class GoldSink:
             for sha, task, version in scope:
                 by_group.setdefault((task, version), []).append(sha)
             for (task, version), shas in by_group.items():
-                rows = [r for r in tag_rows if r["task"] == task and r["prompt_version"] == version]
-                self.tag.overwrite(self._arrow(self.tag, rows), overwrite_filter=tag_scope_filter(task, version, shas))
+                column = "version" if self.registered else "prompt_version"
+                rows = [r for r in tag_rows if r["task"] == task and r[column] == version]
+                self.tag.overwrite(self._arrow(self.tag, rows), overwrite_filter=tag_scope_filter(
+                    task, version, shas, registered=self.registered, has_version=self.has_version,
+                ))
         if log_rows:
             self.inference.upsert(self._arrow(self.inference, log_rows), join_cols=list(self.gc.INFERENCE_LOG_KEYS))
 
 
-def tag_scope_filter(task: str, version: str, shas: Sequence[str]):
+def tag_scope_filter(task: str, version: str, shas: Sequence[str], *,
+                     registered: bool = False, has_version: bool = False):
     """교체할 태그 행: source=photo, subject_type=photo, 이 작업·질문지 버전, 그리고 이 사진들."""
-    from pyiceberg.expressions import And, EqualTo, In
+    from pyiceberg.expressions import And, EqualTo, In, IsNull
+
+    version_filter = EqualTo("version" if registered else "prompt_version", version)
+    if not registered and has_version:
+        version_filter = And(version_filter, IsNull("version"))
 
     return And(
         And(And(EqualTo("source", SOURCE), EqualTo("subject_type", SUBJECT_PHOTO)), EqualTo("task", task)),
-        And(EqualTo("prompt_version", version), In("subject_key", sorted(set(shas)))),
+        And(version_filter, In("subject_key", sorted(set(shas)))),
     )
 
 
@@ -597,21 +622,39 @@ def _default_targets(args) -> str:
     return f"s3://{args.bucket}/{get_gold_environment(args.gold_env).work_prefix()}/{args.run_id}/targets.json"
 
 
-def _sink(args, catalog):
+def _sink(args, catalog, registered: dict[str, str] | None = None):
     if args.local_out:
+        if registered:
+            raise ValueError("Registered versions require the Gold Iceberg sink")
         return LocalSink(Path(args.local_out))
     from rebom.common.gold_catalog import get_gold_environment
+    from rebom.common.gold_version_registry import verify_runtime_config
 
-    return GoldSink(catalog, get_gold_environment(args.gold_env))
+    env = get_gold_environment(args.gold_env)
+    for task, version in (registered or {}).items():
+        verify_runtime_config(catalog, env, task, version, version_config.runtime_config(task))
+    return GoldSink(catalog, env, registered=bool(registered))
+
+
+def _registered_versions(values: Sequence[str]) -> dict[str, str]:
+    versions = {}
+    for version in values:
+        task = version.partition("@")[0]
+        if task not in VERSIONS or task in versions:
+            raise ValueError(f"Expected one registered version per photo tagging task: {version}")
+        versions[task] = version
+    return versions
 
 
 def cmd_select(args) -> int:
     from rebom.storage.silver.environment_config import get_silver_environment
 
     catalog, s3 = _clients(args)
-    sink = _sink(args, catalog)
+    registered = _registered_versions(getattr(args, "version", ()))
+    versions = registered or VERSIONS
+    sink = _sink(args, catalog, registered)
     dogs, images = read_silver(catalog, get_silver_environment(args.silver_env))
-    targets, no_photo = select_targets(dogs, images, sink.read_inference_log(), limit=args.limit or None)
+    targets, no_photo = select_targets(dogs, images, sink.read_inference_log(), versions=versions, limit=args.limit or None)
     calls = sum(len(t.tasks) for t in targets) * REPEATS
     summary = {
         "run_id": args.run_id, "selected_at": _now().isoformat(), "silver_env": args.silver_env,
@@ -619,6 +662,8 @@ def cmd_select(args) -> int:
         "no_photo_new": len(no_photo), "calls": calls,
         "prompt_versions": VERSIONS, "items": [asdict(t) for t in targets],
     }
+    if registered:
+        summary["versions"] = registered
     print(f"보호중 개 {summary['protecting_dogs']}마리, 대상 사진 {len(targets)}장({summary['target_dogs']}마리, 호출 {calls}번), "
           f"새 NO_PHOTO {len(no_photo)}마리")
     if args.dry_run:
@@ -626,23 +671,28 @@ def cmd_select(args) -> int:
         return 0
     _write_json(_default_targets(args), summary, s3)
     if no_photo:
-        sink.write([], [], no_photo_rows(no_photo, args.run_id or "manual", _now()), [])
+        sink.write([], [], no_photo_rows(no_photo, args.run_id or "manual", _now(), versions), [])
     return 0
 
 
 def cmd_run(args) -> int:
     catalog, s3 = _clients(args)
     data = _read_json(_default_targets(args), s3, args.bucket)
+    registered = _registered_versions(tuple(data.get("versions", {}).values()))
+    explicit = _registered_versions(getattr(args, "version", ()))
+    if explicit and explicit != registered:
+        raise ValueError("Run versions must match the target list. Select targets again for another version.")
+    versions = registered or VERSIONS
     targets = [Target.from_dict(d) for d in data["items"]]
-    sink = _sink(args, catalog)
+    sink = _sink(args, catalog, registered)
     # 목록을 만든 뒤 다른 실행이 끝낸 것은 건너뛴다
-    targets = pending_targets(targets, sink.read_inference_log())
+    targets = pending_targets(targets, sink.read_inference_log(), versions)
     if args.max_photos:
         targets = targets[: args.max_photos]
     print(f"태깅할 사진 {len(targets)}장")
     if args.dry_run or not targets:
         return 0
-    client = OpenRouterClient(KEY_ENV)
+    client = OpenRouterClient(KEY_ENV, app_name=APP_NAME, app_url=APP_URL)
     run_id = args.run_id or f"manual-{_now():%Y%m%dT%H%M%SZ}"
     cfg = TaggerConfig(run_id=run_id, concurrency=args.concurrency, max_trait_prompt_tokens=args.max_trait_prompt_tokens,
                        canonical_slug=client.canonical_slug(MODEL))
@@ -653,9 +703,11 @@ def cmd_run(args) -> int:
         items = [(t, fetch_image(s3, args.bucket, t)) for t in batch]
         outcomes, stop = tag_photos(items, client, cfg)
         ts = _now()
-        scope, tag_rows = replaced_tag_rows(outcomes)
-        logs = inference_rows(outcomes, previous, run_id, ts)
+        scope, tag_rows = replaced_tag_rows(outcomes, registered)
+        logs = inference_rows(outcomes, previous, run_id, ts, versions)
         reqs = [r for o in outcomes for r in o.requests]
+        if registered:
+            reqs = [r | {"version": versions[r["task"]]} for r in reqs]
         sink.write(scope, tag_rows, logs, reqs)
         previous.update(log_index(logs))
         totals["photos"] += sum(1 for o in outcomes if o.tasks)
@@ -680,6 +732,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--bucket", default="rebom-data-559987919299")
     ap.add_argument("--silver-env", default="test")
     ap.add_argument("--gold-env", default="test")
+    ap.add_argument("--version", action="append", default=[], help="등록된 작업 버전, 예: photo_trait@1. 작업별 반복 지정")
     ap.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드에서는 비운다")
     ap.add_argument("--local-out", default=None, help="Gold 대신 이 폴더에 JSONL 로 쓴다 (PC 시험용)")
     ap.add_argument("--limit", type=int, default=0, help="select: 대상 사진 상한 (샘플 시험용)")

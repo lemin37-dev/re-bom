@@ -168,3 +168,26 @@ def test_real_runner_reuses_immutable_prepared_snapshot_after_schema_evolution(
     assert "REUSED_ALREADY_VERIFIED" in capsys.readouterr().out
     assert catalog.load_table("test.notice").current_snapshot().snapshot_id == notice_id
     assert s3.put_object.call_count == writes
+
+
+
+def test_notice_snapshot_records_bronze_run_id(evolved_notice):
+    _, table = evolved_notice
+    run_id = "test_bronze_run_001"
+
+    result = upsert_notice(
+        table,
+        prepared_notice(table),
+        run_id=run_id,
+    )
+
+    assert (result.rows_updated, result.rows_inserted) == (1, 1)
+
+    table.refresh()
+    snapshot = table.current_snapshot()
+
+    assert snapshot is not None
+    assert snapshot.summary is not None
+    assert snapshot.summary.additional_properties.get(
+        "bronze_run_id"
+    ) == run_id

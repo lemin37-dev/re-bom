@@ -197,6 +197,15 @@ def execute(args):
     state_s3 = None
     if args.s3_state_bucket:
         state_s3 = boto3.client("s3", region_name="ap-northeast-2")
+        if args.apply:
+            order = ensure_run_order(
+                state_s3,
+                args.s3_state_bucket,
+                args.s3_state_prefix,
+                run_id,
+            )
+            print("SILVER_RUN_ORDER_PRECHECK:", order)
+
         if not run_dir.exists():
             restored = restore_snapshot(
                 state_s3,
@@ -317,6 +326,48 @@ def execute(args):
             )
 
             for stage in STAGES[start_index:STAGES.index(result["stage"]) + 1]:
+                if stage == "COMPLETED":
+                    from rebom.storage.silver.s3_run_journal import (
+                        read_notice_snapshot,
+                        save_notice_snapshot,
+                    )
+
+                    completed_table = catalog.load_table(NOTICE_NAME)
+
+                    evidence = read_notice_snapshot(
+                        state_s3,
+                        args.s3_state_bucket,
+                        args.s3_state_prefix,
+                        run_id,
+                    )
+
+                    if evidence is not None:
+                        if evidence["notice_table"] != NOTICE_NAME:
+                            raise RuntimeError("NOTICE_EVIDENCE_TABLE_MISMATCH")
+
+                        snapshot_id = evidence["notice_snapshot_id"]
+
+                        if completed_table.snapshot_by_id(snapshot_id) is None:
+                            raise RuntimeError("NOTICE_EVIDENCE_SNAPSHOT_MISSING")
+                    else:
+                        snapshot = completed_table.current_snapshot()
+
+                        if snapshot is None:
+                            raise RuntimeError("NOTICE_SNAPSHOT_MISSING")
+
+                        snapshot_id = snapshot.snapshot_id
+
+                        save_notice_snapshot(
+                            state_s3,
+                            args.s3_state_bucket,
+                            args.s3_state_prefix,
+                            run_id,
+                            NOTICE_NAME,
+                            snapshot_id,
+                        )
+
+                    print("COMPLETED_NOTICE_SNAPSHOT_ID:", snapshot_id)
+
                 write_stage(
                     state_s3,
                     args.s3_state_bucket,
@@ -329,13 +380,43 @@ def execute(args):
 
         return result
 
+    if state_s3 is not None:
+        from rebom.storage.silver.s3_run_journal import ensure_run_order
+
+        order = ensure_run_order(
+            state_s3,
+            args.s3_state_bucket,
+            args.s3_state_prefix,
+            run_id,
+        )
+
+        print("SILVER_RUN_ORDER:", order)
+
+        if order == "COMPLETED_RUN_RETRY":
+            from rebom.storage.silver.publish_log import (
+                find_completed_notice_snapshot_id,
+            )
+
+            snapshot_id = find_completed_notice_snapshot_id(
+                state_s3,
+                args.s3_state_bucket,
+                args.s3_state_prefix,
+                run_id,
+                catalog.load_table(NOTICE_NAME),
+            )
+
+            print("NOTICE_SNAPSHOT_ID:", snapshot_id)
+            print("ICEBERG_WRITE: FALSE")
+            print("AWS_SILVER_APPLY: REUSED_ALREADY_VERIFIED")
+            return
+
     before = reconcile()
     if before["stage"] == "COMPLETED":
         print("AWS_SILVER_APPLY: REUSED_ALREADY_VERIFIED")
         return
 
     if notice_arrow.num_rows and before["stage"] == "PREPARED":
-        result = upsert_notice(notice, notice_arrow)
+        result = upsert_notice(notice, notice_arrow, run_id=run_id)
         print("NOTICE_INSERTED:", result.rows_inserted)
         print("NOTICE_UPDATED:", result.rows_updated)
 
@@ -366,24 +447,21 @@ def main():
         execute(args)
         return
 
-    # Serialize every writer targeting these two shared test tables, across run IDs.
-    # This remains a local-process lock and is NOT safe across hosts / Airflow pods.
-    # An externally coordinated single-writer policy is required for deployment.
-    lock = args.journal_dir / "aws-silver-tables.lock"
-    lock.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError as exc:
-        raise RuntimeError(
-            f"AWS Silver tables locked: {lock}; check active writer before removing"
-        ) from exc
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            stream.write(str(os.getpid()))
-        # Lock covers source snapshot creation, journal reconciliation, and writes.
+    import boto3
+    from rebom.storage.silver.s3_run_journal import silver_writer_lock
+
+    if not args.s3_state_bucket:
+        raise RuntimeError("S3_STATE_BUCKET_REQUIRED_FOR_APPLY")
+
+    s3 = boto3.client("s3", region_name="ap-northeast-2")
+
+    with silver_writer_lock(
+        s3,
+        args.s3_state_bucket,
+        args.environment,
+        "silver-notice-history",
+    ):
         execute(args)
-    finally:
-        lock.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

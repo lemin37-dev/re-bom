@@ -32,4 +32,5 @@
 @import './ui.css';
 @import '../web/styles/search.css';
 @import './components.css';
+@import './tag-search.css';
 @import './responsive.css';

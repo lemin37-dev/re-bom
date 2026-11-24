@@ -1,4 +1,5 @@
 import type { Animal, AnimalShelter, ShelterSummary, SizeLabel, Species } from '@/types/animal'
+import type { PhotoTag, TagCatalog, TagMatch, TagSpecies } from '@/types/tags'
 
 /**
  * 검색 API 주소. 기본은 같은 주소의 /api (k3s·CloudFront 배포: /api 를 검색 API 로 넘김).
@@ -39,6 +40,10 @@ export type ApiAnimal = {
   orgName: string | null
   shelter: ApiShelter
   updatedAt: string | null
+  /** 대표 사진을 보고 모델이 붙인 태그. 태그가 없는 공고는 빈 배열 */
+  photoTags?: PhotoTag[]
+  /** 태그를 골라 검색했을 때만 옴 */
+  tagMatch?: TagMatch | null
   // 상세
   endReason?: string | null
   healthCheck?: string | null
@@ -46,7 +51,8 @@ export type ApiAnimal = {
   sociality?: string | null
   healthNote?: string | null
 }
-export type ApiPage = { total: number; page: number; size: number; items: ApiAnimal[] }
+/** matched: 태그를 골랐을 때 고른 범주가 모두 맞는 아이 수 (목록 맨 앞) */
+export type ApiPage = { total: number; matched?: number | null; page: number; size: number; items: ApiAnimal[] }
 
 export type AnimalSearchParams = {
   species?: Species
@@ -59,6 +65,8 @@ export type AnimalSearchParams = {
   q?: string
   weightMin?: number
   weightLt?: number
+  /** 사진 태그 코드 (예: ['ear.drop', 'fur.fluffy']). 같은 범주 안은 하나라도, 범주끼리는 모두 맞아야 함 */
+  tags?: string[]
   sort?: 'latest' | 'notice_end'
   page?: number
   size?: number
@@ -93,6 +101,7 @@ function toQuery(p: AnimalSearchParams) {
   set('q', p.q?.trim())
   set('weight_min', p.weightMin)
   set('weight_lt', p.weightLt)
+  set('tags', p.tags?.join(','))
   set('sort', p.sort)
   set('page', p.page)
   set('size', p.size)
@@ -101,11 +110,15 @@ function toQuery(p: AnimalSearchParams) {
 
 export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSignal) {
   const page = await getJson<ApiPage>(`/animals?${toQuery(params)}`, signal)
-  return { total: page.total, items: page.items.map(toAnimal) }
+  return { total: page.total, matched: page.matched ?? null, items: page.items.map(toAnimal) }
 }
 
 export async function fetchAnimal(id: string, signal?: AbortSignal) {
   return toAnimal(await getJson<ApiAnimal>(`/animals/${encodeURIComponent(id)}`, signal))
+}
+
+export async function fetchTagCatalog(species: TagSpecies, signal?: AbortSignal) {
+  return getJson<TagCatalog>(`/tags?species=${species}`, signal)
 }
 
 export async function fetchShelters(signal?: AbortSignal) {
@@ -163,6 +176,8 @@ export function toAnimal(a: ApiAnimal): Animal {
     shelter: a.shelter,
     quote: a.specialMark || '',
     photos: a.photos,
+    photoTags: a.photoTags ?? [],
+    tagMatch: a.tagMatch ?? null,
     healthCheck: a.healthCheck,
     vaccinationCheck: a.vaccinationCheck,
     sociality: a.sociality,

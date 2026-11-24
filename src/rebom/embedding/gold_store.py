@@ -111,19 +111,31 @@ class State:
         return st
 
 
-def read_state(catalog, env, model: str, dim: int, prep_version: str) -> State:
+def image_version_filter(table, mid: str, prep_version: str, version: str | None):
+    from pyiceberg.expressions import And, EqualTo, IsNull
+
+    previous = And(EqualTo("model", mid), EqualTo("prompt_version", prep_version))
+    if version is not None:
+        return EqualTo("version", version)
+    if any(field.name == "version" for field in table.schema().fields):
+        return And(previous, IsNull("version"))
+    return previous
+
+
+def read_state(catalog, env, model: str, dim: int, prep_version: str, *, version: str | None = None) -> State:
     from pyiceberg.expressions import And, EqualTo
 
     from rebom.common import gold_catalog as gc
 
     mid = model_id(model, dim)
-    image = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE)).scan(
-        row_filter=And(EqualTo("model", mid), EqualTo("prompt_version", prep_version)),
+    image_table = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))
+    image = image_table.scan(
+        row_filter=image_version_filter(image_table, mid, prep_version, version),
         selected_fields=("subject_key", "embedding"),
     ).to_arrow()
     state = State(vectors=dict(zip(image.column("subject_key").to_pylist(), vectors_of(image))))
     logs = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE)).scan(
-        row_filter=And(EqualTo("task", IMAGE_TASK), EqualTo("version", log_version(mid, prep_version))),
+        row_filter=And(EqualTo("task", IMAGE_TASK), EqualTo("version", version or log_version(mid, prep_version))),
         selected_fields=("subject_key", "status", "attempts", "detail"),
     ).to_arrow().to_pylist()
     state.logs = {r["subject_key"]: r for r in logs}
@@ -170,32 +182,42 @@ def request_link(meta: dict[str, Any], batch_size: int) -> dict[str, Any]:
 
 # ---- 쓰기 ------------------------------------------------------------------------------------------------------
 
-def _scope(mid_or_version: tuple[str, str], shas: Iterable[str], log: bool):
+def _scope(version_filter, rows: Iterable[dict]):
     from pyiceberg.expressions import And, EqualTo, In
 
-    a, b = mid_or_version
-    first = And(EqualTo("task", IMAGE_TASK), EqualTo("version", b)) if log else \
-        And(EqualTo("model", a), EqualTo("prompt_version", b))
-    return And(first, In("subject_key", sorted(set(shas))))
+    return And(EqualTo("task", IMAGE_TASK), version_filter, In("subject_key", sorted({r["subject_key"] for r in rows})))
 
 
 def write_run(catalog, env, *, mid: str, prep_version: str, images: list[dict], logs: list[dict],
-              requests: list[dict]) -> dict[str, int]:
+              requests: list[dict], version: str | None = None) -> dict[str, int]:
     """요청 기록(비용) 먼저 append, 그다음 결과·처리 기록을 이 사진들 범위만 교체한다."""
-    from rebom.common import gold_catalog as gc
+    from pyiceberg.expressions import EqualTo
 
-    if requests:
-        t = catalog.load_table(env.table(gc.EMBEDDING_REQUEST_LOG_TABLE))
-        t.append(table_arrow(t, requests))
-    if images:
-        t = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))
-        t.overwrite(table_arrow(t, images, vector=True),
-                    overwrite_filter=_scope((mid, prep_version), (r["subject_key"] for r in images), log=False))
+    from rebom.common import gold_catalog as gc
+    from rebom.common.gold_version_registry import require_version_column
+
+    image_table = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE)) if images else None
+    request_table = catalog.load_table(env.table(gc.EMBEDDING_REQUEST_LOG_TABLE)) if requests else None
+    if version is not None:
+        for table in (image_table, request_table):
+            if table is not None:
+                require_version_column(table)
+        images = [row | {"version": version} for row in images]
+        logs = [row | {"version": version} for row in logs]
+        requests = [row | {"version": version} for row in requests]
+
+    if request_table is not None:
+        request_table.append(table_arrow(request_table, requests))
+    if image_table is not None:
+        image_table.overwrite(
+            table_arrow(image_table, images, vector=True),
+            overwrite_filter=_scope(image_version_filter(image_table, mid, prep_version, version), images),
+        )
     if logs:
         t = catalog.load_table(env.table(gc.EMBEDDING_INFERENCE_LOG_TABLE))
-        t.overwrite(table_arrow(t, logs),
-                    overwrite_filter=_scope(("", log_version(mid, prep_version)), (r["subject_key"] for r in logs),
-                                            log=True))
+        t.overwrite(table_arrow(t, logs), overwrite_filter=_scope(
+            EqualTo("version", version or log_version(mid, prep_version)), logs,
+        ))
     return {"image": len(images), "log": len(logs), "request": len(requests)}
 
 
