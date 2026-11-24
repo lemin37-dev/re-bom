@@ -21,6 +21,7 @@ RUN useradd --system --uid 10002 --no-create-home rebom-storage
 COPY --from=build /opt/venv /opt/venv
 COPY scripts/storage/rebom_run_aws_real_silver_test.py /app/scripts/storage/rebom_run_aws_real_silver_test.py
 COPY scripts/storage/rebom_auto_process_photo_manifests.py /app/scripts/storage/rebom_auto_process_photo_manifests.py
+COPY scripts/storage/rebom_publish_silver_gold.py /app/scripts/storage/rebom_publish_silver_gold.py
 
 WORKDIR /app
 USER 10002

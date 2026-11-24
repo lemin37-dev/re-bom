@@ -137,9 +137,9 @@ with DAG(
         arguments=["--run-id", BRONZE_RUN_ID, "--limit", "2000"],  # 상한. 시험할 때는 "--dry-run" 추가
     )
 
-    silver_dry_run = KubernetesPodOperator(
-        task_id="silver_dry_run",
-        name="silver-dry-run",
+    silver_notice_apply = KubernetesPodOperator(
+        task_id="silver_notice_apply",
+        name="silver-notice-apply",
         namespace="rebom-storage",
         service_account_name="rebom-storage",
         image="559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/storage:develop",
@@ -149,7 +149,7 @@ with DAG(
             "--run-id", BRONZE_RUN_ID,
             "--bucket", DATA_BUCKET,
             "--environment", "test",
-            "--check-photo-manifests",
+            "--apply",
         ],
         env_vars={"REBOM_S3_BUCKET": DATA_BUCKET},
         node_selector={"rebom/pool": "main"},
@@ -199,6 +199,44 @@ with DAG(
             "REBOM_PHOTO_JOURNAL_PREFIX": (
                 "bench_tmp/b-storage-test/journals/photo_auto_runs"
             ),
+        },
+        node_selector={"rebom/pool": "main"},
+        container_resources=k8s.V1ResourceRequirements(
+            requests={"cpu": "100m", "memory": "256Mi"},
+            limits={"memory": "1Gi"},
+        ),
+        get_logs=True,
+        on_finish_action="delete_pod",
+        in_cluster=True,
+    )
+
+    silver_gold_publish = KubernetesPodOperator(
+        task_id="silver_gold_publish",
+        name="silver-gold-publish",
+        namespace="rebom-storage",
+        service_account_name="rebom-storage",
+        image="559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/storage:develop",
+        image_pull_policy="Always",
+        cmds=["python", "scripts/storage/rebom_publish_silver_gold.py"],
+        arguments=[
+            "--bronze-run-id", BRONZE_RUN_ID,
+            "--bucket", DATA_BUCKET,
+            "--notice-table",
+            "rebom_silver.silver_animal_notice_real_20261111_test",
+            "--photo-table",
+            "rebom_silver.silver_animal_image_auto_b_test",
+            "--notice-prefix",
+            "bench_tmp/b-storage-test/journal-recovery-20261111",
+            "--photo-prefix",
+            "bench_tmp/b-storage-test/journals/photo_auto_runs",
+            "--publish-prefix",
+            "bench_tmp/b-storage-test/publish",
+            "--pod-auth",
+            "--publish",
+        ],
+        env_vars={
+            "REBOM_S3_BUCKET": DATA_BUCKET,
+            "AWS_DEFAULT_REGION": "ap-northeast-2",
         },
         node_selector={"rebom/pool": "main"},
         container_resources=k8s.V1ResourceRequirements(
@@ -260,6 +298,7 @@ with DAG(
 
     rescue_incremental >> [generate_ingest_events, rescue_photos]
     rescue_photos >> photos_done
-    [generate_ingest_events, photos_done] >> silver_dry_run
-    silver_dry_run >> silver_photo_apply_enabled >> silver_photo_apply
+    generate_ingest_events >> silver_notice_apply
+    photos_done >> silver_photo_apply_enabled >> silver_photo_apply
+    [silver_notice_apply, silver_photo_apply] >> silver_gold_publish
     photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings
