@@ -212,6 +212,10 @@ def _chunks(items: list, n: int):
 READ_ERROR_WARN_RUNS = 3  # 이만큼 연속으로 못 읽은 Bronze 파일은 사람이 확인하도록 경고
 READ_ERROR_FAIL_MIN = 20  # 이번 실행에서 이 수 이상, 그리고 절반 넘게 못 읽으면 권한·네트워크 문제로 보고 실패 처리
 EXIT_READ_ERRORS = 4
+API_ACCOUNT_CODES = {401, 402, 403}  # 키·크레딧·권한 문제. 다른 사진도 모두 실패하므로 바로 멈춘다
+API_STOP_AFTER = 5  # 요청이 이만큼 연속으로 끝내 실패하면 서비스 장애로 보고 남은 요청을 보내지 않는다
+API_ERROR_WARN_RUNS = 3  # 이만큼 연속 실행에서 실패한 사진은 사람이 확인하도록 경고
+EXIT_API_ERRORS = 5  # Airflow 가 task 를 다시 실행해 남은 사진만 보낸다
 
 
 def _s3_error_code(exc: Exception) -> str:
@@ -228,7 +232,7 @@ def _new_run_id() -> str:
 
 
 def embed(args: argparse.Namespace) -> int:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
     from datetime import datetime, timezone
 
@@ -261,6 +265,7 @@ def embed(args: argparse.Namespace) -> int:
     _print("plan (보내기 전)", {
         **plan.stats,
         "retry_read_errors": len(retry_keys),  # 지난 실행에서 Bronze 파일을 못 읽어 다시 시도하는 사진
+        "retry_api_errors": len(plan.send.keys() & staged.api_errors.keys()),  # 지난 실행에서 모델 호출이 실패한 사진
         "this_run_sha256": len(order),
         "this_run_photos": sum(len(plan.send[s]) for s in order) + len(plan.reuse),
         "this_run_requests_max": -(-len(order) // args.image_batch),  # 빈 사진은 빠져 실제로는 더 적다
@@ -283,6 +288,7 @@ def embed(args: argparse.Namespace) -> int:
     skipped: dict[str, str] = {}
     sha_mismatch: list[str] = []
     read_errors: dict[str, str] = {}  # Bronze s3_key → 오류 코드. skipped 에 넣지 않아 다음 실행에서 다시 읽는다
+    api_errors: dict[str, str] = {}  # sha256 → 오류 코드. skipped 에 넣지 않아 다음 실행에서 다시 보낸다
     rows: list[dict] = []
     parts: list[str] = []
     mid = gold_store.model_id(gemini.MODEL, args.dim)
@@ -330,14 +336,25 @@ def embed(args: argparse.Namespace) -> int:
                 ready.append((sha, jpeg))
         request = None
         if ready:
-            jpegs = [j for _, j in ready]
-            if hasattr(embedder, "embed_images_recorded"):
-                vecs, meta = embedder.embed_images_recorded(jpegs)
-            else:  # 기록을 주지 않는 임베더 (테스트 등)
-                vecs, meta = embedder.embed_images(jpegs), {"requested_at": datetime.now(timezone.utc)}
-            out += [(sha, v, None) for (sha, _), v in zip(ready, vecs)]
-            request = ([sha for sha, _ in ready], meta)
+            jpegs, shas = [j for _, j in ready], [sha for sha, _ in ready]
+            sent_at = datetime.now(timezone.utc)
+            try:
+                if hasattr(embedder, "embed_images_recorded"):
+                    vecs, meta = embedder.embed_images_recorded(jpegs)
+                else:  # 기록을 주지 않는 임베더 (테스트 등)
+                    vecs, meta = embedder.embed_images(jpegs), {"requested_at": sent_at}
+            except Exception as exc:  # noqa: BLE001 - 재시도까지 끝내 실패한 호출. 이 사진들만 남기고 나머지는 계속한다
+                code = _api_error_code(exc)
+                out += [(sha, None, f"api_error:{code}") for sha in shas]
+                return out, (shas, {"requested_at": sent_at, "requested_model": gemini.MODEL}, code)
+            out += [(sha, v, None) for (sha, _), v in zip(ready, vecs, strict=True)]
+            request = (shas, meta, None)
         return out, request
+
+    def add_request(request) -> None:
+        shas, meta, error = request
+        gold_requests.append(gold_store.request_row(shas, meta, prep.PREP_VERSION, run_id,
+                                                    status="ERROR" if error else gold_store.OK, error_code=error))
 
     def gold_log(sha: str, reason: str) -> dict:
         """보내지 않은 사진의 처리 기록. 빈 사진은 판정 점수, 읽기 실패는 다음 실행에서 셀 시도 수."""
@@ -351,6 +368,10 @@ def embed(args: argparse.Namespace) -> int:
             before = staged.read_errors.get(key, 0)
             return gold_store.log_row(sha, version, gold_store.READ_ERROR, run_id, now, attempts=before + 1,
                                       detail={"s3_key": key, "error": code}, last_error=reason)
+        if kind == "api_error":
+            before = staged.api_errors.get(sha, 0)
+            return gold_store.log_row(sha, version, gold_store.API_ERROR, run_id, now, attempts=before + 1,
+                                      detail={"s3_key": key, "error": code}, last_error=reason)
         if kind == "sha_mismatch":
             return gold_store.log_row(sha, version, gold_store.SHA_MISMATCH, run_id, now, detail={"s3_key": key},
                                       last_error=reason)
@@ -363,16 +384,39 @@ def embed(args: argparse.Namespace) -> int:
 
     t0, done, status = time.time(), 0, "ok"
     next_report = 300
-    try:
-        with ThreadPoolExecutor(max_workers=args.workers) as ex:
-            futures = [ex.submit(work, b) for b in _chunks(order, args.image_batch)]
+    stop, failed_in_a_row = None, 0  # 남은 요청을 보내지 않는 이유, 연속으로 끝내 실패한 요청 수
+
+    def send(ex, batches) -> None:
+        """한 바퀴 보내기. 실패한 사진은 api_errors 에 남고, 성공하면 빠진다."""
+        nonlocal done, next_report, stop, failed_in_a_row
+        futures = [ex.submit(work, b) for b in batches]
+        seen = set()
+        try:
             for f in as_completed(futures):
+                seen.add(f)
+                if f.cancelled():
+                    continue
                 results, request = f.result()
                 if request is not None:
-                    shas, meta = request
-                    gold_requests.append(gold_store.request_row(shas, meta, prep.PREP_VERSION, run_id))
-                    links.update({s: gold_store.request_link(meta, len(shas)) for s in shas})
+                    add_request(request)
+                    shas, meta, error = request
+                    if error is None:
+                        failed_in_a_row = 0
+                        links.update({s: gold_store.request_link(meta, len(shas)) for s in shas})
+                    else:
+                        failed_in_a_row += 1
+                        if error in {str(c) for c in API_ACCOUNT_CODES}:
+                            stop = stop or f"키·계정 오류({error})"
+                        elif failed_in_a_row >= API_STOP_AFTER:
+                            stop = stop or f"연속 {failed_in_a_row}번 실패({error})"
+                        if stop:  # 아직 시작하지 않은 요청은 보내지 않는다 (보내고 버리면 비용만 든다)
+                            for p in futures:
+                                p.cancel()
                 for sha, vec, reason in results:
+                    if reason is not None and reason.startswith("api_error"):
+                        api_errors[sha] = reason.split(":", 1)[1]
+                        continue
+                    api_errors.pop(sha, None)
                     done += 1
                     if vec is None:
                         gold_logs[sha] = gold_log(sha, reason)
@@ -399,6 +443,27 @@ def embed(args: argparse.Namespace) -> int:
                     el = time.time() - t0
                     print(f"  {done}/{len(order)} sha256 ({el:.0f}s, {el / done:.3f}s/장)")
                     next_report += 300
+        except BaseException:
+            for p in futures:
+                p.cancel()
+            wait(futures)  # 이미 보낸 요청은 끝까지 받아 비용 기록을 남긴다
+            for f in futures:
+                if f not in seen and not f.cancelled() and f.exception() is None and f.result()[1] is not None:
+                    add_request(f.result()[1])
+            raise
+
+    try:
+        with ThreadPoolExecutor(max_workers=args.workers) as ex:
+            send(ex, list(_chunks(order, args.image_batch)))
+            if api_errors and not stop:  # 실패한 사진만 1장씩 한 번 더 보낸다
+                print(f"모델 호출에 실패한 사진 {len(api_errors)}장을 한 번 더 보냅니다.")
+                failed_in_a_row = 0
+                send(ex, [[sha] for sha in sorted(api_errors)])
+        for sha, code in api_errors.items():
+            gold_logs[sha] = gold_log(sha, f"api_error:{code}")
+            stats["api_error"] += 1
+        if stop:
+            status = "stopped"
     except BaseException:
         status = "aborted"
         raise
@@ -421,6 +486,7 @@ def embed(args: argparse.Namespace) -> int:
             "sec_per_sha256": round(elapsed / max(done, 1), 4), "workers": args.workers,
             "image_batch": args.image_batch, "stats": dict(stats), "plan": plan.stats, "parts": parts,
             "skipped_sha256": skipped, "sha_mismatch_keys": sha_mismatch, "read_error_keys": read_errors,
+            "api_error_sha256": api_errors, "stop_reason": stop,
             "api_usage": embedder.usage(),  # 경로(openrouter/google)·호출 수·OpenRouter 비용(USD)
             "gold": gold_info,  # --gold-env 일 때 쓴 환경과 행 수 (gold-migrate 가 멈추는 표시)
             "version": candidate,
@@ -429,9 +495,37 @@ def embed(args: argparse.Namespace) -> int:
                       Body=json.dumps(summary, ensure_ascii=False, indent=2).encode("utf-8"))
         print("done", status, dict(stats), f"{elapsed:.0f}s ({elapsed / max(done, 1):.3f}s/장)",
               f"-> s3://{bucket}/{prefix}", f"gold {gold_info}" if gold_info else "")
-        if gold_error is not None and status == "ok":
+        if gold_error is not None and status != "aborted":
             raise RuntimeError(f"Gold 표 쓰기 실패 (parquet·summary 는 썼음): {gold_info['error']}") from gold_error
-    return _report_read_errors(read_errors, staged.read_errors, done)
+    read_exit = _report_read_errors(read_errors, staged.read_errors, done)
+    api_exit = _report_api_errors(api_errors, staged.api_errors, stats["api_sha256"], stop)
+    return api_exit or read_exit
+
+
+def _api_error_code(exc: Exception) -> str:
+    """HTTP 코드가 있으면 코드, 없으면 예외 이름. 응답 본문은 남기지 않는다."""
+    from rebom.embedding import gemini
+
+    code = gemini._error_code(exc)
+    return str(code) if code is not None else type(exc).__name__
+
+
+def _report_api_errors(now: dict[str, str], before: dict[str, int], succeeded: int, stop: str | None) -> int:
+    """모델 호출이 끝내 실패한 사진을 알린다. 모두 다음 실행에서 다시 보낸다.
+    멈췄거나 이번에 하나도 성공하지 못했으면 EXIT_API_ERRORS (Airflow 가 다시 실행해 남은 사진만 보냄).
+    몇 장만 실패하면 성공(0)으로 끝내 나머지 사진의 적재를 막지 않는다."""
+    if stop:
+        print(f"!! 모델 호출을 멈췄습니다: {stop}. 남은 사진은 다음 실행에서 보냅니다.", file=sys.stderr)
+    if not now:
+        return EXIT_API_ERRORS if stop else 0
+    print(f"모델 호출에 실패한 사진 {len(now)}장 (다음 실행에서 다시 보냄):", dict(Counter(now.values())))
+    stuck = sorted(s for s in now if before.get(s, 0) + 1 >= API_ERROR_WARN_RUNS)
+    if stuck:
+        print(f"!! {API_ERROR_WARN_RUNS}번 이상 연속으로 실패한 사진 {len(stuck)}장. 오류 코드를 확인해 주세요:",
+              [(s[:12], now[s]) for s in stuck[:10]])
+    if stop or (succeeded == 0 and len(stuck) < len(now)):
+        return EXIT_API_ERRORS
+    return 0
 
 
 def _report_read_errors(now: dict[str, str], before: dict[str, int], done: int) -> int:
