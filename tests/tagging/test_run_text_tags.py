@@ -153,7 +153,7 @@ def test_same_text_called_once_and_rows_for_each_animal():
     first = [r for r in rows if r["subject_key"] == "1"]
     assert sorted(r["tag_code"] for r in first) == ["health.info", "personality.active", "personality.gentle"]
     g = next(r for r in first if r["tag_code"] == "personality.gentle")
-    assert g["source"] == "info_text" and g["subject_type"] == "animal" and g["similarity"] == 97
+    assert g["source"] == "text" and g["subject_type"] == "animal" and g["similarity"] == 97
     assert g["prompt_version"] == "text-personality-v1" and g["source_hash"] == rtt.text_hash("순함")
     detail = json.loads(g["detail"])
     assert detail["request_id"] == "gen-test-0001" and detail["input_text"] == "순함"

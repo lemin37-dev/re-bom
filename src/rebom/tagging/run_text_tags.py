@@ -17,7 +17,7 @@
 - 같은 실행 안에서 글이 같은 공고는 한 번만 부르고 결과를 나눠 쓴다(보호중 18,730건 중 서로 다른 글 약 1.25만, 2026-11-23 실측).
 
 저장 (Gold 태깅 묶음 표 3개, 새 표 없음):
-- gold_animal_tag: subject_type=animal, subject_key=공고번호, source=info_text. 작업 text_personality(성격 태그, 0개 이상),
+- gold_animal_tag: subject_type=animal, subject_key=공고번호, source=text. 작업 text_personality(성격 태그, 0개 이상),
   text_health(health.info 또는 health.none 1행). 교체 범위는 (공고, 작업, 버전, source_hash=input_hash) 다.
   글이 바뀌거나 질문 버전을 올리면 새 행이 생기고 이전 글·이전 버전 행은 남는다(Gold 이전 버전 보존, 2026-11-20 팀 결정).
   같은 글을 다시 태깅할 때(실패 재시도, 저장 도중 끊긴 실행)만 그 글의 행을 교체해 중복을 막는다.
@@ -56,7 +56,7 @@ from rebom.tagging.run_photo_tags import LocalSink, _read_json, _write_json, log
 log = logging.getLogger("rebom.tagging.text_tags")
 
 KEY_ENV = "OPENROUTER_KEY_TAG_JEV"
-SOURCE = "info_text"  # 태그를 만든 입력 칸. 사진 태그의 source=photo 와 같은 뜻 (2026-11-23 jev → info_text)
+SOURCE = "text"  # 태그를 만든 입력 칸. 사진 태그의 source=photo 와 같은 뜻 (2026-11-24 jev → text)
 SUBJECT_ANIMAL = "animal"
 PROTECTING = "PROTECTING"
 DEFAULT_SPECIES = ("417000", "422400")  # 개, 고양이
@@ -393,7 +393,7 @@ class TextGoldSink:
 
 
 def tag_scope_filter(task: str, version: str, pairs: Sequence[tuple[str, str]]):
-    """교체할 태그 행: source=info_text, subject_type=animal, 이 작업·버전, 그리고 (공고번호, source_hash) 쌍들.
+    """교체할 태그 행: source=text, subject_type=animal, 이 작업·버전, 그리고 (공고번호, source_hash) 쌍들.
 
     공고번호와 글 해시를 쌍으로 맞추므로 같은 공고의 이전 글 행, 사진 태그 행은 건드리지 않는다.
     """
