@@ -28,7 +28,7 @@ spec:
               containerPort: 8000
           env:
             - name: REBOM_DATA_MODE
-              value: sample
+              value: db
             # 브라우저는 같은 주소(/api)로 부르므로 CORS 는 필요 없다. 로컬 개발 기본값만 둔다
             - name: REBOM_CORS_ORIGINS
               value: http://localhost:3000
