@@ -8,6 +8,7 @@
  * 한글 글꼴(Noto Sans KR): fonts.css의 @font-face가 public/fonts/의 WOFF2를 유니코드 범위별로 불러옵니다.
  */
 @import './fonts.css';
+@import 'leaflet/dist/leaflet.css'; /* 한반도 지도 (components/map/KoreaMap) */
 @import 'tailwindcss';
 @import './tokens.css';
 
