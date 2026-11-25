@@ -22,6 +22,8 @@ serve = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.4",
+    "psycopg[binary]>=3.2",  # REBOM_DATA_MODE=db (RDS 서비스 표 읽기)
+    "boto3>=1.34",  # db 접속 정보(Secrets Manager)
 ]
 photos = [
     "Pillow>=10",

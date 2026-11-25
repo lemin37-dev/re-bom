@@ -82,9 +82,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         result = r.search(query)
         items = []
         for x in result.rows:
-            item = to_summary(x, r.tags_of(x["desertionNo"]))
+            tags = x["_tags"] if "_tags" in x else r.tags_of(x["desertionNo"])  # db 모드는 한 번에 읽어 둔다
+            item = to_summary(x, tags)
             if tag_groups:
-                item.tag_match = tag_match(r.tags_of(x["desertionNo"]), tag_groups)
+                item.tag_match = tag_match(tags, tag_groups)
             items.append(item)
         return AnimalPage(total=result.total, matched=result.matched, page=page, size=size, items=items)
 
@@ -107,7 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raw = r.get(desertion_no)
         if raw is None:
             raise HTTPException(status_code=404, detail="해당 구조번호의 동물이 없습니다.")
-        return to_detail(raw, r.tags_of(desertion_no))
+        return to_detail(raw, raw["_tags"] if "_tags" in raw else r.tags_of(desertion_no))
 
     return app
 

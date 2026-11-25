@@ -220,8 +220,9 @@ def _embed_tasks() -> dict[str, dict[str, ast.expr]]:
 def test_photo_embedding_runs_after_photos_not_blocking_silver():
     """사진 임베딩은 사진 task 가 끝나면 바로 돌고, Silver 와는 따로 간다(서로 막지 않음)."""
     src = DAG_FILE.read_text(encoding="utf-8")
-    assert "photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings" in src
-    for task in ("check_embedding_drift", "embed_photos", "load_photo_embeddings"):
+    assert "photos_done >> check_embedding_drift >> embed_photos\n" in src
+    assert "load_photo_embeddings =" not in src  # RDS 반영은 sync_* 가 한다 (11/25)
+    for task in ("check_embedding_drift", "embed_photos"):
         for silver_task in (
             "silver_notice_apply",
             "silver_photo_apply",
@@ -233,13 +234,10 @@ def test_photo_embedding_runs_after_photos_not_blocking_silver():
 
 
 def test_photo_embedding_has_caps():
-    """embed 는 상한(--limit), load 는 쓰기 상한(--max-write)을 둔다. 0 이면 상한이 없어 막아야 한다."""
+    """embed 는 상한(--limit)을 둔다. 0 이면 상한이 없어 막아야 한다."""
     tasks = _embed_tasks()
     embed = ast.literal_eval(tasks["embed_photos"]["arguments"])
-    load = ast.literal_eval(tasks["load_photo_embeddings"]["arguments"])
     assert embed[0] == "embed" and int(embed[embed.index("--limit") + 1]) > 0 and "--dry-run" not in embed
-    assert load[0] == "load" and int(load[load.index("--max-write") + 1]) > 0
-    assert "--full" not in load
 
 
 
@@ -270,3 +268,39 @@ def test_embedding_tasks_label_openrouter_usage():
     """OpenRouter 비용 구분: 임베딩 파드는 task 이름이 든 REBOM_USAGE_TAG 를 받는다(키 값은 아님)."""
     src = DAG_FILE.read_text(encoding="utf-8")
     assert '"REBOM_USAGE_TAG": f"rebom-embed:airflow:{task_id}"' in src
+
+
+def _sync_tasks() -> dict[str, list[ast.expr]]:
+    tasks = {}
+    for node in ast.walk(_tree()):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "sync_task":
+            tasks[ast.literal_eval(node.args[0])] = node.args
+    return tasks
+
+
+def test_rds_sync_tasks_routes_and_order():
+    """RDS 동기화: 경로 4개, 공고는 사진을 기다리지 않고, 사진·벡터는 발행·임베딩 뒤, 태그·글 벡터는 사진 뒤 (11/23 분리안)."""
+    tasks = _sync_tasks()
+    assert {t: ast.literal_eval(a[2]) for t, a in tasks.items()} == {
+        "sync_notice_status": "notice_status", "sync_photo_vector": "photo_vector",
+        "sync_tag": "tag", "sync_text_vector": "text_vector"}
+    consts = _constants()
+    refs = {t: [consts[e.id] if isinstance(e, ast.Name) else ast.literal_eval(e) for e in a[3].elts]
+            for t, a in tasks.items()}
+    assert refs["sync_notice_status"] == ["--run-id", consts["BRONZE_RUN_ID"]]
+    for t in ("sync_photo_vector", "sync_tag", "sync_text_vector"):
+        assert refs[t] == ["--publish-id", consts["PUBLISH_ID"]], t
+    assert consts["PUBLISH_ID"] == "silver_" + consts["BRONZE_RUN_ID"]
+    assert consts["RDS_SYNC_GOLD_ENV"] == "test"
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert "[rds_sync_enabled, silver_notice_apply] >> sync_notice_status" in src
+    assert "[silver_gold_publish, embed_photos, sync_notice_status] >> sync_photo_vector >> [sync_tag, sync_text_vector]" in src
+    assert "silver_photo_apply >> sync_notice_status" not in src
+
+
+def test_rds_sync_off_by_default():
+    """RDS 쓰기는 Variable rebom_rds_sync_enabled 가 true 일 때만."""
+    src = DAG_FILE.read_text(encoding="utf-8")
+    assert 'Variable.get("rebom_rds_sync_enabled", default="false")' in src
+    assert 'ShortCircuitOperator(task_id="rds_sync_enabled"' in src
+    assert '"-m", "rebom.serving.sync"' in src and "--profile" not in src.split("def sync_task")[1].split("rds_sync_enabled =")[0]

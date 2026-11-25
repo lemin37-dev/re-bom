@@ -560,9 +560,9 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 | 실제 DB 구조 | `db/migrations/NNN_*.sql` | 이미 있는 파일은 고치지 않고 다음 번호 파일 추가. 적용은 사람이 |
 | 둘이 같은지 | `tests/test_rds_schema_doc.py` | 표·칼럼 이름이 다르면 pytest 실패 |
 | RDS 에 어디까지 적용했는지 | RDS `schema_migrations` 표 (005) | `python -m rebom.common.migrate status` 로 보고, `apply` 로 남은 파일을 적용 |
-| 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.1 = 마이그레이션 001~005.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
+| 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.1 = 마이그레이션 001~007.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
 
-- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~006**(태그 `schema-v0.1`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
+- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~007**(태그 `schema-v0.1`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
 - 적용 도구는 파일 하나를 트랜잭션 하나로 묶어 실행과 기록을 함께 커밋합니다. 그래서 마이그레이션 파일 안에는 `BEGIN`/`COMMIT` 을 쓰지 않습니다. 트랜잭션 밖에서만 되는 명령(`CREATE INDEX CONCURRENTLY` 등)은 파일 첫 줄에 `-- migrate: no-transaction` 을 적습니다.
 - 적용한 파일의 내용(sha256, LF 기준)이 레포와 달라지면 `apply` 가 멈춥니다. 고치지 말고 새 번호 파일을 추가합니다.
 - 001~004 는 기록 표가 생기기 전에 손으로 적용했으므로 `baseline 4` 로 기록만 넣습니다(2026-11-25).
@@ -573,10 +573,35 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 **표 (영역별)**
 
 - 공고 화면: `service_notice`(공고당 1행, 보호자 실명 없음), `service_notice_photo`(사진 칸당 1행), `service_notice_tag`(태그 1개 = 1행, 활성 버전·현재 입력만) — `003_service_tables.sql`
-- 검색 벡터: `image_embedding`, `text_embedding` — `004_vector_tables_v01.sql` 에서 지우고 v0.1 모양으로 다시 만듦(키에 `version`, 서비스 표로 외래키). `006` 에서 version 으로 정해지는 칼럼(`model`, `model_key`, `template_version`, `tag_versions`)을 뺌: 실행 설정은 Gold 레지스트리의 `task@N` 설정에만 두고, 행에는 `version` 과 입력 해시만 둡니다. Gold `prompt_version`(글 임베딩에서는 카드 템플릿)은 RDS 로 옮기지 않습니다. **[결정, 11/25]** RDS 기존 데이터는 비우고 S3 동기화를 처음부터 하며, 사진 HNSW `image_embedding_hnsw_cos` 도 지움. v0.1 은 인덱스 없이 전체 비교, 실측 뒤 v0.2 에서 HNSW 도입 검토
+- 검색 벡터: `image_embedding`, `text_embedding` — `004_vector_tables_v01.sql` 에서 지우고 v0.1 모양으로 다시 만듦(키에 `version`, 서비스 표로 외래키). `006` 에서 version 으로 정해지는 칼럼(`model`, `model_key`, `template_version`, `tag_versions`)을 뺌, `007` 에서 사진 벡터의 `photo_run_id` 도 뺌: 실행 설정은 Gold 레지스트리의 `task@N` 설정에만 두고, 행에는 `version`·입력 해시·`gold_run_id` 만 둡니다(원천 실행은 `service_notice_photo.silver_publish_seq` → 발행 기록으로 추적). Gold `prompt_version`(글 임베딩에서는 카드 템플릿)은 RDS 로 옮기지 않습니다. **[결정, 11/25]** RDS 기존 데이터는 비우고 S3 동기화를 처음부터 하며, 사진 HNSW `image_embedding_hnsw_cos` 도 지움. v0.1 은 인덱스 없이 전체 비교, 실측 뒤 v0.2 에서 HNSW 도입 검토
 - 운영: `active_version`(작업별 활성 버전, 전환은 사람), `sync_state`(동기화 경로별 마지막 반영 완료본) — `003_service_tables.sql`, `schema_migrations`(마이그레이션 적용 기록) — `005_schema_migrations.sql`
+
+### 16.1 S3 → RDS 동기화 [v0.1, 2026-11-25]
+
+코드: `src/rebom/serving/sync/`(계산은 `plan.py`, 읽기는 `inputs.py`, 쓰기는 `db.py`). 실행: `python -m rebom.serving.sync <경로> [--dry-run]`. 기준: 노션 "RDS 동기화 분리 · 11/23 결정", "사진 교체와 Gold → RDS 반영 규칙", "공고 노출 정책 · 확정".
+
+| 경로 (`sync_state.route`) | 입력 | 바꾸는 표 | 순서 기준 |
+|---|---|---|---|
+| `notice_status` | Silver 공고 완료 기록 `notice_completion/<bronze_run_id>.json` 의 공고 스냅샷 + 보호소 표 | `service_notice` | `last_silver_run_id`(시각으로 시작하는 Bronze run_id) |
+| `photo_vector` | READY 발행 기록(`publish/<publish_id>.json`)의 사진 스냅샷 + Gold `gold_image_embedding` | `service_notice_photo`, `image_embedding` | `last_publish_seq` |
+| `tag` | 같은 발행 + Gold `gold_animal_tag`(글 태그는 처리 기록의 최신 입력) | `service_notice_tag` | `last_publish_seq`, 같은 순번의 `photo_vector` 가 먼저 |
+| `text_vector` | 같은 발행 + Gold `gold_text_embedding` | `text_embedding` | `last_publish_seq` |
+
+- 경로 하나 = 트랜잭션 하나. `sync_state` 행을 잠그고 순번을 비교한 뒤 행을 바꾸고 순번을 고친다. 더 오래된 입력은 쓰지 않고 종료 코드 4로 멈춘다. 같은 입력을 다시 돌리면 같은 결과가 된다(바뀐 행만 씀).
+- 바뀐 행은 시각이 아니라 키·해시로 찾는다. 공고는 `content_hash`(공고 내용 칼럼의 sha256), 사진은 sha256·표시 키, 벡터는 sha256·글 해시.
+- **공고**: 처음 보는 공고는 보호중일 때만 넣는다. RDS 에 보호중이던 공고가 종료로 보이면 그 완료본의 `source_fetched_at` 을 `closed_transition_at`, 30일 뒤를 `visible_until` 로 둔다. 같은 종료를 다시 반영해도 시각을 바꾸지 않고, 보호중으로 돌아오면 둘 다 비운다. RDS 를 처음부터 채우므로(11/25) 서비스 시작 전에 이미 종료된 공고는 들어오지 않는다. 전환 시각의 정밀도는 하루 한 번 수집 시각이다. `size` 는 Silver 값 그대로(10kg 이하 small, v0.2 에서 기준을 다시 맞춤).
+- **사진**: Silver 현재 사진 중 sha256·표시 키가 있는 칸만. Silver 에 그 공고가 있는데 칸이 없거나 비었으면(emptied) RDS 칸을 지운다(벡터는 외래키로 같이 지워짐). Silver 에 공고 자체가 없으면 RDS 칸을 그대로 둔다(종료 공고의 마지막 사진 유지). RDS 에 공고가 없으면 넣지 않는다(외래키).
+- **사진 벡터**: 활성 `image_embedding` 버전의 Gold 벡터 중 sha256 이 지금 칸 사진과 같은 것만. 사진이 바뀌었는데 새 벡터가 아직 없으면 옛 벡터 행을 지워 검색 후보에서 뺀다. `s3_key` 는 Bronze 원본 키.
+- **태그**: 사진 태그는 공고 대표 사진(RDS 사진 칸 중 가장 작은 칸)의 sha256 과 같은 `subject_key`, 글 태그는 그 공고·작업의 처리 기록 중 가장 늦은 행이 `OK`·`NO_RESULT` 일 때 그 `input_hash` 와 같은 `source_hash`(15.5). 활성에서 빠진 작업의 행은 지운다. `tag_label` 은 `tagging/tag_codes.py`·`text_tags.py` 이름표, 품종은 `breed.` 뒤 이름. 귀염은 검색 태그로 넣지 않는다.
+- **글 벡터**: 활성 `text_embedding` 버전에서 공고마다 `gold_updated_at` 이 가장 늦은 행.
+- **활성 버전**: RDS `active_version` 을 시작할 때 읽고, `config_hash` 가 Gold 레지스트리(`--gold-env`)의 값과 다르면 멈춘다. 없는 작업은 건너뛴다(사진 칸·공고는 반영). Gold 행의 `version` 칸이 빈 옛 행은 레지스트리 설정의 옛 키(모델·`prompt_version`)로 읽는다(13.6, 끄려면 `--no-legacy`). RDS 행의 `version` 에는 활성 버전 이름을 넣는다.
+- **Gold 환경**: 기본 test(11/25 결정, 사진 벡터도 test 로 옮기는 중). `--gold-env prod` 로 바꿀 수 있다. Silver 는 test 경로(DAG 와 같은 값)다.
+- **DAG**: `rescue_ingest` 의 `sync_notice_status`(Silver 공고 적재 뒤) → `sync_photo_vector`(발행·임베딩·공고 반영 뒤, all_done) → `sync_tag`·`sync_text_vector`. Variable `rebom_rds_sync_enabled = true` 일 때만 돈다. 예전 `load_photo_embeddings` 는 뺐다(`embedding/store.py`·`cli load` 는 v0.1 표와 맞지 않아 쓰지 않음, 코드는 담당자 리뷰 뒤 정리).
+- 시험: `tests/test_serving_sync_plan.py`(규칙), `tests/test_serving_sync_db.py`(실제 PostgreSQL, `REBOM_TEST_PG_DSN` 이 있을 때만).
 
 **남은 일**
 
-- S3 → RDS 동기화 기능(새로 만듦): 003·004 를 적용한 빈 RDS 를 처음부터 채움(11/25 결정). 기존 DAG `load_photo_embeddings`(`embedding/store.py`, `ON CONFLICT (desertion_no, image_slot, model)`)는 코드를 고치지 않으므로 004 적용 뒤 실패함 → 적용 전에 Airflow 에서 멈추고, 동기화 기능이 자리 잡으면 정리.
-- `sync_state` 의 순번 방식(`silver_publish_log` 순번 vs journal `silver_run_id`) 확정, `closed_transition_at` 출처 확인(이광훈 님).
+- `active_version` 첫 값 넣기(사람이, 각 작업의 레지스트리 등록 뒤). 글 태그(`text_personality`·`text_health`)는 아직 등록 버전이 없어 등록해야 동기화된다.
+- 종료 30일이 지난 공고의 RDS 화면용 행 정리 배치(주기 미정). Gold 결과는 보존.
+- Silver prod 경로가 정해지면 동기화 기본 경로·DAG 값을 바꾼다. `embed_photos`(Gold prod)와 동기화(Gold test)의 환경을 맞춘다.
+- 기존 `embedding/store.py`·`cli load`·`smoke` 의 RDS 코드 정리(담당자와 리뷰).
