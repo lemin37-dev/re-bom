@@ -56,6 +56,7 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 
 - `--source bronze`(기본): 사진 manifest를 모두 읽어 아래 1번 규칙으로 칸별 현재 사진을 고릅니다.
 - `--source silver`: Silver 이미지 표(칸마다 최신 정상 버전)의 `original_s3_key`·`sha256`을 그대로 씁니다. 사진 파일은 두 경우 모두 Bronze S3 원본에서 읽습니다.
+- **READY 입력 (11/25)**: `--publish-id`를 주면 Silver READY 발행본의 보호중 사진을 읽고 `gold_run_input`에 `publish_id`를 남깁니다(데이터 계약 13.7). 전환 전 대조는 `compare-sources --publish-id ... --gold-env test`입니다. 11/25 READY 대조: 보호중 38,969칸이 같고, Bronze에만 2칸(API 목록에서 사라져 재처리 중인 공고 1건)입니다. 매일 DAG는 아직 Bronze 입력입니다.
 - Silver가 운영으로 열린 뒤 넘어갑니다. 조건·순서: `docs/image_embedding_status_20261120.md` 4절. `--silver-env test`로는 S3·RDS에 쓰지 않습니다.
 - 전환 전 대조: `python -m rebom.embedding.cli compare-sources --silver-env <환경>` → `switch_ready: true`
 

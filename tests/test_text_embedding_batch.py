@@ -215,11 +215,11 @@ def pinned(tmp_path):
     versions = {"photo_trait": "trait-vision-v10", "text_personality": "text-personality-v1", "text_health": "text-health-v1"}
     register_version(catalog, gold, text_batch.TASK, "text_embedding@1", text_version.runtime_config("A2", versions))
 
-    def add_tags(*tags):
+    def add_tags(*tags, prompt_version=None):
         table = catalog.load_table(gold.table(gc.TAG_TABLE))
         table.append(pa.Table.from_pylist([
             {"source": source, "subject_type": subject, "subject_key": key, "source_hash": h, "task": task, "tag_code": code,
-             "tagger_version": "t", "prompt_version": versions[task], "searchable": True}
+             "tagger_version": "t", "prompt_version": prompt_version or versions[task], "searchable": True}
             for source, subject, key, h, task, code in tags], schema=table.schema().as_arrow()))
 
     sent = []
@@ -293,6 +293,20 @@ def test_unknown_tag_source_stops_instead_of_dropping_tags(pinned):
     assert pinned.sent == []
 
 
+def test_renamed_tag_version_stops_before_api(pinned):
+    """태그 버전 이름이 바뀌면(11-25 Jev) 태그가 빠진 카드를 만들지 않고 멈춘다."""
+    pinned.add_tags(*FULL[:1])
+    pinned.add_tags(*FULL[1:2], prompt_version="text_personality@1")
+    pinned.add_tags(*FULL[2:], prompt_version="text_health@1")
+    plan = pinned.run(write=False, silver_as_of=pinned.at.isoformat())
+    assert plan["missing_tags"] == {"text_health": ["text_health@1"], "text_personality": ["text_personality@1"]}
+    with pytest.raises(ValueError, match="text_health 등록 text-health-v1, 표"):
+        pinned.run(silver_as_of=pinned.at.isoformat())
+    assert pinned.sent == []
+    for base in (gc.TEXT_EMBEDDING_TABLE, gc.REQUEST_LOG_TABLE, gc.INFERENCE_LOG_TABLE, gc.RUN_INPUT_TABLE):
+        assert pinned.catalog.load_table(pinned.gold.table(base)).scan().to_arrow().num_rows == 0
+
+
 def test_changed_card_code_or_template_stops_before_api(pinned, monkeypatch):
     """등록한 뒤 카드 생성 코드가 바뀌면 같은 버전으로 실행되지 않는다."""
     from rebom.embedding import card_template
@@ -313,6 +327,7 @@ def test_versions_with_different_tags_are_kept_side_by_side(pinned):
     config = text_version.runtime_config("A2", {"photo_trait": "photo_trait@9", "text_personality": "text-personality-v1",
                                                 "text_health": "text-health-v1"})
     assert text_version.register(pinned.catalog, pinned.gold, "text_embedding@2", config)
+    pinned.add_tags(("photo", "photo", "other", "other", "photo_trait", "fur.fluffy"), prompt_version="photo_trait@9")
     pinned.run(version="text_embedding@2", silver_as_of=pinned.at.isoformat())
     rows = pinned.catalog.load_table(pinned.gold.table(gc.TEXT_EMBEDDING_TABLE)).scan().to_arrow().to_pylist()
     first = {r["version"]: r["input_text"] for r in rows if r["subject_key"] == "1"}

@@ -245,6 +245,26 @@ def write_run(catalog, env, *, mid: str, prep_version: str, images: list[dict], 
     return {"image": len(images), "log": len(logs), "request": len(requests)}
 
 
+def run_input_table(catalog, env):
+    """gold_run_input 표. 없으면 모델을 부르거나 쓰기 전에 멈춘다."""
+    from pyiceberg.exceptions import NoSuchTableError
+
+    from rebom.common import gold_catalog as gc
+
+    name = env.table(gc.RUN_INPUT_TABLE)
+    try:
+        return catalog.load_table(name)
+    except NoSuchTableError as exc:
+        raise LogSchemaError(f"{name} 표가 없습니다. "
+                             f"gold_catalog --env {env.name} --create --group execution 을 먼저 실행해 주세요.") from exc
+
+
+def write_run_input(table, *, run_id: str, publish_id: str, version: str, at: datetime) -> None:
+    """이 실행이 읽은 Silver 발행본 (실행 1번 = 1행). gold_run_id 로 벡터·처리 기록과 이어진다."""
+    table.append(table_arrow(table, [{"gold_run_id": run_id, "publish_id": publish_id, "task": IMAGE_TASK,
+                                      "version": version, "started_at": at}]))
+
+
 def write_canary(catalog, env, row: dict, requests: list[dict]) -> dict[str, int]:
     from pyiceberg.expressions import EqualTo
 

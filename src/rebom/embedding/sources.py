@@ -1,12 +1,14 @@
-"""임베딩할 '현재 사진'을 어디서 읽을지 고른다: bronze(지금 기본) 또는 silver(Silver 운영 뒤).
+"""임베딩할 '현재 사진'을 어디서 읽을지 고른다: Silver READY 발행본(--publish-id), bronze(지금 기본), silver(점검용).
 
 - bronze: 사진 manifest(bronze/rescue/image_runs/.../manifest.json)를 모두 읽어 칸마다 최신 버전을 고른다 (manifest.py).
+- READY 발행본: 발행본이 고정한 공고·현재 사진 스냅샷을 읽는다. 최신 표로 바꿔 읽지 않는다(글 임베딩과 같음).
+  보호중(status_group = PROTECTING) 공고의 사진만 대상이다. 추적 키는 publish_id(= silver_ + bronze_run_id)이고
+  gold_run_input 에 실행마다 한 행으로 남긴다.
 - silver: Silver 이미지 표(칸마다 최신 정상 버전만 둠)의 desertion_no·image_slot·original_s3_key·sha256 을 읽는다.
-  사진 파일은 두 경우 모두 Bronze S3 원본(original_s3_key)에서 읽는다. 공공 API 주소(source_url)는 쓰지 않는다.
+  사진 파일은 모두 Bronze S3 원본(original_s3_key)에서 읽는다. 공공 API 주소(source_url)는 쓰지 않는다.
 - Silver 이미지 표에는 버전·사진 실행 칸이 없다. 버전은 키 이름(popfile<N>_v002.jpg → 2, 없으면 1)에서 읽고,
-  photo_run_id 는 "silver:<환경>" 으로 둔다.
-- Silver test 표는 현재 사진의 일부만 담고 사진 교체(v2)도 반영 전이라(docs/image_embedding_status_20261120.md 3절),
-  silver test 로는 S3·RDS 에 쓰는 명령을 막는다(cli.py). 비교·점검(--dry-run, staged, compare-sources)만 된다.
+  photo_run_id 는 비운다(Bronze·Silver 안에서만 쓰는 값).
+- --source silver 는 스냅샷을 고정하지 않으므로, silver test 로는 S3·RDS 에 쓰는 명령을 막는다(cli.py). 비교·점검(--dry-run, staged, compare-sources)만 된다.
 - 이 모듈은 S3·Glue 를 읽기만 한다.
 """
 from __future__ import annotations
@@ -15,6 +17,7 @@ import re
 from collections import Counter
 from typing import Any, Iterable
 
+from rebom.common.silver_input import PublishedInput
 from rebom.embedding import manifest as mf
 
 SOURCES = ("bronze", "silver")
@@ -48,7 +51,7 @@ def photos_from_silver(rows: Iterable[dict[str, Any]], env_name: str) -> Current
         if (no, slot) in current:
             raise ValueError(f"같은 칸이 두 번 있음: {no} slot {slot} (silver {env_name})")
         version = int(m["version"]) if m["version"] else 1
-        current[(no, slot)] = mf.Photo(no, slot, version, key, sha, m["ext"].lower(), None, f"silver:{env_name}")
+        current[(no, slot)] = mf.Photo(no, slot, version, key, sha, m["ext"].lower(), None)
     return current
 
 
@@ -61,6 +64,25 @@ def load_silver(env_name: str, profile: str | None = None) -> Current:
     table = get_aws_catalog(profile=profile).load_table(env.image_table)
     rows = table.scan(selected_fields=SILVER_FIELDS).to_arrow().to_pylist()
     return photos_from_silver(rows, env.name)
+
+
+def load_published(catalog: Any, published: PublishedInput) -> tuple[Current, set[str]]:
+    """READY 발행본의 (보호중 공고의 현재 사진, 보호중 공고번호). 두 표 모두 발행본이 고정한 스냅샷으로 읽는다."""
+    from pyiceberg.expressions import EqualTo
+
+    published.validate_snapshots(catalog)
+    notices = catalog.load_table(published.notice_table).scan(
+        row_filter=EqualTo("status_group", "PROTECTING"), selected_fields=("desertion_no",),
+        snapshot_id=published.notice_snapshot_id,
+    ).to_arrow().column("desertion_no").to_pylist()
+    protected = {str(no) for no in notices}
+    rows = catalog.load_table(published.photo_table).scan(
+        selected_fields=SILVER_FIELDS, snapshot_id=published.photo_snapshot_id,
+    ).to_arrow().to_pylist()
+    current = {k: p for k, p in photos_from_silver(rows, published.publish_id).items() if k[0] in protected}
+    if not current:  # 잘못된 스냅샷으로 "보낼 사진 없음" 처리되지 않게
+        raise ValueError(f"보호중 공고의 사진이 없음: {published.publish_id}")
+    return current, protected
 
 
 def load_current(source: str, s3: Any, bucket: str, silver_env: str = "test") -> tuple[Current, list[dict] | None]:
