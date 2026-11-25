@@ -557,7 +557,7 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 | RDS 에 어디까지 적용했는지 | RDS `schema_migrations` 표 (005) | `python -m rebom.common.migrate status` 로 보고, `apply` 로 남은 파일을 적용 |
 | 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.1 = 마이그레이션 001~005.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
 
-- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~005**(태그 `schema-v0.1`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
+- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~006**(태그 `schema-v0.1`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
 - 적용 도구는 파일 하나를 트랜잭션 하나로 묶어 실행과 기록을 함께 커밋합니다. 그래서 마이그레이션 파일 안에는 `BEGIN`/`COMMIT` 을 쓰지 않습니다. 트랜잭션 밖에서만 되는 명령(`CREATE INDEX CONCURRENTLY` 등)은 파일 첫 줄에 `-- migrate: no-transaction` 을 적습니다.
 - 적용한 파일의 내용(sha256, LF 기준)이 레포와 달라지면 `apply` 가 멈춥니다. 고치지 말고 새 번호 파일을 추가합니다.
 - 001~004 는 기록 표가 생기기 전에 손으로 적용했으므로 `baseline 4` 로 기록만 넣습니다(2026-11-25).
@@ -568,7 +568,7 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 **표 (영역별)**
 
 - 공고 화면: `service_notice`(공고당 1행, 보호자 실명 없음), `service_notice_photo`(사진 칸당 1행), `service_notice_tag`(태그 1개 = 1행, 활성 버전·현재 입력만) — `003_service_tables.sql`
-- 검색 벡터: `image_embedding`, `text_embedding` — `004_vector_tables_v01.sql` 에서 지우고 v0.1 모양으로 다시 만듦(키에 `version`, 서비스 표로 외래키). **[결정, 11/25]** RDS 기존 데이터는 비우고 S3 동기화를 처음부터 하며, 사진 HNSW `image_embedding_hnsw_cos` 도 지움. v0.1 은 인덱스 없이 전체 비교, 실측 뒤 v0.2 에서 HNSW 도입 검토
+- 검색 벡터: `image_embedding`, `text_embedding` — `004_vector_tables_v01.sql` 에서 지우고 v0.1 모양으로 다시 만듦(키에 `version`, 서비스 표로 외래키). `006` 에서 version 으로 정해지는 칼럼(`model`, `model_key`, `template_version`, `tag_versions`)을 뺌: 실행 설정은 Gold 레지스트리의 `task@N` 설정에만 두고, 행에는 `version` 과 입력 해시만 둡니다. Gold `prompt_version`(글 임베딩에서는 카드 템플릿)은 RDS 로 옮기지 않습니다. **[결정, 11/25]** RDS 기존 데이터는 비우고 S3 동기화를 처음부터 하며, 사진 HNSW `image_embedding_hnsw_cos` 도 지움. v0.1 은 인덱스 없이 전체 비교, 실측 뒤 v0.2 에서 HNSW 도입 검토
 - 운영: `active_version`(작업별 활성 버전, 전환은 사람), `sync_state`(동기화 경로별 마지막 반영 완료본) — `003_service_tables.sql`, `schema_migrations`(마이그레이션 적용 기록) — `005_schema_migrations.sql`
 
 **남은 일**

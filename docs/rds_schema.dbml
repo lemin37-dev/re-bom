@@ -2,7 +2,7 @@
 // 2026-11-25 · 기준: 노션 "Gold 스키마 · 확정 규칙과 사진 임베딩 설계안"(11/22~) RDS 절, develop eb4e317
 // 쓰는 법: dbdiagram.io 편집 창에 통째로 붙여 넣기. 표 설명 = Table [note], 칼럼 설명·예시 = 칼럼 note('예:' 줄), 값 목록 = Enum.
 // 관리: 이 파일 = 표·칼럼 설명과 값 목록의 원본(그림은 dbdiagram.io 에 붙여 넣어 봄). 실제 DB = db/migrations/*.sql (dbdiagram export SQL 은 쓰지 않음)
-// 버전: 스키마 v0.1 = 마이그레이션 001~005. develop 머지 때 Actions(schema-version.yml)가 태그 schema-v0.1 을 담. 새 마이그레이션이면 번호를 고치고 태그가 이미 있으면 버전을 올림. RDS 적용 상태는 schema_migrations 표
+// 버전: 스키마 v0.1 = 마이그레이션 001~006. develop 머지 때 Actions(schema-version.yml)가 태그 schema-v0.1 을 담. 새 마이그레이션이면 번호를 고치고 태그가 이미 있으면 버전을 올림. RDS 적용 상태는 schema_migrations 표
 // 실제 DB 타입: enum 으로 표시한 칼럼은 실제로는 text/varchar + CHECK. 칼럼 이름이 마이그레이션과 같은지 tests/test_rds_schema_doc.py 가 확인함
 // 벡터 표 2개(image_embedding·text_embedding)는 004 에서 지우고 이 모양으로 다시 만듦(11/25: RDS 데이터 비우고 S3 동기화 처음부터, HNSW 없음)
 
@@ -337,15 +337,13 @@ Table service_notice_tag [note: '''공고에 연결한 태그 1개 = 1행. Gold 
   }
 }
 
-Table image_embedding [note: '''공고 현재 사진 칸의 검색 벡터(칸 × 버전). Gold gold_image_embedding(sha256 단위)을 칸에 펼침. 검색 후보 = 보호중 + sha256 일치 + 활성 버전. 키에 version 포함(004). v0.1 인덱스 없음(전체 비교), HNSW 는 실측 뒤 v0.2 에서 검토'''] {
+Table image_embedding [note: '''공고 현재 사진 칸의 검색 벡터(칸 × 버전). Gold gold_image_embedding(sha256 단위)을 칸에 펼침. 검색 후보 = 보호중 + sha256 일치 + 활성 버전. 키에 version 포함(004). 모델 등 실행 설정은 version 의 레지스트리 설정에만 두고 행에 적지 않음(006). v0.1 인덱스 없음(전체 비교), HNSW 는 실측 뒤 v0.2 에서 검토'''] {
   desertion_no varchar(20) [not null, note: '''공고번호
 예: 448567202600123''']
   image_slot smallint [not null, note: '''사진 칸 1~8
 예: 1''']
   version varchar(64) [not null, note: '''image_embedding@N. 키에 포함해 같은 모델 v1·v2 공존
 예: image_embedding@1''']
-  model text [not null, note: '''모델 이름(:차원)
-예: gemini-embedding-2:768''']
   photo_version smallint [not null, note: '''사진 교체 순번
 예: 2''']
   sha256 char(64) [not null, note: '''임베딩한 원본 sha256. service_notice_photo.sha256 과 다르면 검색 후보에서 제외
@@ -363,21 +361,15 @@ Table image_embedding [note: '''공고 현재 사진 칸의 검색 벡터(칸 ×
   }
 }
 
-Table text_embedding [note: '''공고 카드의 글 검색 벡터(공고 × 버전). Gold gold_text_embedding 중 현재 카드 해시와 맞는 1행. 키에 version 포함·A1/A2 CHECK 제거(004). v0.1 인덱스 없음'''] {
+Table text_embedding [note: '''공고 카드의 글 검색 벡터(공고 × 버전). Gold gold_text_embedding 중 현재 카드 해시와 맞는 1행. 키에 version 포함(004). 모델·카드 템플릿(Gold prompt_version)·태그 버전은 version 의 레지스트리 설정에만 두고 행에 적지 않음(006). v0.1 인덱스 없음'''] {
   desertion_no varchar(20) [not null, note: '''공고번호
 예: 448567202600123''']
   text_kind varchar(10) [not null, note: '''글 종류 (지금은 card 하나)
 예: card''']
   version varchar(64) [not null, note: '''text_embedding@N (템플릿 내용·지문·태그 버전 포함 설정)
 예: text_embedding@3''']
-  model_key text [not null, note: '''모델 이름(:차원)
-예: gemini-embedding-2:768''']
   text_sha256 char(64) [not null, note: '''가린 카드 본문 sha256 (Gold source_hash)
 예: 4547c5…6206''']
-  template_version varchar(10) [not null, note: '''카드 템플릿 (Gold prompt_version)
-예: A2''']
-  tag_versions jsonb [note: '''카드에 쓴 작업별 태그 버전
-예: {"photo_trait": "photo_trait@1", "text_personality": "text_personality@1"}''']
   gold_run_id text [note: '''Gold 실행 ID
 예: text-737c35ec…''']
   embedding vector(768) [not null, note: '''768차원 벡터. v0.1 은 인덱스 없이 전체 비교''']

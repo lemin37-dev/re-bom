@@ -44,6 +44,14 @@ def migration_tables(texts: list[str]) -> dict[str, list[str]]:
                 if cm and cm.group(1).upper() not in _CONSTRAINT_WORDS:
                     cols.append(cm.group(1))
             tables[m.group(1)] = cols
+        # 뒤 번호 파일의 ALTER TABLE … ADD/DROP COLUMN 을 반영
+        for m in re.finditer(r"ALTER TABLE (?:IF EXISTS )?(\w+)\s+(.*?);", text, re.S):
+            cols = tables.setdefault(m.group(1), [])
+            for action, col in re.findall(r"(ADD|DROP) COLUMN (?:IF (?:NOT )?EXISTS )?(\w+)", m.group(2), re.I):
+                if action.upper() == "ADD" and col not in cols:
+                    cols.append(col)
+                elif action.upper() == "DROP" and col in cols:
+                    cols.remove(col)
     return tables
 
 
