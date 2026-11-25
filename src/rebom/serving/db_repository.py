@@ -3,6 +3,9 @@
 표는 S3 → RDS 동기화(rebom.serving.sync)가 채운다. API 는 읽기만 한다.
 - 보이는 공고: 보호중, 그리고 종료 뒤 visible_until 이 안 지난 공고(상세 링크 유지용, 30일)
 - 태그: 동기화가 활성 버전 태그만 넣으므로 버전을 다시 고르지 않는다. 검색·칩에는 searchable 태그만 쓴다
+- 글·사진 질의 벡터: 활성 버전(active_version) 행과 코사인 거리(<=>)로 전체 비교한다(v0.1 인덱스 없음).
+  사진은 service_notice_photo 와 sha256 이 같은 칸만 보고, 공고마다 가장 가까운 칸의 거리를 쓴다.
+  거르지 않고 가까운 순으로 앞에 두며, 벡터가 없는 공고는 원래 정렬로 뒤에 둔다.
 - 응답 모양은 sample 모드와 같다. 행을 공공 API 이름(camelCase)으로 바꿔 schemas.to_summary 에 넘긴다.
   나이·체중은 정제된 칸(birth_year·weight_kg)을 쓰고 원문 파싱(derive)을 하지 않는다.
 보호자 실명은 RDS 에 없다(동기화가 옮기지 않음).
@@ -14,7 +17,9 @@ from collections import defaultdict
 from datetime import date
 from typing import Any, Callable, Sequence
 
-from rebom.serving.repository import MATCH_RANK, SPECIES_CODES, AnimalQuery, SearchPage, _words
+from rebom.serving.repository import (
+    MATCH_RANK, SPECIES_CODES, AnimalQuery, QueryVector, SearchPage, VectorKind, VectorSpec, _words,
+)
 from rebom.serving.tags import tag_match
 
 VISIBLE = "(n.status_group = 'PROTECTING' OR (n.visible_until IS NOT NULL AND n.visible_until > now()))"
@@ -28,6 +33,28 @@ NOTICE_FIELDS = (
 _SELECT = ", ".join(f"n.{c}" for c in NOTICE_FIELDS)
 # 검색어를 찾는 칸 (sample 모드: specialMark·kindFullNm·colorCd·happenPlace·sfeSoci)
 _TEXT = "concat_ws(' ', n.special_mark, n.breed_full_name_raw, n.color_raw, n.happen_place, n.sfe_soci)"
+
+
+VECTOR_TASKS: dict[VectorKind, str] = {"text": "text_embedding", "image": "image_embedding"}
+_DISTANCE: dict[VectorKind, str] = {
+    "text": "SELECT t.desertion_no, t.embedding <=> %s::vector AS dist FROM text_embedding t "
+            "WHERE t.text_kind = 'card' AND t.version = %s",
+    "image": "SELECT e.desertion_no, min(e.embedding <=> %s::vector) AS dist FROM image_embedding e "
+             "JOIN service_notice_photo p ON p.desertion_no = e.desertion_no AND p.image_slot = e.image_slot "
+             "AND p.sha256 = e.sha256 WHERE e.version = %s GROUP BY e.desertion_no",
+}
+
+
+def vector_literal(values: Sequence[float]) -> str:
+    return "[" + ",".join(repr(float(x)) for x in values) + "]"
+
+
+def vector_join(vector: QueryVector | None) -> tuple[str, list[Any]]:
+    """질의 벡터 → 거리 v.dist 를 붙이는 LEFT JOIN 과 값. 벡터가 없으면 빈 문자열."""
+    if vector is None:
+        return "", []
+    sql = f"LEFT JOIN ({_DISTANCE[vector.spec.kind]}) v ON v.desertion_no = n.desertion_no"
+    return sql, [vector_literal(vector.values), vector.spec.version]
 
 
 def _ymd(d: date | None) -> str | None:
@@ -184,37 +211,50 @@ class DbRepository:
         today = self._today()
         cond, args = where(query, today)
         order, order_args = order_by(query, today)
+        join, join_args = vector_join(query.vector)
+        if query.vector:
+            order = f"v.dist ASC NULLS LAST, {order}"
+        select = f"SELECT n.desertion_no, {'v.dist' if query.vector else 'NULL::float8'} AS dist "                  f"FROM service_notice n {join} WHERE {cond} ORDER BY {order}"
         start = (query.page - 1) * query.size
         if not query.tags:
             total = self._rows(f"SELECT count(*) AS n FROM service_notice n WHERE {cond}", args)[0]["n"]
-            ids = [r["desertion_no"] for r in self._rows(
-                f"SELECT n.desertion_no FROM service_notice n WHERE {cond} ORDER BY {order} LIMIT %s OFFSET %s",
-                [*args, *order_args, query.size, start])]
-            return SearchPage(total, self._with_tags(ids))
+            rows = self._rows(f"{select} LIMIT %s OFFSET %s", [*join_args, *args, *order_args, query.size, start])
+            return SearchPage(total, self._with_tags(rows))
         # 태그는 거르지 않고 순서를 바꾼다(serving/tags.py). 조건에 맞는 번호를 모두 읽어 단계별로 줄 세운다
-        ids = [r["desertion_no"] for r in self._rows(
-            f"SELECT n.desertion_no FROM service_notice n WHERE {cond} ORDER BY {order}", [*args, *order_args])]
-        tags = self._tags(ids)
-        ranked = [(no, tag_match(tags.get(no, frozenset()), query.tags)) for no in ids]
-        ranked = [(no, m) for no, m in ranked if m is not None]
-        ranked.sort(key=lambda x: MATCH_RANK[x[1]])
+        rows = self._rows(select, [*join_args, *args, *order_args])
+        tags = self._tags([r["desertion_no"] for r in rows])
+        ranked = [(r, tag_match(tags.get(r["desertion_no"], frozenset()), query.tags)) for r in rows]
+        ranked = [(r, m) for r, m in ranked if m is not None]
+        ranked.sort(key=lambda x: MATCH_RANK[x[1]])  # 안정 정렬이라 같은 단계 안에서는 거리·고른 정렬이 유지된다
         matched = sum(1 for _, m in ranked if m == "all")
-        page = [no for no, _ in ranked[start:start + query.size]]
+        page = [r for r, _ in ranked[start:start + query.size]]
         return SearchPage(len(ranked), self._with_tags(page, tags), matched)
 
-    def _with_tags(self, nos: Sequence[str], tags: dict[str, frozenset[str]] | None = None) -> list[dict[str, Any]]:
+    def _with_tags(self, hits: Sequence[dict[str, Any]],
+                   tags: dict[str, frozenset[str]] | None = None) -> list[dict[str, Any]]:
+        """hits: desertion_no 와 dist(질의 벡터와의 코사인 거리, 없으면 None) 행."""
+        nos = [h["desertion_no"] for h in hits]
+        dist = {h["desertion_no"]: h.get("dist") for h in hits}
         tags = tags if tags is not None else self._tags(nos)
         rows = self._notices(nos)
         for r in rows:
             r["_tags"] = tags.get(r["desertionNo"], frozenset())
+            d = dist.get(r["desertionNo"])
+            r["_similarity"] = None if d is None else round(1 - float(d), 4)
         return rows
 
     def get(self, desertion_no: str) -> dict[str, Any] | None:
-        rows = self._with_tags([desertion_no])
+        rows = self._with_tags([{"desertion_no": desertion_no}])
         return rows[0] if rows else None
 
     def tags_of(self, desertion_no: str) -> frozenset[str]:
         return self._tags([desertion_no]).get(desertion_no, frozenset())
+
+    def vector_spec(self, kind: VectorKind) -> VectorSpec | None:
+        """활성 버전과 질의 차원(query_config.dim, 없으면 벡터 칸의 768). 활성 버전이 없으면 None."""
+        rows = self._rows("SELECT version, coalesce((query_config ->> 'dim')::int, 768) AS dim "
+                          "FROM active_version WHERE task = %s", [VECTOR_TASKS[kind]])
+        return VectorSpec(kind, rows[0]["version"], rows[0]["dim"]) if rows else None
 
     def shelters(self) -> list[tuple[dict[str, Any], int]]:
         """보호소별 대표 행과 보호중 동물 수. 보호중 많은 순 (sample 모드와 같음)."""

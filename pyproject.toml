@@ -24,6 +24,7 @@ serve = [
     "pydantic-settings>=2.4",
     "psycopg[binary]>=3.2",  # REBOM_DATA_MODE=db (RDS 서비스 표 읽기)
     "boto3>=1.34",  # db 접속 정보(Secrets Manager)
+    "Pillow>=10",  # 사진으로 찾기 질의 전처리 (serving/query_embed.py)
 ]
 photos = [
     "Pillow>=10",

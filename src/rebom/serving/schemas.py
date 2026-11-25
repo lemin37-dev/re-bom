@@ -69,6 +69,7 @@ class AnimalSummary(_Model):
     updated_at: str | None = None
     photo_tags: list[PhotoTag] = []  # 대표 사진을 보고 모델이 붙인 태그 (serving/tags.py)
     tag_match: TagMatch | None = None  # 태그를 골랐을 때만: all · some · unknown · other
+    similarity: float | None = None  # 글·사진으로 찾을 때만: 1 - 코사인 거리. 벡터가 없는 공고는 null
 
 
 class AnimalDetail(AnimalSummary):
@@ -174,6 +175,7 @@ def _summary_fields(raw: dict[str, Any], tags: Iterable[str] = (), today: date |
         "shelter": shelter_of(raw),
         "updated_at": raw.get("updTm"),
         "photo_tags": chips(tags),
+        "similarity": raw.get("_similarity"),
     }
 
 
