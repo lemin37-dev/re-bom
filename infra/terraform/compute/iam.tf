@@ -39,16 +39,6 @@ data "aws_iam_policy_document" "node" {
     resources = ["arn:aws:s3:::${var.data_bucket}/*"]
   }
 
-  # Allow deletion only for Silver writer lock objects.
-  statement {
-    sid     = "SilverWriterLockDelete"
-    actions = ["s3:DeleteObject"]
-    resources = [
-      "arn:aws:s3:::${var.data_bucket}/bench_tmp/b-storage-test/locks/notice-history.lock.json",
-      "arn:aws:s3:::${var.data_bucket}/bench_tmp/b-storage-test/locks/shelter.lock.json",
-    ]
-  }
-
   # API 키 등 비밀값. rebom/ 으로 시작하는 이름만 읽는다.
   statement {
     sid       = "ReadAppSecrets"
