@@ -138,7 +138,7 @@ re-bom/
 │   └── serving/               # 민혁  검색 API, 챗봇
 │
 ├── frontend/                  # Next.js 웹·모바일 화면 (자체 AGENTS.md 있음)
-├── db/migrations/             # 스키마 SQL (001_init.sql, 002_… 순서대로 추가)
+├── db/migrations/             # 스키마 SQL (001_init.sql, 002_… 순서대로 추가). 설명·ERD 는 docs/rds_schema.dbml
 ├── infra/                     # Dockerfile, k3s 매니페스트
 ├── scripts/                   # 일회성 스크립트 (API 점검, 리포트 등)
 ├── notebooks/                 # EDA·실험 (커밋 전 출력 지우기 권장)

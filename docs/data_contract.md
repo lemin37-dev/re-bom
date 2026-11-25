@@ -132,7 +132,7 @@
     - 글(텍스트) 임베딩도 같은 구조(`gold/text_embedding/…`, 카드 해시 기준)로 합니다. 글도 사진과 같은 모델(`gemini-embedding-2`, 768)을 쓰고, 검색에서는 순위로 합칩니다. RDS 테이블 초안은 `db/migrations/002_text_embedding.sql`(`text_embedding`, 기본키 공고·`text_kind`·`model_key`, 아직 적용 안 함). 자세한 계획은 `docs/image_embedding_pipeline.md` 10절.
   - **키**: (`desertion_no`, `image_slot`, `model`). 같은 칸의 sha256이 바뀌면 그 행을 덮어씁니다(과거 버전 벡터는 남기지 않음).
   - **칼럼**: `photo_version`, `sha256`, `s3_key`(원본 키), `photo_run_id`, `embedding vector(768)`, `embedded_at`.
-  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스(`001_init.sql`, 사진 백필이 끝나 그대로 유지). **[확정, 11/24]** 새로 만드는 벡터 테이블(글 `text_embedding` 등)은 v0.1에서 인덱스 없이 전체 비교하고, HNSW는 v0.1 실측 확인 후 v0.2에서 도입을 고려합니다. 종·보호중 조건은 서비스 테이블 `animal`과 `desertion_no`로 JOIN해 거릅니다(벡터 테이블에 종 칼럼은 두지 않음). 사진 HNSW를 타는 검색은 조건으로 걸러진 만큼 결과가 모자랄 수 있으니 `hnsw.ef_search`를 LIMIT 이상으로 두고 `hnsw.iterative_scan`(pgvector 0.8)을 켭니다. 이 설정은 성능 비교 후 검색 코드에 넣습니다(지금 코드는 기본값). 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
+  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스(`001_init.sql`, 사진 백필이 끝나 그대로 유지 → **11/25 결정으로 `004_vector_tables_v01.sql` 에서 삭제**, 16절). **[확정, 11/24]** 새로 만드는 벡터 테이블(글 `text_embedding` 등)은 v0.1에서 인덱스 없이 전체 비교하고, HNSW는 v0.1 실측 확인 후 v0.2에서 도입을 고려합니다. 종·보호중 조건은 서비스 테이블 `animal`과 `desertion_no`로 JOIN해 거릅니다(벡터 테이블에 종 칼럼은 두지 않음). 사진 HNSW를 타는 검색은 조건으로 걸러진 만큼 결과가 모자랄 수 있으니 `hnsw.ef_search`를 LIMIT 이상으로 두고 `hnsw.iterative_scan`(pgvector 0.8)을 켭니다. 이 설정은 성능 비교 후 검색 코드에 넣습니다(지금 코드는 기본값). 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
   - **[확정, 11/19]** 종료 공고 사진의 벡터는 지우지 않고 검색에서 거릅니다. 종료 뒤 보호중으로 복귀하는 공고가 있기 때문입니다(3절). 검색은 기본으로 `processState`가 `보호중`인 공고 안에서만 찾습니다. 공고 상태는 B 서비스 테이블에서 읽습니다.
 
 ## 7. 컬럼 (A→B 인계 스키마 v0)
@@ -542,3 +542,36 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 - DAG(`dags/text_tags.py`)와 실행 이미지: 사진 태깅처럼 Silver apply 전환 뒤 연결. 이미지·ECR·네임스페이스·Secret 은 사람이 만듭니다.
 - 같은 글 재사용을 실행 사이로 넓히기(지금은 한 실행 안에서만).
 - 기준 확인: sfe 의 "양호"(칸 이름 없이 붙어 정보 없음으로 판정), "밝은 성격"(활발 여부).
+
+## 16. 서비스 DB (RDS) 표 [v0.1 초안, 2026-11-25]
+
+기준: 노션 "Gold 스키마 · 확정 규칙과 사진 임베딩 설계안"(11/22~) 의 RDS 절. 동물병원·보호소 별도 표와 태그 사전 표는 두지 않습니다.
+
+**관리 방식**
+
+| 무엇 | 원본 | 고치는 법 |
+|---|---|---|
+| 표·칼럼 설명, 예시, 값 목록(태그 등) | `docs/rds_schema.dbml` | 파일을 고치고 dbdiagram.io 에 붙여 넣어 그림 확인 |
+| 실제 DB 구조 | `db/migrations/NNN_*.sql` | 이미 있는 파일은 고치지 않고 다음 번호 파일 추가. 적용은 사람이 |
+| 둘이 같은지 | `tests/test_rds_schema_doc.py` | 표·칼럼 이름이 다르면 pytest 실패 |
+| RDS 에 어디까지 적용했는지 | RDS `schema_migrations` 표 (005) | `python -m rebom.common.migrate status` 로 보고, `apply` 로 남은 파일을 적용 |
+| 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.1 = 마이그레이션 001~005.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
+
+- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~006**(태그 `schema-v0.1`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
+- 적용 도구는 파일 하나를 트랜잭션 하나로 묶어 실행과 기록을 함께 커밋합니다. 그래서 마이그레이션 파일 안에는 `BEGIN`/`COMMIT` 을 쓰지 않습니다. 트랜잭션 밖에서만 되는 명령(`CREATE INDEX CONCURRENTLY` 등)은 파일 첫 줄에 `-- migrate: no-transaction` 을 적습니다.
+- 적용한 파일의 내용(sha256, LF 기준)이 레포와 달라지면 `apply` 가 멈춥니다. 고치지 말고 새 번호 파일을 추가합니다.
+- 001~004 는 기록 표가 생기기 전에 손으로 적용했으므로 `baseline 4` 로 기록만 넣습니다(2026-11-25).
+
+- dbdiagram.io 의 SQL 내보내기는 쓰지 않습니다. 값 목록을 PostgreSQL ENUM 타입으로 만들고(값 삭제 불가), CHECK·부분 인덱스·`IF NOT EXISTS` 가 빠지며, `breed.<품종>` 같은 열린 값을 닫힌 목록으로 만듭니다.
+- DBML 의 Enum 은 설명용입니다. 실제 DB 에서는 text/varchar + CHECK 이고, `tag_code` 는 품종이 열린 값이라 CHECK 가 없습니다. 귀염은 검색 태그가 될 수 없게 CHECK 로 막습니다.
+
+**표 (영역별)**
+
+- 공고 화면: `service_notice`(공고당 1행, 보호자 실명 없음), `service_notice_photo`(사진 칸당 1행), `service_notice_tag`(태그 1개 = 1행, 활성 버전·현재 입력만) — `003_service_tables.sql`
+- 검색 벡터: `image_embedding`, `text_embedding` — `004_vector_tables_v01.sql` 에서 지우고 v0.1 모양으로 다시 만듦(키에 `version`, 서비스 표로 외래키). `006` 에서 version 으로 정해지는 칼럼(`model`, `model_key`, `template_version`, `tag_versions`)을 뺌: 실행 설정은 Gold 레지스트리의 `task@N` 설정에만 두고, 행에는 `version` 과 입력 해시만 둡니다. Gold `prompt_version`(글 임베딩에서는 카드 템플릿)은 RDS 로 옮기지 않습니다. **[결정, 11/25]** RDS 기존 데이터는 비우고 S3 동기화를 처음부터 하며, 사진 HNSW `image_embedding_hnsw_cos` 도 지움. v0.1 은 인덱스 없이 전체 비교, 실측 뒤 v0.2 에서 HNSW 도입 검토
+- 운영: `active_version`(작업별 활성 버전, 전환은 사람), `sync_state`(동기화 경로별 마지막 반영 완료본) — `003_service_tables.sql`, `schema_migrations`(마이그레이션 적용 기록) — `005_schema_migrations.sql`
+
+**남은 일**
+
+- S3 → RDS 동기화 기능(새로 만듦): 003·004 를 적용한 빈 RDS 를 처음부터 채움(11/25 결정). 기존 DAG `load_photo_embeddings`(`embedding/store.py`, `ON CONFLICT (desertion_no, image_slot, model)`)는 코드를 고치지 않으므로 004 적용 뒤 실패함 → 적용 전에 Airflow 에서 멈추고, 동기화 기능이 자리 잡으면 정리.
+- `sync_state` 의 순번 방식(`silver_publish_log` 순번 vs journal `silver_run_id`) 확정, `closed_transition_at` 출처 확인(이광훈 님).
