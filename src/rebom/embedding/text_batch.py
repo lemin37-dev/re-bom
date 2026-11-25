@@ -79,6 +79,16 @@ def _check_tag_sources(tags, versions: dict[str, str]) -> None:
         raise ValueError(f"Unexpected tag source {unknown}; expected one of TAG_SOURCES")
 
 
+def renamed_tags(tags, versions: dict[str, str]) -> dict[str, list[str]]:
+    """등록된 버전의 태그는 한 건도 없고 다른 버전만 있는 작업 → 표에 있는 버전들.
+    태그 버전 이름이 바뀐 경우다. 그대로 두면 카드에서 그 태그가 오류 없이 빠진다."""
+    found = defaultdict(set)
+    for row in tags:
+        found[row["task"]].add(row.get("version") or row["prompt_version"])
+    return {task: sorted(found[task]) for task, version in sorted(versions.items())
+            if found[task] and version not in found[task]}
+
+
 def _tag_index(tags, versions: dict[str, str]):
     index = defaultdict(set)
     for row in tags:
@@ -277,6 +287,10 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
         _check_tag_sources(tags, versions)
     cards = build_cards(notice_rows, photos, tags, template, versions)
     with_tags = {task: sum(task in card.tag_versions for card in cards) for task in sorted(versions)}
+    missing_tags = renamed_tags(tags, versions)
+    if write and missing_tags:  # 모델을 부르거나 쓰기 전에 멈춘다
+        raise ValueError(f"{version}에 등록된 태그가 표에 없고 다른 버전만 있음: " + ", ".join(
+            f"{task} 등록 {versions[task]}, 표 {found}" for task, found in missing_tags.items()))
     selected = [card for card in cards if set(require_tags) <= set(card.tag_versions)]
     existing = table.scan(
         row_filter=And(EqualTo("subject_type", "animal"), EqualTo("task", TASK), EqualTo("version", version)),
@@ -298,7 +312,7 @@ def run(catalog, gold, silver, version: str, *, limit: int, write: bool, embedde
                         template=template, version=version, run_id=run_id, embedder=embedder,
                         silver_snapshots=snapshots)
     result = {"template": template, "template_sha256": spec.sha256, "template_recorded": fingerprint,
-            "cards": len(cards), "with_tags": with_tags, "selected": len(selected), "planned": len(to_write),
+            "cards": len(cards), "with_tags": with_tags, "missing_tags": missing_tags, "selected": len(selected), "planned": len(to_write),
             "written": len(to_write) if write else 0, "silver_as_of": cutoff[0].isoformat() if cutoff else None,
             "silver_snapshots": snapshots,
             "show": [{"notice": c.notice, "text": c.text, "tag_versions": c.tag_versions} for c in to_write[:show]]}

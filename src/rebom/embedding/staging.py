@@ -16,7 +16,7 @@ from rebom.embedding.manifest import Photo
 
 ROOT = "gold/image_embedding/"
 
-COLUMNS = ["desertion_no", "image_slot", "photo_version", "sha256", "s3_key", "photo_run_id",
+COLUMNS = ["desertion_no", "image_slot", "photo_version", "sha256", "s3_key",
            "embedding", "source", "embed_run_id", "prep_version", "embedded_at"]
 
 
@@ -30,7 +30,7 @@ def _schema(dim: int):
 
     return pa.schema([
         ("desertion_no", pa.string()), ("image_slot", pa.int16()), ("photo_version", pa.int16()),
-        ("sha256", pa.string()), ("s3_key", pa.string()), ("photo_run_id", pa.string()),
+        ("sha256", pa.string()), ("s3_key", pa.string()),
         ("embedding", pa.list_(pa.float32(), dim)),
         ("source", pa.string()),  # api: 이번에 Gemini 호출 / reuse: 같은 sha256 벡터 재사용
         ("embed_run_id", pa.string()), ("prep_version", pa.string()), ("embedded_at", pa.string()),
@@ -67,7 +67,7 @@ def read_parquet(data: bytes) -> list[dict[str, Any]]:
 
 def photo_row(p: Photo, vec: Sequence[float], source: str, run_id: str, prep_version: str, at: str) -> dict:
     return {"desertion_no": p.desertion_no, "image_slot": p.slot, "photo_version": p.version, "sha256": p.sha256,
-            "s3_key": p.s3_key, "photo_run_id": p.photo_run_id, "embedding": list(vec), "source": source,
+            "s3_key": p.s3_key, "embedding": list(vec), "source": source,
             "embed_run_id": run_id, "prep_version": prep_version, "embedded_at": at}
 
 

@@ -24,7 +24,7 @@ def test_photos_from_silver_reads_version_from_key_and_skips_empty():
     current = sources.photos_from_silver(rows, "test")
     assert set(current) == {("1", 1), ("1", 2)}
     a = current[("1", 1)]
-    assert (a.version, a.ext, a.sha256, a.photo_run_id) == (2, "jpg", SHA_A, "silver:test")
+    assert (a.version, a.ext, a.sha256, a.photo_run_id) == (2, "jpg", SHA_A, None)
     assert current[("1", 2)].version == 1 and current[("1", 2)].sha256 == SHA_B
 
 

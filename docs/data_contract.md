@@ -381,6 +381,11 @@ Canary 점검 결과는 전용 테이블에 저장하고 공용 요청 로그의
 - 사진 수집 실패 슬롯은 기존 연결 또는 사진 없음 상태를 유지합니다. 슬롯과 스냅샷 정합성을 검증한 경우 READY를 발행할 수 있습니다.
 - RDS의 공고 상태는 공고 전용 `COMPLETED` 신호로 별도 반영합니다. 보호 종료 공고는 검색에서 제외하고, 상세 30일은 최초 보호중 → 종료를 관측한 `fetched_at`부터 계산합니다. 같은 전환을 재처리해도 만료 시각은 유지합니다.
 
+- **공유 키 [확정, 11/25 Silver·임베딩]**: Gold·RDS는 `publish_id`(= `silver_` + `bronze_run_id`)를 따릅니다. `photo_run_id`는 Bronze·Silver 안의 수집·처리·복구용이고 Gold·RDS에서는 쓰지 않습니다(Silver 이력 표의 `run_id`도 `photo_run_id`와 같은 값).
+- **사진 임베딩의 READY 입력 (11/25)**: `embed --publish-id <ID> --publish-bucket <버킷> --publish-prefix <경로> --gold-env <환경>`은 발행본이 고정한 공고·현재 사진 스냅샷에서 **보호중 공고의 사진**만 대상으로 합니다. 사진 파일은 Silver가 가리키는 Bronze 원본(`original_s3_key`)에서 읽습니다. 실행마다 `gold_run_input`에 한 행을 남기고, 새로 만들 사진이 0장이어도 남깁니다(시작 기록이며 완료 표시는 아님). 이미 만든 벡터는 sha256으로 재사용합니다. 쓸 때는 발행본의 표가 같은 환경의 Silver 표여야 하므로, Gold prod 쓰기는 Silver prod가 열린 뒤 됩니다. 매일 DAG는 아직 Bronze 입력입니다.
+- **태그 버전 이름이 바뀐 경우 (11/25)**: `embed-text`는 등록된 버전의 태그가 한 건도 없고 다른 버전만 있으면 모델을 부르기 전에 멈춥니다(계획에는 `missing_tags`로 표시). `_test`의 Jev 태그가 `text_health@1`·`text_personality@1`로 바뀌어 `text_embedding@3`은 쓰기가 멈추며, 저장된 `@3` 벡터는 그대로 씁니다(새 이름으로 만든 카드 18,730건이 저장된 글과 같음). 다음 글 적재는 새 이름으로 등록한 버전으로 합니다.
+- **v0.1(11/23)**: READY 이전이라 공고 스냅샷 `9071221286505043399`, 사진 스냅샷 `5477718773468639493`(Bronze 실행 `20261123T030014-aebb34`)을 기준선으로 따로 관리합니다.
+
 `gold_run_input`은 `gold_run_id`별로 Silver의 `publish_id`, 작업 `task`, 설정 `version`, 시작 시각 `started_at`을 기록합니다. 글 임베딩은 명시한 READY 발행본의 공고·사진 테이블과 스냅샷 ID를 검증하고 실행 동안 고정합니다. 최신 테이블 조회로 대체하지 않습니다. 실행 입력 표는 `--group execution`으로 생성합니다.
 
 ## 14. 현재 사진 스냅샷 [합의, 2026-11-20 이광훈 님 · A 구현 `CODE_VERSION` 2026-11-20]
