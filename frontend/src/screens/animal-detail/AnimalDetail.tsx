@@ -98,7 +98,7 @@ export function AnimalDetail({ animal: a, similar, onBack, onGuide, onOpen, comp
     </DetailInformation>
 
     <section className="information-section" id="pet-section-5">
-      <div className="section-with-link"><SectionTitle number="06" title="이 지역의 입양 지원" sub={`${center.sido ?? ''} ${center.sigungu ?? ''} 기준 예시 안내`} /><button className="text-link" onClick={onGuide}>입양 절차 안내 보기<Icon name="arrow" size={16} /></button></div>
+      <div className="section-with-link"><SectionTitle number="06" title="이 지역의 입양 혜택" sub={`보호소 관할 ${center.sido ?? ''} ${center.sigungu ?? ''} 기준 · 입양비 지원은 보통 입양한 보호센터의 지역에서 신청해요`} /><button className="text-link" onClick={onGuide}>입양 절차 안내 보기<Icon name="arrow" size={16} /></button></div>
       <SupportCards region={center.sido ?? ''} district={center.sigungu ?? ''} />
     </section>
 

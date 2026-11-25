@@ -1,0 +1,2998 @@
+{
+ "generatedAt": "2026-11-23",
+ "sources": {
+  "programs": "행정안전부 대한민국 공공서비스(혜택) 정보",
+  "ordinances": "국가법령정보센터 자치법규 (동물 조례의 '입양' 조문 자동 분류, 운영팀 검토 전)",
+  "festivals": "전국문화축제 표준데이터 (데이터 기준일 2026-10-08)",
+  "coords": "지역 위치: OpenStreetMap Nominatim (© OpenStreetMap contributors)"
+ },
+ "regions": [
+  {
+   "sido": "강원특별자치도",
+   "sigungu": null,
+   "lat": 37.77253,
+   "lng": 128.38207,
+   "approx": false
+  },
+  {
+   "sido": "강원특별자치도",
+   "sigungu": "삼척시",
+   "lat": 37.44987,
+   "lng": 129.1653,
+   "approx": false
+  },
+  {
+   "sido": "강원특별자치도",
+   "sigungu": "속초시",
+   "lat": 38.20696,
+   "lng": 128.59134,
+   "approx": false
+  },
+  {
+   "sido": "강원특별자치도",
+   "sigungu": "횡성군",
+   "lat": 37.4916,
+   "lng": 127.985,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": null,
+   "lat": 37.28847,
+   "lng": 127.05352,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "가평군",
+   "lat": 37.8314,
+   "lng": 127.5098,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "고양시",
+   "lat": 37.65819,
+   "lng": 126.83195,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "과천시",
+   "lat": 37.4289,
+   "lng": 126.98817,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "광명시",
+   "lat": 37.47855,
+   "lng": 126.86439,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "구리시",
+   "lat": 37.59359,
+   "lng": 127.12979,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "군포시",
+   "lat": 37.36152,
+   "lng": 126.9349,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "남양주시",
+   "lat": 37.63594,
+   "lng": 127.21651,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "부천시",
+   "lat": 37.50144,
+   "lng": 126.76601,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "성남시",
+   "lat": 37.42016,
+   "lng": 127.12621,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "수원시",
+   "lat": 37.26333,
+   "lng": 127.02875,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "시흥시",
+   "lat": 37.37989,
+   "lng": 126.80323,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "안양시",
+   "lat": 37.39385,
+   "lng": 126.95706,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "양주시",
+   "lat": 37.78493,
+   "lng": 127.04578,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "양평군",
+   "lat": 37.4916,
+   "lng": 127.4875,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "오산시",
+   "lat": 37.14994,
+   "lng": 127.07746,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "의왕시",
+   "lat": 37.34491,
+   "lng": 126.96899,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "의정부시",
+   "lat": 37.73807,
+   "lng": 127.03397,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "파주시",
+   "lat": 37.7599,
+   "lng": 126.78015,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "평택시",
+   "lat": 36.9925,
+   "lng": 127.11272,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "포천시",
+   "lat": 37.89483,
+   "lng": 127.20073,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "하남시",
+   "lat": 37.53925,
+   "lng": 127.21487,
+   "approx": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "화성시",
+   "lat": 37.19947,
+   "lng": 126.83126,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": null,
+   "lat": 35.38783,
+   "lng": 128.36623,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "거제시",
+   "lat": 34.88047,
+   "lng": 128.62121,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "고성군",
+   "lat": 34.97328,
+   "lng": 128.32223,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "김해시",
+   "lat": 35.22791,
+   "lng": 128.88954,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "밀양시",
+   "lat": 35.50384,
+   "lng": 128.7467,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "사천시",
+   "lat": 35.00347,
+   "lng": 128.06456,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "양산시",
+   "lat": 35.335,
+   "lng": 129.03706,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "진주시",
+   "lat": 35.18035,
+   "lng": 128.108,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "창원시",
+   "lat": 35.22796,
+   "lng": 128.68186,
+   "approx": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "함양군",
+   "lat": 35.52041,
+   "lng": 127.7253,
+   "approx": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": null,
+   "lat": 36.5754,
+   "lng": 128.5058,
+   "approx": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": "경주시",
+   "lat": 35.85567,
+   "lng": 129.22488,
+   "approx": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": "구미시",
+   "lat": 36.11955,
+   "lng": 128.34447,
+   "approx": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": "상주시",
+   "lat": 36.41045,
+   "lng": 128.15906,
+   "approx": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": null,
+   "lat": 35.8713,
+   "lng": 128.6018,
+   "approx": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "군위군",
+   "lat": 36.2425,
+   "lng": 128.5732,
+   "approx": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "달성군",
+   "lat": 35.7753,
+   "lng": 128.4312,
+   "approx": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "동구",
+   "lat": 35.8865,
+   "lng": 128.6355,
+   "approx": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "서구",
+   "lat": 35.8716,
+   "lng": 128.5591,
+   "approx": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "수성구",
+   "lat": 35.8584,
+   "lng": 128.6305,
+   "approx": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "중구",
+   "lat": 35.86926,
+   "lng": 128.60595,
+   "approx": false
+  },
+  {
+   "sido": "대전광역시",
+   "sigungu": null,
+   "lat": 36.3497,
+   "lng": 127.3849,
+   "approx": false
+  },
+  {
+   "sido": "대전광역시",
+   "sigungu": "대덕구",
+   "lat": 36.34656,
+   "lng": 127.41584,
+   "approx": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": null,
+   "lat": 35.17995,
+   "lng": 129.07524,
+   "approx": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "남구",
+   "lat": 35.1361,
+   "lng": 129.0844,
+   "approx": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "부산진구",
+   "lat": 35.16323,
+   "lng": 129.05295,
+   "approx": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "사하구",
+   "lat": 35.1041,
+   "lng": 128.9751,
+   "approx": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "수영구",
+   "lat": 35.1454,
+   "lng": 129.1127,
+   "approx": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "연제구",
+   "lat": 35.1765,
+   "lng": 129.0793,
+   "approx": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "해운대구",
+   "lat": 35.1629,
+   "lng": 129.1638,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": null,
+   "lat": 37.56668,
+   "lng": 126.97829,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "강남구",
+   "lat": 37.5177,
+   "lng": 127.0473,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "강서구",
+   "lat": 37.56142,
+   "lng": 126.82327,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "관악구",
+   "lat": 37.4782,
+   "lng": 126.9518,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "광진구",
+   "lat": 37.53627,
+   "lng": 127.08795,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "구로구",
+   "lat": 37.4952,
+   "lng": 126.8877,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "노원구",
+   "lat": 37.654,
+   "lng": 127.0567,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "동대문구",
+   "lat": 37.5742,
+   "lng": 127.03951,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "동작구",
+   "lat": 37.5121,
+   "lng": 126.9395,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "서대문구",
+   "lat": 37.57907,
+   "lng": 126.93679,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "서초구",
+   "lat": 37.4835,
+   "lng": 127.0322,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "성동구",
+   "lat": 37.5635,
+   "lng": 127.0365,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "성북구",
+   "lat": 37.59,
+   "lng": 127.0165,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "양천구",
+   "lat": 37.5171,
+   "lng": 126.8663,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "영등포구",
+   "lat": 37.5262,
+   "lng": 126.8959,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "용산구",
+   "lat": 37.5323,
+   "lng": 126.99,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "은평구",
+   "lat": 37.6024,
+   "lng": 126.9293,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "중구",
+   "lat": 37.56366,
+   "lng": 126.99751,
+   "approx": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "중랑구",
+   "lat": 37.6063,
+   "lng": 127.093,
+   "approx": false
+  },
+  {
+   "sido": "울산광역시",
+   "sigungu": null,
+   "lat": 35.53917,
+   "lng": 129.31191,
+   "approx": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": null,
+   "lat": 37.456,
+   "lng": 126.7052,
+   "approx": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "계양구",
+   "lat": 37.53735,
+   "lng": 126.73791,
+   "approx": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "남동구",
+   "lat": 37.4469,
+   "lng": 126.73151,
+   "approx": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "미추홀구",
+   "lat": 37.4636,
+   "lng": 126.6502,
+   "approx": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "연수구",
+   "lat": 37.4098,
+   "lng": 126.6787,
+   "approx": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "영종구",
+   "lat": 37.45645,
+   "lng": 126.44334,
+   "approx": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "제물포구",
+   "lat": 37.46525,
+   "lng": 126.60641,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": null,
+   "lat": 34.64297,
+   "lng": 126.40143,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "광산구",
+   "lat": 35.13964,
+   "lng": 126.79382,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "나주시",
+   "lat": 35.01589,
+   "lng": 126.71083,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "남구",
+   "lat": 35.1327,
+   "lng": 126.9025,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "담양군",
+   "lat": 35.32088,
+   "lng": 126.98832,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "동구",
+   "lat": 35.1462,
+   "lng": 126.9229,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "목포시",
+   "lat": 34.79033,
+   "lng": 126.38475,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "영광군",
+   "lat": 35.27693,
+   "lng": 126.51245,
+   "approx": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "화순군",
+   "lat": 35.06431,
+   "lng": 126.98643,
+   "approx": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": null,
+   "lat": 35.8199,
+   "lng": 127.109,
+   "approx": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": "김제시",
+   "lat": 35.80382,
+   "lng": 126.88056,
+   "approx": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": "남원시",
+   "lat": 35.41631,
+   "lng": 127.39037,
+   "approx": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": "임실군",
+   "lat": 35.6174,
+   "lng": 127.2893,
+   "approx": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": "정읍시",
+   "lat": 35.56977,
+   "lng": 126.85598,
+   "approx": false
+  },
+  {
+   "sido": "제주특별자치도",
+   "sigungu": null,
+   "lat": 33.48877,
+   "lng": 126.49871,
+   "approx": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": null,
+   "lat": 36.6593,
+   "lng": 126.6729,
+   "approx": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "공주시",
+   "lat": 36.47257,
+   "lng": 127.09124,
+   "approx": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "논산시",
+   "lat": 36.18682,
+   "lng": 127.09875,
+   "approx": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "서산시",
+   "lat": 36.7845,
+   "lng": 126.45032,
+   "approx": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "아산시",
+   "lat": 36.78995,
+   "lng": 127.00268,
+   "approx": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "예산군",
+   "lat": 36.6809,
+   "lng": 126.84487,
+   "approx": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "태안군",
+   "lat": 36.74542,
+   "lng": 126.29836,
+   "approx": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": null,
+   "lat": 36.85272,
+   "lng": 127.71533,
+   "approx": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "단양군",
+   "lat": 36.9848,
+   "lng": 128.3659,
+   "approx": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "보은군",
+   "lat": 36.48901,
+   "lng": 127.72924,
+   "approx": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "음성군",
+   "lat": 36.94,
+   "lng": 127.6906,
+   "approx": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "충주시",
+   "lat": 36.99073,
+   "lng": 127.92599,
+   "approx": false
+  }
+ ],
+ "programs": [
+  {
+   "id": "648000001144",
+   "sido": "경상남도",
+   "sigungu": null,
+   "kinds": [
+    "cost"
+   ],
+   "name": "유기동물 입양장려금 지원",
+   "summary": "시군 동물보호센터의 보호동물 입양 시 입양장려금 제공",
+   "target": "도내 시군 동물보호센터에서 유기유실동물*을 반려목적으로 입양하려는 도민으로 동물등록*(내장형)을 완료한 입양자\n* 동물보호법 제20조에 따라 지자체장이 소유권을 취득한 동물\n** 동물보호법 시행령 제6조에 따른 비영리법인 단체가 동물보호센터로부터 기증받은 동물을 개인에게 분양한 경우, 입양자가 동물등록 후 신청가능(동물보호 법인·단체는 지원대상 아님",
+   "content": "도내 시군 동물보호센터의 보호동물(유기·유실동물)을 반려의 목적으로 입양하려는 자로서\n동물등록(내장형 인식)을 완료한 입양자를 대상으로 입양장려금 제공",
+   "deadline": "입양 후 6개월 이내(시군별 사업량 소진 시까지)",
+   "method": "○ 입양 후 6개월 이내 동물보호센터 또는 해당 시군 담당자 방문신청",
+   "documents": "① 분양확인서 사본\n② 입금통장사본\n③ 신분증(주민등록증, 운전면허증 등)\n④ 동물등록증 사본",
+   "contact": "경상남도 축산과/055-211-6543",
+   "law": "",
+   "ordinance": "경상남도 동물보호 조례(제23조)||경상남도 동물보호 조례(제3조)",
+   "updatedAt": "20261105",
+   "benefit": {
+    "headline": "입양장려금",
+    "amountMan": null,
+    "percent": null,
+    "items": [],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "내장형 동물등록 완료",
+     "이 지역 주민"
+    ],
+    "applyWithin": "입양 후 6개월 안에 신청",
+    "channels": [
+     "방문"
+    ],
+    "budgetLimited": true
+   }
+  },
+  {
+   "id": "648000001145",
+   "sido": "경상남도",
+   "sigungu": null,
+   "kinds": [
+    "insurance"
+   ],
+   "name": "입양동물 펫보험 가입 지원",
+   "summary": "시군 동물보호센터의 보호동물 입양 시, 입양동물 펫보험 가입비 지원",
+   "target": "도내 시군 동물보호센터에서 유기유실동물*을 반려목적으로 입양하려는 도민으로 동물등록*(내장형)을 완료한 입양자\n- 단, 동물등록 미확인 시, 지원 불가\n* 동물보호법 제20조에 따라 지자체장이 소유권을 취득한 동물\n** 동물보호법 시행령 제6조에 따른 비영리법인 단체가 동물보호센터로부터 기증받은 동물을 개인에게 분양한 경우, 입양자가 동물등록 후 신청가능(동물보호 법인·단체는 지원대상 아님",
+   "content": "도내 시군 동물보호센터의 보호동물(유기·유실동물)을 반려의 목적으로 입양하려는 자로서\n동물등록(내장형 인식)을 완료하고 펫보험에 가입한 입양자를 대상으로 펫보험 가입비용 지원",
+   "deadline": "입양 후 6개월 이내(시군별 사업량 소진 시까지)",
+   "method": "○ 입양 후 6개월 이내 동물보호센터 또는 해당 시군 담당자 방문신청\n○ 입양동물에 대한 펫보험 가입은 입양자가 희망하는 펫보험업체에 자유롭게 가입하고 보험 증서를 첨부하여 지급 신청\n※ 단, 연 1회 이상 점검하여 1년간 펫보험 가입이용료 1/2이상 미납부 확인 시 환수조치",
+   "documents": "① 분양확인서 사본\n② 입금통장사본\n③ 펫보험 가입증서\n④ 신분증(주민등록증, 운전면허증 등)\n⑤ 동물등록증 사본",
+   "contact": "경상남도 축산과/055-211-6543",
+   "law": "",
+   "ordinance": "경상남도 동물보호 조례(제23조)||경상남도 동물보호 조례(제3조)",
+   "updatedAt": "20261105",
+   "benefit": {
+    "headline": "펫보험 가입비 지원",
+    "amountMan": null,
+    "percent": null,
+    "items": [
+     "펫보험 가입"
+    ],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "내장형 동물등록 완료",
+     "이 지역 주민",
+     "펫보험 가입 후 신청"
+    ],
+    "applyWithin": "입양 후 6개월 안에 신청",
+    "channels": [
+     "방문"
+    ],
+    "budgetLimited": true
+   }
+  },
+  {
+   "id": "542000000120",
+   "sido": "경상남도",
+   "sigungu": "고성군",
+   "kinds": [
+    "cost"
+   ],
+   "name": "유기･유실동물 입양비 지원",
+   "summary": "고성군 동물가족센터 입양자에게 입양비용 지원",
+   "target": "○ 유기동물 입양대상자 중 내장형등록 완료자",
+   "content": "○ 입양동물의 질병진단비, 치료비, 예방접종, 중성화수술, 내장형동물등록비, 훈련소 교육비, 미용비 등(※ 간식, 사료, 장난감 등의 물품 구매 내역은 지원 불가능)\n○ 유기동물 입양비용 지원\n- 25만원 이상 사용시 15만원 지원",
+   "deadline": "상시신청",
+   "method": "○ 방문 신청\n- 주민센터 : 거주지 관할 읍면동 주민센터에 방문 신청\n- 시군구 : 관할 군청 방문",
+   "documents": "① 입양비 청구서\n② 세부내역 영수증\n③ 지출 영수증 원본\n④ 병원진료 내역서(치료비, 예방접종, 미용비, 사회화 교육 훈련비 등)\n⑤ 통장사본",
+   "contact": "고성군 축산과/055-670-4327",
+   "law": "",
+   "ordinance": "고성군 동물보호에 관한 조례(제16조)",
+   "updatedAt": "20260511",
+   "benefit": {
+    "headline": "입양 비용 지원 15만원",
+    "amountMan": 15,
+    "percent": null,
+    "items": [
+     "질병 진단",
+     "치료",
+     "예방접종",
+     "중성화 수술",
+     "동물등록(내장칩)",
+     "미용",
+     "교육·훈련"
+    ],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "내장형 동물등록 완료"
+    ],
+    "applyWithin": "언제든 신청",
+    "channels": [
+     "방문"
+    ],
+    "budgetLimited": false
+   }
+  },
+  {
+   "id": "320000000313",
+   "sido": "서울특별시",
+   "sigungu": "관악구",
+   "kinds": [
+    "cost"
+   ],
+   "name": "관악구 유기동물 입양비 지원",
+   "summary": "입양동물 1마리당 최대 25만원 이내 지원",
+   "target": "-지원대상: 관악구 지정 유기동물 보호센터에서 유기동물을 반려의 목적으로 입양하여 동물등록(내장형)을 완료한 자",
+   "content": "-지원비용: 입양동물 1마리당 최대 25만원 이내(자부담 10만원 포함)\n(2025.12.31.까지 입양: 최대 15만원 지원, 2026.1.1.이후 입양: 최대 25만원 지원)\n-지원항목: 질병진단비, 치료비, 예방접종비, 중성화수술비, 내장형 동물등록비, 미용비, 펫보험* 가입비, 사회화 교육 및 훈련비\n*펫보험의 경우 신청일 기준 유효한 보험인 경우에 한하여 지원",
+   "deadline": "상시신청",
+   "method": "-방문: 관악구청 일자리벤처과 또는 관악구 유기동물보호센터\n-팩스: 02-879-7834",
+   "documents": "1. 입양확인서\n2. 입양비 청구서: 홈페이지 URL의 체출서류 다운로드 후 작성\n3. 통장사본\n4. 증방자료사본(영수증 등): 홈페이지 URL의 체출서류 다운로드 후 작성\n(신분증은 온라인 신청의 경우 인증서 등록, 접속으로 본인 확인 절차 갈음)\n5. 동물등록증사본\n6. 동물사랑배움터 입양예정자 교육 이수증",
+   "contact": "일자리벤처과/02-879-6694",
+   "law": "",
+   "ordinance": "서울특별시 관악구 동물보호 조례||서울특별시 관악구 동물보호 조례||서울특별시 관악구 동물보호 조례(제16조)",
+   "updatedAt": "20261109",
+   "benefit": {
+    "headline": "입양 비용 지원 최대 25만원",
+    "amountMan": 25,
+    "percent": null,
+    "items": [
+     "질병 진단",
+     "치료",
+     "예방접종",
+     "중성화 수술",
+     "동물등록(내장칩)",
+     "미용",
+     "펫보험 가입",
+     "교육·훈련"
+    ],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "내장형 동물등록 완료"
+    ],
+    "applyWithin": "언제든 신청",
+    "channels": [
+     "방문",
+     "팩스"
+    ],
+    "budgetLimited": false
+   }
+  },
+  {
+   "id": "305000000132",
+   "sido": "서울특별시",
+   "sigungu": "동대문구",
+   "kinds": [
+    "cost"
+   ],
+   "name": "동대문구 유기동물 입양비 지원",
+   "summary": "관내 유실,유기동물을 반려 목적의 입양 후 소요된 소유자 부담 비용 지원/1마리당 25만원",
+   "target": "우리 구 유실 유기동물(개,고양이)를 구 지정 동물보호센터에서 반려 목적으로 입양하려는 자로써 동물등록 완료 입양자\n- 유기돔물 입양 후 6개월 이내 신청 건에 한하여 지급",
+   "content": "1. 지원대상 : 우리 구 보호중인 유기동물을 반려 목적으로 입양하려는 자로써 동물등록 완료 입양자\n- 유기돔물 입양 후 6개월 이내 신청 건에 한하여 지급\n2. 신청방법 : 입양자 본인이 유기동물 입양관련 비용 지출 후 서류 준비하여 신청(방문, 이메일) 검토 후 지급\n- 준비서류 : 입양비 신청서, 입양자 신분증, 입양확인서 사본, 등물등록증 사본, 입양비 지출 관련 증빙서류(지출영수증, 병원진료내역서, 기타 입양관련 지출내역 등)\n입양자 본인명의 통장사본\n3. 지원내용 : 질병질단비, 치료비, 예방접종, 중성화수술비, 내장형 동물 등록비, 미용비, 펫보험 가입비(신청일 기준 유효한 것)\n중 입양 시 지출한 비용 중 마리당 최대 25 만원까지 지원",
+   "deadline": "상시신청",
+   "method": "입양자가 유기동물 입양시 관련 비용 지출 후 신청 준비서류 준비하여 방문 혹은 이메일로 신청",
+   "documents": "1. 입양비 신청서\n2. 입양자 신분증\n3. 입양확인서 사본\n4. 등물등록증 사본\n5. 입양비 지출 관련 증빙서류\n6. 입양자 본인 명의 통장사본",
+   "contact": "동대문구보건소 보건위생과/02-2127-4273",
+   "law": "동물보호법",
+   "ordinance": "",
+   "updatedAt": "20261112",
+   "benefit": {
+    "headline": "입양 비용 지원 최대 25만원",
+    "amountMan": 25,
+    "percent": null,
+    "items": [
+     "질병 진단",
+     "치료",
+     "예방접종",
+     "중성화 수술",
+     "동물등록(내장칩)",
+     "미용",
+     "펫보험 가입"
+    ],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "내장형 동물등록 완료"
+    ],
+    "applyWithin": "입양 후 6개월 안에 신청",
+    "channels": [
+     "방문",
+     "이메일"
+    ],
+    "budgetLimited": false
+   }
+  },
+  {
+   "id": "319000000136",
+   "sido": "서울특별시",
+   "sigungu": "동작구",
+   "kinds": [
+    "cost"
+   ],
+   "name": "유실·유기동물 입양비 지원",
+   "summary": "동작구 지정 동물보호센터에서 유기동물을 반려의 목적으로 입양한 자에게 입양비 지원",
+   "target": "동작구 지정 동물보호센터에서 공고한 유실·유기동물을 반려의 목적으로 입양하려는 자로서 아래의 요건을 모두 충족한 자\n- 동물등록(내장형) 완료\n- 동물사랑배움터(apms.epis.or.kr) 입양예정자 교육 수료자\n* 입양비 신청자와 입양자가 동일인이어야 함\n* 유기동물 입양일로부터 1년 이내 신청한 건에 한하여 지급",
+   "content": "ㅇ지원대상: 동작구 지정 동물보호센터*의 유실·유기동물을 반려의 목적으로 입양한 자로서 아래의 요건을 모두 충족하는 자\n- 동물등록(내장형) 완료\n- 동물사랑배움터(apms.epis.or.kr)에서 입양예정자 교육 수료자\n* 동작구 지정 동물보호센터 : 디아크동물종합병원(동작구 장승배기로27길 18)\nㅇ지원내용: 유실·유기동물을 반려 목적으로 입양 후 소요된 소유자 부담 비용 일부 지원\n- 지원금액 : 입양동물 1마리당 최대 25만원 이내\n- 지원항목 : 질병진단비, 치료비, 예방접종비, 중성화수술비, 내장형 동물등록비, 미용비, 펫보험* 가입비\n* 펫보험의 경우 신청일 기준 유효한 보험인 경우에 한하여 지원\nㅇ기타\n- 유기동물 입양 후 1년 이내 신청한 건에 한하여 지급\n- 예산 소진 시 마감\n- 선착순 지급",
+   "deadline": "유실·유기동물 입양 후 1년 이내 신청한 건에 한하여 지급",
+   "method": "ㅇ 동작구보건소 6층 예방관리과 동물보호팀 또는 동작구 동물보호센터에 방문하여 신청기한 내 구비서류 제출\nㅇ 신청 문의 : 02-820-9558",
+   "documents": "입양비 청구서, 입양확인서(동작구 동물보호센터 발급), 비용 증빙자료(진료비영수증, 보험증서 등), 통장사본, 신분증, 동물등록증, 입양예정자 교육 수료증",
+   "contact": "예방관리과/02-820-9558",
+   "law": "동물보호법(제4조)",
+   "ordinance": "서울특별시 동작구 동물보호 및 동물복지에 관한 조례(제15조)||서울특별시 동물보호 조례(제25조)",
+   "updatedAt": "20261111",
+   "benefit": {
+    "headline": "입양 비용 지원 최대 25만원",
+    "amountMan": 25,
+    "percent": null,
+    "items": [
+     "질병 진단",
+     "치료",
+     "예방접종",
+     "중성화 수술",
+     "동물등록(내장칩)",
+     "미용",
+     "펫보험 가입"
+    ],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "내장형 동물등록 완료",
+     "입양 전 교육 이수"
+    ],
+    "applyWithin": "입양 후 1년 안에 신청",
+    "channels": [
+     "방문"
+    ],
+    "budgetLimited": true
+   }
+  },
+  {
+   "id": "318000000432",
+   "sido": "서울특별시",
+   "sigungu": "영등포구",
+   "kinds": [
+    "cost"
+   ],
+   "name": "유실·유기동물 입양비 지원",
+   "summary": "영등포구 지정 동물보호센터의 유실·유기동물 입양시 소유자 부담비용 지원(최대 15만원)",
+   "target": "영등포구 지정 동물보호센터에서 유실·유기동물을 반려의 목적으로 입양하려는 자로서 아래의 조건을 모두 충족하는 자\n- 동물등록(내장형) 완료\n- 동물사랑배움터(apms.epis.or.kr) '입양예정자 교육'을 입양 전(또는 입양비 신청 전)에 이수한 자\n- 입양 후 1년이 경과하지 아니한 자\n※ 영등포구 지정 동물보호센터: (사)한국동물구조관리협회",
+   "content": "영등포구 지정 동물보호센터의 유실·유기동물 입양시 소유자 부담비용 지원\n- 소유자 부담비용의 60%, 최대 15만원 지원\n- 지원범위: 질병진단비, 치료비, 예방접종, 중성화수술비, 내장형 동물등록비, 미용비, 펫보험 가입비(신청일 기준 유효한 보험에 한함), 사회화교육 및 훈련비",
+   "deadline": "입양 후 1년 이내. 예산 소진시까지",
+   "method": "- 방문: 영등포구 당산로 123, 영등포구보건소 5층 생활건강과 반려동물정책팀\n- 이메일: 담당 부서에 주소 문의",
+   "documents": "1. 입양확인서(동물보호센터 발급)\n2. 입양비 청구서\n3. 통장사본\n4. 진료비 영수증, 보험증서 등 증빙자료\n5. 동물등록증 사본(동물등록은 내장형으로 해야함)\n6. 동물사랑배움터(apms.epis.or.kr) '입양예정자 교육' 이수증",
+   "contact": "영등포구보건소 생활건강과/02-2670-4720",
+   "law": "동물보호법(제4조)",
+   "ordinance": "서울특별시 영등포구 동물 보호 및 복지에 관한 조례(제13조)||서울특별시 동물보호 조례(제15조)",
+   "updatedAt": "20260805",
+   "benefit": {
+    "headline": "입양 비용 지원 최대 15만원",
+    "amountMan": 15,
+    "percent": 60,
+    "items": [
+     "질병 진단",
+     "치료",
+     "예방접종",
+     "중성화 수술",
+     "동물등록(내장칩)",
+     "미용",
+     "펫보험 가입",
+     "교육·훈련"
+    ],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "내장형 동물등록 완료",
+     "입양 전 교육 이수"
+    ],
+    "applyWithin": "입양 후 1년 안에 신청",
+    "channels": [
+     "방문",
+     "이메일"
+    ],
+    "budgetLimited": true
+   }
+  },
+  {
+   "id": "469100000021",
+   "sido": "전북특별자치도",
+   "sigungu": "정읍시",
+   "kinds": [
+    "insurance"
+   ],
+   "name": "펫 보헙 가입비 지원사업",
+   "summary": "펫보험 가입비 및 보험료 15만원 지원",
+   "target": "정읍시 동물보호소 內 유실ㆍ유기동물을 입양 후 펫 보험에 가입한 자",
+   "content": "정읍시 동물보호소에서 보호하는 유기견을 입양하면 반려동물 펫보험 가입비 및 보험료 15만원 지원",
+   "deadline": "상시신청",
+   "method": "정읍시 농업기술센터 축산과 동물보호팀으로 방문신청 및 등기우편 발송(정읍시 정우남로 282, 본관 2층 축산과)",
+   "documents": "1. 펫보험 가입비 지원사업 청구서\n2. 입양확인서\n3. 보험가입 증서\n4. 동물등록증 사본\n5. 신분증(주민등록증ㆍ운전면허증 등)\n6. 입금받을 통장사본\n7. 반려견 입양 전 교육 수료증",
+   "contact": "축산과 동물보호팀/063-539-6404",
+   "law": "",
+   "ordinance": "",
+   "updatedAt": "20261111",
+   "benefit": {
+    "headline": "펫보험 가입비 지원 15만원",
+    "amountMan": 15,
+    "percent": null,
+    "items": [
+     "펫보험 가입"
+    ],
+    "conditions": [
+     "이 지역 보호센터에서 입양",
+     "펫보험 가입 후 신청"
+    ],
+    "applyWithin": "언제든 신청",
+    "channels": [
+     "방문",
+     "우편"
+    ],
+    "budgetLimited": false
+   }
+  }
+ ],
+ "ordinances": [
+  {
+   "sido": "강원특별자치도",
+   "sigungu": null,
+   "name": "강원특별자치도 동물보호 조례",
+   "kinds": {
+    "fee": [
+     "제12조"
+    ]
+   },
+   "enforcedAt": "20240927",
+   "reviewed": false
+  },
+  {
+   "sido": "강원특별자치도",
+   "sigungu": "삼척시",
+   "name": "삼척시 반려ㆍ유기동물 보호 및 동물보호센터 운영에 관한 조례",
+   "kinds": {
+    "insurance": [
+     "제4조"
+    ],
+    "event": [
+     "제18조"
+    ]
+   },
+   "enforcedAt": "20241220",
+   "reviewed": false
+  },
+  {
+   "sido": "강원특별자치도",
+   "sigungu": "속초시",
+   "name": "속초시 반려동물 보호 및 학대방지 조례",
+   "kinds": {
+    "event": [
+     "제10조"
+    ]
+   },
+   "enforcedAt": "20230611",
+   "reviewed": false
+  },
+  {
+   "sido": "강원특별자치도",
+   "sigungu": "횡성군",
+   "name": "횡성군 동물보호에 관한 조례",
+   "kinds": {
+    "education": [
+     "제3조"
+    ],
+    "event": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20231114",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": null,
+   "name": "경기도 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20260629",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": null,
+   "name": "경기도 반려동물 보호 및 문화조성에 관한 조례",
+   "kinds": {
+    "center": [
+     "제7조",
+     "제9조",
+     "제12조"
+    ],
+    "education": [
+     "제12조"
+    ],
+    "event": [
+     "제12조"
+    ]
+   },
+   "enforcedAt": "20230411",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": null,
+   "name": "경기도 반려동물 입양 활성화 및 지원 조례",
+   "kinds": {
+    "aftercare": [
+     "제1조"
+    ],
+    "cost": [
+     "제5조"
+    ],
+    "education": [
+     "제5조",
+     "제6조",
+     "제7조"
+    ],
+    "center": [
+     "제5조",
+     "제6조",
+     "제7조"
+    ],
+    "event": [
+     "제5조",
+     "제6조",
+     "제7조"
+    ]
+   },
+   "enforcedAt": "20260115",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": null,
+   "name": "경기도 반려동물 테마파크 설치 및 운영에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제5조"
+    ]
+   },
+   "enforcedAt": "20241011",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": null,
+   "name": "경기도 홀로 사는 노인 등의 반려동물 입양 및 양육 지원 조례",
+   "kinds": {
+    "basic": [
+     "제1조",
+     "제2조",
+     "제3조",
+     "제4조",
+     "제5조",
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20251010",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "가평군",
+   "name": "가평군 동물복지 및 유기동물로 인한 피해 지원 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20261007",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "고양시",
+   "name": "고양시 동물복지 및 생명존중문화 조성 지원 조례",
+   "kinds": {
+    "basic": [
+     "제12조"
+    ]
+   },
+   "enforcedAt": "20230523",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "과천시",
+   "name": "과천시 동물보호 조례",
+   "kinds": {
+    "center": [
+     "제22조"
+    ]
+   },
+   "enforcedAt": "20250422",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "광명시",
+   "name": "광명시 동물보호 조례",
+   "kinds": {
+    "education": [
+     "제14조"
+    ]
+   },
+   "enforcedAt": "20250407",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "광명시",
+   "name": "광명시 반려동물 입양 활성화 지원 조례",
+   "kinds": {
+    "cost": [
+     "제6조"
+    ],
+    "education": [
+     "제6조"
+    ],
+    "center": [
+     "제6조"
+    ],
+    "event": [
+     "제6조",
+     "제7조",
+     "제9조"
+    ]
+   },
+   "enforcedAt": "20261116",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "구리시",
+   "name": "구리시 동물보호 및 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제5조",
+     "제28조"
+    ],
+    "event": [
+     "제5조",
+     "제28조"
+    ],
+    "cost": [
+     "제18조"
+    ],
+    "center": [
+     "제28조"
+    ]
+   },
+   "enforcedAt": "20230526",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "군포시",
+   "name": "군포시 동물복지 교육 활성화 및 지원에 관한 조례",
+   "kinds": {
+    "education": [
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20251210",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "군포시",
+   "name": "군포시 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제7조",
+     "제9조",
+     "제22조",
+     "제35조"
+    ],
+    "event": [
+     "제7조",
+     "제9조"
+    ],
+    "cost": [
+     "제22조"
+    ]
+   },
+   "enforcedAt": "20250317",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "남양주시",
+   "name": "남양주시 동물복지 및 유기동물로 인한 피해 지원 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20250709",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "부천시",
+   "name": "부천시 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "education": [
+     "제19조"
+    ],
+    "center": [
+     "제19조"
+    ]
+   },
+   "enforcedAt": "20240101",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "성남시",
+   "name": "성남시 동물보호에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제29조"
+    ]
+   },
+   "enforcedAt": "20251013",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "수원시",
+   "name": "수원시 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제3조",
+     "제16조"
+    ]
+   },
+   "enforcedAt": "20250311",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "시흥시",
+   "name": "시흥시 동물보호 및 복지에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제20조"
+    ]
+   },
+   "enforcedAt": "20240509",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "시흥시",
+   "name": "시흥시 반려동물 입양 활성화에 관한 조례",
+   "kinds": {
+    "education": [
+     "제2조",
+     "제6조",
+     "제7조",
+     "제8조",
+     "제9조"
+    ],
+    "center": [
+     "제2조",
+     "제6조"
+    ],
+    "event": [
+     "제5조",
+     "제6조",
+     "제7조"
+    ],
+    "cost": [
+     "제6조",
+     "제7조"
+    ]
+   },
+   "enforcedAt": "20231215",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "안양시",
+   "name": "안양시 동물 보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제16조"
+    ]
+   },
+   "enforcedAt": "20240724",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "양주시",
+   "name": "양주시 동물보호 및 반려문화 조성에 관한 조례",
+   "kinds": {
+    "education": [
+     "제4조"
+    ],
+    "event": [
+     "제4조"
+    ]
+   },
+   "enforcedAt": "20260427",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "양평군",
+   "name": "양평군 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제14조"
+    ]
+   },
+   "enforcedAt": "20260304",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "오산시",
+   "name": "오산시 동물보호 조례",
+   "kinds": {
+    "education": [
+     "제11조"
+    ],
+    "center": [
+     "제11조"
+    ],
+    "event": [
+     "제11조"
+    ]
+   },
+   "enforcedAt": "20260406",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "의왕시",
+   "name": "의왕시 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "education": [
+     "제5조"
+    ],
+    "event": [
+     "제5조"
+    ]
+   },
+   "enforcedAt": "20190501",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "의정부시",
+   "name": "의정부시 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20250221",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "파주시",
+   "name": "파주시 동물 보호 및 복지 조례",
+   "kinds": {
+    "education": [
+     "제6조",
+     "제10조",
+     "제34조"
+    ],
+    "event": [
+     "제6조",
+     "제10조"
+    ],
+    "cost": [
+     "제21조"
+    ]
+   },
+   "enforcedAt": "20250718",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "파주시",
+   "name": "파주시 동물보호 교육 활성화 및 지원에 관한 조례",
+   "kinds": {
+    "education": [
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20231101",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "평택시",
+   "name": "평택시 동물보호·복지 및 동물보호센터 운영에 관한 조례",
+   "kinds": {
+    "education": [
+     "제24조"
+    ],
+    "center": [
+     "제24조",
+     "제30조"
+    ]
+   },
+   "enforcedAt": "20251229",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "포천시",
+   "name": "포천시 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20160316",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "하남시",
+   "name": "하남시 동물보호ㆍ관리 및 복지에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제19조의3"
+    ],
+    "education": [
+     "제19조의3",
+     "제21조"
+    ],
+    "aftercare": [
+     "제19조의3"
+    ],
+    "center": [
+     "제21조"
+    ]
+   },
+   "enforcedAt": "20261001",
+   "reviewed": false
+  },
+  {
+   "sido": "경기도",
+   "sigungu": "화성시",
+   "name": "화성시 동물보호 및 복지에 관한 조례",
+   "kinds": {
+    "education": [
+     "제11조"
+    ],
+    "event": [
+     "제11조"
+    ],
+    "center": [
+     "제13조의2",
+     "제13조의4"
+    ]
+   },
+   "enforcedAt": "20250711",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": null,
+   "name": "경상남도 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제22조"
+    ]
+   },
+   "enforcedAt": "20240926",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "거제시",
+   "name": "거제시 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제3조",
+     "제20조"
+    ]
+   },
+   "enforcedAt": "20241121",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "김해시",
+   "name": "김해시 동물보호에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제17조"
+    ]
+   },
+   "enforcedAt": "20260923",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "밀양시",
+   "name": "밀양시 동물보호에 관한 조례",
+   "kinds": {
+    "center": [
+     "제10조"
+    ],
+    "cost": [
+     "제10조"
+    ]
+   },
+   "enforcedAt": "20240926",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "사천시",
+   "name": "사천시 동물보호에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20251113",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "양산시",
+   "name": "양산시 반려동물지원센터 관리 및 운영 조례",
+   "kinds": {
+    "education": [
+     "제4조"
+    ],
+    "center": [
+     "제4조"
+    ]
+   },
+   "enforcedAt": "20251211",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "진주시",
+   "name": "진주시 동물보호에 관한 조례",
+   "kinds": {
+    "center": [
+     "제17조"
+    ]
+   },
+   "enforcedAt": "20261112",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "창원시",
+   "name": "창원시 동물 보호 및 복지에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제5조"
+    ]
+   },
+   "enforcedAt": "20261015",
+   "reviewed": false
+  },
+  {
+   "sido": "경상남도",
+   "sigungu": "함양군",
+   "name": "함양군 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20220811",
+   "reviewed": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": null,
+   "name": "경상북도 동물보호 및 관리 조례",
+   "kinds": {
+    "basic": [
+     "제19조"
+    ]
+   },
+   "enforcedAt": "20241230",
+   "reviewed": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": null,
+   "name": "경상북도 유실ㆍ유기동물 입양 활성화 및 지원에 관한 조례",
+   "kinds": {
+    "education": [
+     "제12조"
+    ],
+    "event": [
+     "제12조"
+    ]
+   },
+   "enforcedAt": "20250519",
+   "reviewed": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": "경주시",
+   "name": "경주시 반려·유기동물 보호 및 동물보호센터 운영에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제12조"
+    ]
+   },
+   "enforcedAt": "20220303",
+   "reviewed": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": "구미시",
+   "name": "구미시 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "center": [
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20250402",
+   "reviewed": false
+  },
+  {
+   "sido": "경상북도",
+   "sigungu": "상주시",
+   "name": "상주시 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제4조"
+    ]
+   },
+   "enforcedAt": "20240717",
+   "reviewed": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": null,
+   "name": "대구광역시 동물보호 및 복지 조례",
+   "kinds": {
+    "center": [
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20250410",
+   "reviewed": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "군위군",
+   "name": "대구광역시 군위군 동물보호 및 복지 조례",
+   "kinds": {
+    "basic": [
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20240101",
+   "reviewed": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "달성군",
+   "name": "대구광역시 달성군 동물보호에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제18조"
+    ]
+   },
+   "enforcedAt": "20250430",
+   "reviewed": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "동구",
+   "name": "대구광역시 동구 동물보호에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제19조"
+    ]
+   },
+   "enforcedAt": "20260330",
+   "reviewed": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "서구",
+   "name": "대구광역시 서구 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20241030",
+   "reviewed": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "수성구",
+   "name": "대구광역시 수성구 정서회복을 위한 유기동물 입양 및 양육지원 조례",
+   "kinds": {
+    "aftercare": [
+     "제4조"
+    ],
+    "education": [
+     "제5조"
+    ]
+   },
+   "enforcedAt": "20251217",
+   "reviewed": false
+  },
+  {
+   "sido": "대구광역시",
+   "sigungu": "중구",
+   "name": "대구광역시 중구 동물보호에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제22조"
+    ]
+   },
+   "enforcedAt": "20211110",
+   "reviewed": false
+  },
+  {
+   "sido": "대전광역시",
+   "sigungu": null,
+   "name": "대전광역시 반려동물 보호 및 문화조성 조례",
+   "kinds": {
+    "basic": [
+     "제7조"
+    ]
+   },
+   "enforcedAt": "20240216",
+   "reviewed": false
+  },
+  {
+   "sido": "대전광역시",
+   "sigungu": null,
+   "name": "대전광역시 반려동물공원 및 동물보호센터 운영 조례",
+   "kinds": {
+    "basic": [
+     "제10조",
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20240216",
+   "reviewed": false
+  },
+  {
+   "sido": "대전광역시",
+   "sigungu": "대덕구",
+   "name": "대전광역시 대덕구 유실ㆍ유기동물 보호와 입양 활성화 조례",
+   "kinds": {
+    "cost": [
+     "제7조"
+    ],
+    "insurance": [
+     "제7조"
+    ]
+   },
+   "enforcedAt": "20240628",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": null,
+   "name": "부산광역시 동물 보호 및 복지에 관한 조례",
+   "kinds": {
+    "center": [
+     "제2조",
+     "제16조",
+     "제19조",
+     "제23조"
+    ],
+    "cost": [
+     "제16조",
+     "제19조"
+    ],
+    "insurance": [
+     "제19조"
+    ],
+    "education": [
+     "제19조",
+     "제23조"
+    ],
+    "aftercare": [
+     "제19조"
+    ]
+   },
+   "enforcedAt": "20260520",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": null,
+   "name": "부산광역시 동물보호 교육 프로그램 개발 및 운영에 관한 조례",
+   "kinds": {
+    "education": [
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20211229",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "남구",
+   "name": "부산광역시 남구 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "education": [
+     "제13조"
+    ],
+    "center": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20260930",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "부산진구",
+   "name": "부산광역시 부산진구 동물보호 및 동물복지에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20221206",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "사하구",
+   "name": "부산광역시 사하구 동물보호 및 반려문화 조성에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제16조"
+    ],
+    "insurance": [
+     "제16조"
+    ],
+    "education": [
+     "제16조"
+    ],
+    "event": [
+     "제16조"
+    ]
+   },
+   "enforcedAt": "20250701",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "수영구",
+   "name": "부산광역시 수영구 유실ㆍ유기동물 입양 활성화 및 지원에 관한 조례",
+   "kinds": {
+    "education": [
+     "제7조"
+    ],
+    "event": [
+     "제7조"
+    ]
+   },
+   "enforcedAt": "20261008",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "연제구",
+   "name": "부산광역시 연제구 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "education": [
+     "제13조"
+    ],
+    "center": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20251224",
+   "reviewed": false
+  },
+  {
+   "sido": "부산광역시",
+   "sigungu": "해운대구",
+   "name": "부산광역시 해운대구 동물보호 및 복지에 관한 조례",
+   "kinds": {
+    "education": [
+     "제2조"
+    ],
+    "center": [
+     "제2조"
+    ]
+   },
+   "enforcedAt": "20230630",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": null,
+   "name": "서울특별시 동물보호 조례",
+   "kinds": {
+    "insurance": [
+     "제15조"
+    ],
+    "education": [
+     "제15조",
+     "제25조",
+     "제28조"
+    ],
+    "event": [
+     "제25조"
+    ]
+   },
+   "enforcedAt": "20261001",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": null,
+   "name": "서울특별시 행정기구 설치 조례",
+   "kinds": {
+    "center": [
+     "제69조"
+    ]
+   },
+   "enforcedAt": "20250701",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "강남구",
+   "name": "서울특별시 강남구 동물보호 조례",
+   "kinds": {
+    "cost": [
+     "제13조"
+    ],
+    "insurance": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20251219",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "강남구",
+   "name": "서울특별시 강남구 동물보호 조례 시행규칙",
+   "kinds": {
+    "cost": [
+     "제6조"
+    ],
+    "education": [
+     "제6조"
+    ],
+    "center": [
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20251219",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "강서구",
+   "name": "서울특별시 강서구 동물 보호 조례",
+   "kinds": {
+    "education": [
+     "제21조"
+    ]
+   },
+   "enforcedAt": "20260408",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "광진구",
+   "name": "서울특별시 광진구 동물보호 및 동물복지에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제20조"
+    ]
+   },
+   "enforcedAt": "20261113",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "구로구",
+   "name": "서울특별시 구로구 동물 보호 조례",
+   "kinds": {
+    "basic": [
+     "제25조"
+    ]
+   },
+   "enforcedAt": "20230615",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "노원구",
+   "name": "서울특별시 노원구 반려동물 문화센터 운영에 관한 조례",
+   "kinds": {
+    "education": [
+     "제4조"
+    ]
+   },
+   "enforcedAt": "20210513",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "동대문구",
+   "name": "서울특별시 동대문구 동물 보호 조례",
+   "kinds": {
+    "basic": [
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20250508",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "동작구",
+   "name": "서울특별시 동작구 동물보호 및 동물복지에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20260903",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "서대문구",
+   "name": "서울특별시 서대문구 동물보호 및 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제4조",
+     "제18조"
+    ],
+    "event": [
+     "제4조"
+    ]
+   },
+   "enforcedAt": "20260408",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "서초구",
+   "name": "서울특별시 서초구 동물 보호 조례",
+   "kinds": {
+    "basic": [
+     "제5조",
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20250925",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "성동구",
+   "name": "서울특별시 성동구 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20250313",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "성북구",
+   "name": "서울특별시 성북구 동물보호 및 동물복지에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제3조",
+     "제17조"
+    ]
+   },
+   "enforcedAt": "20260514",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "양천구",
+   "name": "서울특별시 양천구 동물 보호 조례",
+   "kinds": {
+    "cost": [
+     "제18조"
+    ],
+    "center": [
+     "제18조"
+    ]
+   },
+   "enforcedAt": "20250424",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "영등포구",
+   "name": "서울특별시 영등포구 동물 보호 및 복지에 관한 조례",
+   "kinds": {
+    "insurance": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20261105",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "용산구",
+   "name": "서울특별시 용산구 동물보호조례",
+   "kinds": {
+    "basic": [
+     "제23조"
+    ]
+   },
+   "enforcedAt": "20241115",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "은평구",
+   "name": "서울특별시 은평구 동물복지 및 생명존중문화 조성 조례",
+   "kinds": {
+    "education": [
+     "제17조"
+    ],
+    "event": [
+     "제17조"
+    ]
+   },
+   "enforcedAt": "20251226",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "중구",
+   "name": "서울특별시 중구 동물보호 및 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제6조"
+    ],
+    "event": [
+     "제6조"
+    ],
+    "cost": [
+     "제15조"
+    ],
+    "insurance": [
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20261111",
+   "reviewed": false
+  },
+  {
+   "sido": "서울특별시",
+   "sigungu": "중랑구",
+   "name": "서울특별시 중랑구 동물복지 및 생명존중문화 조성 조례",
+   "kinds": {
+    "center": [
+     "제22조"
+    ],
+    "education": [
+     "제23조"
+    ],
+    "event": [
+     "제23조"
+    ]
+   },
+   "enforcedAt": "20260225",
+   "reviewed": false
+  },
+  {
+   "sido": "울산광역시",
+   "sigungu": null,
+   "name": "울산광역시 반려동물 문화센터 설치 및 운영 조례",
+   "kinds": {
+    "education": [
+     "제4조"
+    ],
+    "center": [
+     "제4조"
+    ]
+   },
+   "enforcedAt": "20260625",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": null,
+   "name": "인천광역시 동물보호와 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제20조"
+    ]
+   },
+   "enforcedAt": "20240717",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "계양구",
+   "name": "인천광역시 계양구 동물보호 및 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제5조"
+    ],
+    "event": [
+     "제5조"
+    ],
+    "cost": [
+     "제13조"
+    ],
+    "center": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20240405",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "남동구",
+   "name": "남동구 동물보호 및 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제5조"
+    ],
+    "event": [
+     "제5조"
+    ],
+    "cost": [
+     "제13조"
+    ],
+    "center": [
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20231109",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "미추홀구",
+   "name": "인천광역시 미추홀구 동물보호 및 복지 조례",
+   "kinds": {
+    "cost": [
+     "제5조"
+    ]
+   },
+   "enforcedAt": "20240112",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "연수구",
+   "name": "인천광역시 연수구 동물보호 및 동물복지에 관한 조례",
+   "kinds": {
+    "education": [
+     "제6조",
+     "제7조",
+     "제20조"
+    ],
+    "event": [
+     "제6조",
+     "제7조",
+     "제20조"
+    ],
+    "cost": [
+     "제18조"
+    ]
+   },
+   "enforcedAt": "20260429",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "영종구",
+   "name": "인천광역시 중구 반려동물 보호 및 학대방지 조례",
+   "kinds": {
+    "cost": [
+     "제10조"
+    ]
+   },
+   "enforcedAt": "20230721",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "제물포구",
+   "name": "인천광역시 동구 동물보호 및 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제6조"
+    ],
+    "event": [
+     "제6조"
+    ],
+    "insurance": [
+     "제15조"
+    ],
+    "center": [
+     "제15조"
+    ]
+   },
+   "enforcedAt": "20240517",
+   "reviewed": false
+  },
+  {
+   "sido": "인천광역시",
+   "sigungu": "제물포구",
+   "name": "인천광역시 제물포구 동물보호 및 동물복지 조례",
+   "kinds": {
+    "education": [
+     "제5조"
+    ],
+    "event": [
+     "제5조"
+    ],
+    "insurance": [
+     "제9조"
+    ],
+    "center": [
+     "제9조"
+    ]
+   },
+   "enforcedAt": "20260701",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "광산구",
+   "name": "전남광주통합특별시 광산구 반려동물 및 유실ㆍ유기동물 보호와 학대방지에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제8조"
+    ]
+   },
+   "enforcedAt": "20260701",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "나주시",
+   "name": "나주시 동물보호에 관한 조례",
+   "kinds": {
+    "event": [
+     "제22조"
+    ]
+   },
+   "enforcedAt": "20230512",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "나주시",
+   "name": "나주시 반려동물 보호 및 반려문화 조성에 관한 조례",
+   "kinds": {
+    "event": [
+     "제7조"
+    ]
+   },
+   "enforcedAt": "20240520",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "나주시",
+   "name": "나주시 반려동물 테마파크 설치 및 운영관리 조례",
+   "kinds": {
+    "education": [
+     "제2조"
+    ]
+   },
+   "enforcedAt": "20231031",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "남구",
+   "name": "전남광주통합특별시 남구 동물 보호 조례",
+   "kinds": {
+    "basic": [
+     "제8조"
+    ]
+   },
+   "enforcedAt": "20260701",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "담양군",
+   "name": "담양군 동물보호 및 복지에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제3조",
+     "제4조",
+     "제20조"
+    ]
+   },
+   "enforcedAt": "20220412",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "담양군",
+   "name": "담양군 동물보호 및 복지에 관한 조례 시행규칙",
+   "kinds": {
+    "basic": [
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20230925",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "동구",
+   "name": "전남광주통합특별시 동구 동물보호 및 반려문화 조성 조례",
+   "kinds": {
+    "basic": [
+     "제20조"
+    ]
+   },
+   "enforcedAt": "20260701",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "목포시",
+   "name": "목포시 반려동물 및 유실ㆍ유기동물 보호와 학대방지에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제24조의2"
+    ],
+    "insurance": [
+     "제24조의2"
+    ],
+    "education": [
+     "제24조의2"
+    ],
+    "event": [
+     "제24조의2"
+    ],
+    "goods": [
+     "제24조의2"
+    ]
+   },
+   "enforcedAt": "20261012",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "영광군",
+   "name": "영광군 동물보호 및 반려동물문화 조성에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제12조"
+    ]
+   },
+   "enforcedAt": "20231229",
+   "reviewed": false
+  },
+  {
+   "sido": "전남광주통합특별시",
+   "sigungu": "화순군",
+   "name": "화순군 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20221208",
+   "reviewed": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": null,
+   "name": "전북특별자치도 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제17조"
+    ]
+   },
+   "enforcedAt": "20240927",
+   "reviewed": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": "김제시",
+   "name": "김제시 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제5조"
+    ]
+   },
+   "enforcedAt": "20261113",
+   "reviewed": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": "남원시",
+   "name": "남원시 반려동물 보호 및 복지에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제12조"
+    ]
+   },
+   "enforcedAt": "20240118",
+   "reviewed": false
+  },
+  {
+   "sido": "전북특별자치도",
+   "sigungu": "임실군",
+   "name": "임실군 동물 보호 및 복지에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20240118",
+   "reviewed": false
+  },
+  {
+   "sido": "제주특별자치도",
+   "sigungu": null,
+   "name": "제주특별자치도 동물 보호 및 관리 조례",
+   "kinds": {
+    "basic": [
+     "제3조",
+     "제19조"
+    ]
+   },
+   "enforcedAt": "20251231",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": null,
+   "name": "충청남도 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제21조"
+    ]
+   },
+   "enforcedAt": "20250310",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": null,
+   "name": "충청남도 반려동물 보호 및 문화 조성에 관한 조례",
+   "kinds": {
+    "education": [
+     "제10조"
+    ],
+    "center": [
+     "제10조"
+    ],
+    "event": [
+     "제10조"
+    ]
+   },
+   "enforcedAt": "20240510",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "공주시",
+   "name": "공주시 동물보호 및 복지 지원에 관한 조례",
+   "kinds": {
+    "cost": [
+     "제17조"
+    ]
+   },
+   "enforcedAt": "20230623",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "논산시",
+   "name": "논산시 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제15조의2"
+    ]
+   },
+   "enforcedAt": "20250930",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "서산시",
+   "name": "서산시 동물사랑 및 생명존중문화 조성에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제7조의3",
+     "제11조",
+     "제13조"
+    ]
+   },
+   "enforcedAt": "20210325",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "아산시",
+   "name": "아산시 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제17조"
+    ]
+   },
+   "enforcedAt": "20241216",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "예산군",
+   "name": "예산군 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제16조",
+     "제18조"
+    ]
+   },
+   "enforcedAt": "20241115",
+   "reviewed": false
+  },
+  {
+   "sido": "충청남도",
+   "sigungu": "태안군",
+   "name": "태안군 동물보호 및 관리에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20230705",
+   "reviewed": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": null,
+   "name": "충청북도 동물보호 조례",
+   "kinds": {
+    "fee": [
+     "제16조"
+    ]
+   },
+   "enforcedAt": "20250516",
+   "reviewed": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": null,
+   "name": "충청북도 반려동물 보호 및 문화 조성에 관한 조례",
+   "kinds": {
+    "center": [
+     "제8조"
+    ]
+   },
+   "enforcedAt": "20251107",
+   "reviewed": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "단양군",
+   "name": "단양군 동물복지 및 유기동물로 인한 피해 지원 조례",
+   "kinds": {
+    "basic": [
+     "제3조"
+    ]
+   },
+   "enforcedAt": "20241227",
+   "reviewed": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "보은군",
+   "name": "보은군 동물보호 및 복지 증진에 관한 조례",
+   "kinds": {
+    "basic": [
+     "제3조",
+     "제9조"
+    ]
+   },
+   "enforcedAt": "20251107",
+   "reviewed": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "음성군",
+   "name": "음성군 동물보호 조례",
+   "kinds": {
+    "basic": [
+     "제16조"
+    ]
+   },
+   "enforcedAt": "20200515",
+   "reviewed": false
+  },
+  {
+   "sido": "충청북도",
+   "sigungu": "충주시",
+   "name": "충주시 동물보호 및 생명 존중 문화 조성 지원 조례",
+   "kinds": {
+    "basic": [
+     "제6조"
+    ]
+   },
+   "enforcedAt": "20220301",
+   "reviewed": false
+  }
+ ],
+ "festivals": [
+  {
+   "name": "2024 양천구 반려동물 문화축제",
+   "start": "2024-06-01",
+   "end": "2024-06-01",
+   "place": "목동로데오패션거리",
+   "address": "서울특별시 양천구 신정동 1068",
+   "sido": "서울특별시",
+   "sigungu": "양천구",
+   "host": "서울특별시 양천구청",
+   "lat": 37.52842,
+   "lng": 126.86079
+  },
+  {
+   "name": "의견문화제와 함께하는 임실N펫스타",
+   "start": "2026-05-01",
+   "end": "2026-05-03",
+   "place": "오수의견관광지",
+   "address": "전북특별자치도 임실군 오수면 의견로 3",
+   "sido": "전북특별자치도",
+   "sigungu": "임실군",
+   "host": "의견문화제전위원회",
+   "lat": 35.54002,
+   "lng": 127.33642
+  },
+  {
+   "name": "광주 펫크닉",
+   "start": "2026-10-10",
+   "end": "2026-10-11",
+   "place": "김대중컨벤션센터 야외광장",
+   "address": "광주광역시 서구 상무누리로 30",
+   "sido": "광주광역시",
+   "sigungu": "서구",
+   "host": "광주관광공사",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "name": "반려동물 문화행사(페스티벌)",
+   "start": "2026-10-24",
+   "end": "2026-10-24",
+   "place": "성남시청 광장",
+   "address": "경기도 성남시 중원구 성남대로 997",
+   "sido": "경기도",
+   "sigungu": "성남시",
+   "host": "경기도 성남시 농업기술센터",
+   "lat": 37.42017,
+   "lng": 127.12628
+  },
+  {
+   "name": "2026 경산 반려문화축제",
+   "start": "2026-11-07",
+   "end": "2026-11-08",
+   "place": "남천강변",
+   "address": "경상북도 경산시 진량읍 대구대로 201",
+   "sido": "경상북도",
+   "sigungu": "경산시",
+   "host": "(재)경산문화관광재단",
+   "lat": 35.90454,
+   "lng": 128.84281
+  }
+ ]
+}
