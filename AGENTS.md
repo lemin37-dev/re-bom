@@ -54,6 +54,8 @@
 4. **커밋하면 안 되는 파일**: `data/sample/` 을 제외한 `data/` 아래 파일, 모델 가중치(`*.pt`, `*.safetensors`, `*.onnx`), `*.parquet`, 로그.
 5. **인프라 적용은 사람만**: `terraform apply`·`destroy`·`import`·`state` 변경, 그리고 클라우드·클러스터 리소스를 직접 만들거나 바꾸거나 지우는 명령(aws CLI 생성·수정·삭제, `kubectl apply`·`delete`, `helm install`·`upgrade`·`uninstall` 등)은 AI 도구가 실행하지 않는다. `fmt`·`validate`·`plan` 같은 읽기 작업까지만 하고, 적용할 명령문을 적어서 사람에게 넘긴다.
 
+6. **활성 버전 전환은 사람이**: RDS `active_version` 의 `version`·`config_hash` 를 바꾸거나 Secrets Manager 권한을 고치는 일은 AI 도구가 실행하지 않는다. 전환 순서는 `docs/data_contract.md` 16.2 를 따라 명령문을 차례로 적어 사람에게 넘긴다. `query_config` 는 동기화가 레지스트리에서 채우므로 손으로 넣지 않는다(검색 API 는 사용자 입력을 활성 버전과 같은 모델·차원으로 임베딩한다). Gemini 키·시크릿을 못 읽으면 우회하지 말고 사람에게 요청한다.
+
 ## 작업 습관
 - 코드를 바꾸면 관련 테스트를 `tests/` 에 추가하거나 고치고 `pytest` 를 실행한다.
 - 외부 API 테스트는 실제 호출 대신 `tests/fixtures/` 나 `data/sample/` 의 샘플 JSON을 사용한다.

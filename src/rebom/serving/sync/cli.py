@@ -12,6 +12,8 @@
   service_notice_tag. 대표 사진은 RDS service_notice_photo 에서 고르므로 같은 발행의 photo_vector 가 먼저 끝나 있어야 한다.
 - text_vector: 활성 text_embedding 버전의 Gold 글 벡터 → text_embedding.
 - 활성 버전은 RDS active_version 을 시작할 때 한 번 읽고, Gold 레지스트리의 설정 해시와 같아야 쓴다. 없는 작업은 건너뛴다.
+- photo_vector·text_vector 는 같은 트랜잭션에서 active_version.query_config 를 그 버전의 레지스트리 model_id·dim 으로
+  채운다(검색 API 가 사용자 입력을 같은 모델·차원으로 임베딩하도록). 사람이 손으로 넣지 않는다.
 - --dry-run 은 같은 계산과 쓰기를 트랜잭션 안에서 해 보고 되돌린다(숫자만 출력).
 - 종료 코드: 0 성공, 4 이미 반영한 것보다 오래된 입력(StaleInput), 그 밖의 오류는 1.
 - 접속: Secrets Manager rebom/dev/rebom-db. PC 에서는 SSM 포트포워딩 뒤 REBOM_DB_HOST=127.0.0.1, REBOM_DB_PORT=15432.
@@ -96,6 +98,15 @@ class Runner:
             raise RuntimeError(f"active_version.config_hash 가 Gold 레지스트리({self.gold_env.name})와 다릅니다: {version}")
         return version, config
 
+    @staticmethod
+    def sync_query_config(conn, active: dict[str, dict[str, Any]], task: str, version: str,
+                          config: dict[str, Any]) -> dict[str, Any] | str:
+        qc = plan.query_config(config)
+        if qc is None:
+            return f"레지스트리 {version} 에 model_id·dim 이 없어 query_config 를 채우지 못함 (벡터 검색 503)"
+        changed = db.set_query_config(conn, task, version, active[task]["config_hash"], qc)
+        return {**qc, "changed": changed}
+
     def publication(self) -> dict[str, Any]:
         return inputs.ready_publication(self.s3, self.args.bucket, self.args.publish_prefix, self.args.publish_id)
 
@@ -162,6 +173,7 @@ class Runner:
             version, vectors = vector
             final = {k: {**v, "original_s3_key": (photos.get(k) or {}).get("original_s3_key")}
                      for k, v in db.existing_photos(c).items()}
+            out["query_config"] = self.sync_query_config(c, active, "image_embedding", version, config)
             vp = plan.plan_image_vectors(final, vectors, db.existing_image_vectors(c, version), version)
             progress(f"RDS 사진 벡터 반영 중 (넣기 {len(vp.upserts)}, 지우기 {len(vp.deletes)})")
             db.delete_image_vectors(c, vp.deletes, version)
@@ -220,11 +232,13 @@ class Runner:
         rows = inputs.text_vectors(self.catalog, self.gold_env, version, config, legacy=self.args.legacy)
 
         def work(c):
+            qc = self.sync_query_config(c, active, "text_embedding", version, config)
             tp = plan.plan_text_vectors(db.notice_numbers(c), rows, db.existing_text_vectors(c, version), version)
             db.delete_text_vectors(c, tp.deletes, version)
             if not self.args.dry_run:  # dry-run 은 건수만. 벡터는 커서 RDS 로 올리는 데 오래 걸린다
                 db.upsert_text_vectors(c, tp.upserts)
-            return {"publish_seq": rec["publish_seq"], "version": version, "gold_rows": len(rows), "text_vector": tp.stats}
+            return {"publish_seq": rec["publish_seq"], "version": version, "gold_rows": len(rows), "query_config": qc,
+                    "text_vector": tp.stats}
 
         return self.transaction(conn, "text_vector", pos, work)
 

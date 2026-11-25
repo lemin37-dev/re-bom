@@ -33,6 +33,8 @@ pytest
 |---|---|
 | `GET /health` | 상태, 데이터 모드, 건수 |
 | `GET /animals` | 목록. `species`(dog/cat/etc) `state`(protect/ended) `sex`(M/F/Q) `region`(시·도 단어, 쉼표 구분) `shelter`(보호소 등록번호) `q`(단어 중 하나라도) `age_min`·`age_max` `weight_min`·`weight_lt` `sort`(latest/notice_end) `page` `size`(≤100) |
+| `GET /animals?text=…` | 문장으로 찾기(db 모드). 문장을 임베딩해 공고 글 벡터와 가까운 순으로 앞에 둔다. 다른 필터는 같고, 벡터가 없는 공고는 뒤. 항목마다 `similarity`(1 − 코사인 거리) |
+| `POST /animals/photo-search` | 사진으로 찾기(db 모드). 본문에 사진 파일 그대로(`Content-Type: image/*`, 10MB 이하), 필터는 쿼리 문자열. 공고마다 가장 닮은 현재 사진 칸 기준 |
 | `GET /animals/{desertionNo}` | 상세. 없으면 404 |
 | `GET /shelters` | 공고에서 모은 보호센터 목록과 보호 중인 동물 수 |
 
