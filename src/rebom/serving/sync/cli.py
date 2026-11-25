@@ -157,8 +157,7 @@ class Runner:
             version, vectors = vector
             final = {k: {**v, "original_s3_key": (photos.get(k) or {}).get("original_s3_key")}
                      for k, v in db.existing_photos(c).items()}
-            vp = plan.plan_image_vectors(final, vectors, db.existing_image_vectors(c, version), version,
-                                         rec["photo_run_id"])
+            vp = plan.plan_image_vectors(final, vectors, db.existing_image_vectors(c, version), version)
             db.delete_image_vectors(c, vp.deletes, version)
             db.upsert_image_vectors(c, vp.upserts)
             out["image_vector"] = {"version": version, "gold_vectors": len(vectors), **vp.stats}

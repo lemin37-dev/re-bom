@@ -1,7 +1,7 @@
 """동기화를 실제 PostgreSQL 에 돌려 본다 (S3·Glue 는 가짜 입력).
 
 REBOM_TEST_PG_DSN 이 있을 때만 돈다. 예: REBOM_TEST_PG_DSN="host=/tmp port=55432 user=postgres dbname=synctest"
-pgvector 가 없어도 되도록 vector 를 text 도메인으로 바꿔 003~006 을 적용한다(검색 연산자는 쓰지 않음).
+pgvector 가 없어도 되도록 vector 를 text 도메인으로 바꿔 003~007 을 적용한다(검색 연산자는 쓰지 않음).
 ⚠ 그 DB 의 public 스키마를 지우고 다시 만든다. 운영 DB 를 넣지 말 것.
 """
 import json
@@ -27,7 +27,7 @@ def conn():
     c = psycopg.connect(DSN, autocommit=True)
     c.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public; CREATE DOMAIN vector AS text")
     for name in ("003_service_tables.sql", "004_vector_tables_v01.sql", "005_schema_migrations.sql",
-                 "006_embedding_drop_config_columns.sql"):
+                 "006_embedding_drop_config_columns.sql", "007_image_embedding_drop_photo_run_id.sql"):
         c.execute((MIGRATIONS / name).read_text(encoding="utf-8").replace("vector(768)", "vector"))
     yield c
     c.close()
@@ -114,8 +114,8 @@ def test_full_flow(conn, monkeypatch, capsys):
     r = run(capsys, "photo_vector")
     assert r["photo"]["upserts"] == 3
     assert r["image_vector"]["upserts"] == 1 and r["image_vector"]["waiting_vector"] == 2
-    row = conn.execute("SELECT version, sha256, s3_key, photo_run_id, embedding::text FROM image_embedding").fetchone()
-    assert row == ("image_embedding@1", SHA_A, "bronze/rescue/images/1001/popfile1.jpg", "photo-run-1", "[0.1,0.2]")
+    row = conn.execute("SELECT version, sha256, s3_key, gold_run_id, embedding::text FROM image_embedding").fetchone()
+    assert row == ("image_embedding@1", SHA_A, "bronze/rescue/images/1001/popfile1.jpg", "g1", "[0.1,0.2]")
 
     r = run(capsys, "tag")
     assert r["tag"]["upserts"] == 1 and r["skipped_tasks"] == ["photo_breed", "text_personality", "text_health"]

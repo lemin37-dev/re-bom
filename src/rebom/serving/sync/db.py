@@ -159,8 +159,7 @@ def existing_image_vectors(conn, version: str) -> dict[tuple[str, int], str]:
 
 def upsert_image_vectors(conn, rows: Sequence[Mapping[str, Any]]) -> int:
     rows = [{**r, "embedding": to_vector_literal(r["embedding"])} for r in rows]
-    cols = ("desertion_no", "image_slot", "version", "photo_version", "sha256", "s3_key", "photo_run_id",
-            "gold_run_id", "embedding")
+    cols = ("desertion_no", "image_slot", "version", "photo_version", "sha256", "s3_key", "gold_run_id", "embedding")
     return _upsert(conn, "image_embedding", cols, ("desertion_no", "image_slot", "version"), rows,
                    casts={"embedding": "::vector"}, extra_set="embedded_at = now()")
 

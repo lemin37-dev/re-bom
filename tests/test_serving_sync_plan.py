@@ -124,10 +124,10 @@ def test_image_vectors_follow_current_photo():
               ("2", 1): {**photo("2", 1, SHA_C), "photo_version": 1}}
     vectors = {SHA_A: {"embedding": [0.1, 0.2], "gold_run_id": "g1"}}
     existing = {("1", 2): SHA_C, ("2", 1): SHA_C, ("8", 1): SHA_A}
-    p = plan.plan_image_vectors(photos, vectors, existing, "image_embedding@1", "silver:test")
+    p = plan.plan_image_vectors(photos, vectors, existing, "image_embedding@1")
     assert [(r["desertion_no"], r["image_slot"]) for r in p.upserts] == [("1", 1)]
     up = p.upserts[0]
-    assert up["version"] == "image_embedding@1" and up["s3_key"].startswith("bronze/") and up["photo_run_id"] == "silver:test"
+    assert up["version"] == "image_embedding@1" and up["s3_key"].startswith("bronze/") and "photo_run_id" not in up
     # 1-2 는 사진이 B 로 바뀌었는데 B 벡터가 없다 → 옛 벡터 삭제(검색 후보에서 뺌). 8-1 은 사진 칸이 없다
     assert p.deletes == [("1", 2), ("8", 1)]
     assert p.unchanged == 1 and p.notes["waiting_vector"] == 1

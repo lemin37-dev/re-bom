@@ -211,7 +211,7 @@ def plan_photos(photos: Mapping[tuple[str, int], Mapping[str, Any]], present: se
 
 
 def plan_image_vectors(photos: Mapping[tuple[str, int], Mapping[str, Any]], vectors: Mapping[str, Mapping[str, Any]],
-                       existing: Mapping[tuple[str, int], str], version: str, photo_run_id: str) -> RowPlan:
+                       existing: Mapping[tuple[str, int], str], version: str) -> RowPlan:
     """photos: 동기화 뒤 RDS 의 사진 칸(plan_photos 반영 뒤). vectors: sha256 → {embedding, gold_run_id}.
     existing: 이 버전의 RDS (공고, 칸) → sha256."""
     plan = RowPlan(notes={"waiting_vector": 0})
@@ -228,7 +228,7 @@ def plan_image_vectors(photos: Mapping[tuple[str, int], Mapping[str, Any]], vect
             continue
         plan.upserts.append({"desertion_no": key[0], "image_slot": key[1], "version": version,
                              "photo_version": p["photo_version"], "sha256": sha,
-                             "s3_key": p.get("original_s3_key") or p["serving_s3_key"], "photo_run_id": photo_run_id,
+                             "s3_key": p.get("original_s3_key") or p["serving_s3_key"],
                              "gold_run_id": vec.get("gold_run_id"), "embedding": vec["embedding"]})
     plan.deletes += sorted(k for k in existing if k not in photos and k not in plan.deletes)
     return plan
