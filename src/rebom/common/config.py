@@ -15,7 +15,7 @@ class DataMode(str, Enum):
     """API 가 데이터를 어디서 가져올지."""
 
     SAMPLE = "sample"  # data/sample/ 의 구조동물 샘플 JSON (현재 기본)
-    DB = "db"  # 정제·적재된 PostgreSQL(pgvector). 아직 연결 전
+    DB = "db"  # RDS 서비스 표 (S3 → RDS 동기화가 채움, serving/db_repository.py)
 
 
 class Settings(BaseSettings):
@@ -28,6 +28,10 @@ class Settings(BaseSettings):
 
     data_mode: DataMode = DataMode.SAMPLE
     sample_path: Path = DEFAULT_SAMPLE_PATH
+    # db 모드 접속. 비우면 Secrets Manager(rebom/dev/rebom-db, REBOM_DB_HOST·PORT 덮어쓰기)로 붙는다. 로컬 시험용
+    db_dsn: str | None = None
+    # 사진 주소 앞부분. 비우면 /images/... 처럼 같은 도메인(CloudFront /images/*) 기준 상대 주소
+    image_base_url: str = ""
     # 쉼표로 구분한 허용 출처. 프론트 개발 서버 기본값
     cors_origins: str = "http://localhost:3000"
 

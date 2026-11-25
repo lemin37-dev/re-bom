@@ -90,9 +90,11 @@ def test_owner_name_and_rfid_never_exposed(tmp_path):
     assert "410000000000000" not in text
 
 
-def test_db_mode_not_ready():
-    with pytest.raises(NotImplementedError):
-        build_repository(Settings(data_mode=DataMode.DB, _env_file=None))
+def test_db_mode_builds_lazily():
+    """db 모드 저장소는 만들 때 접속하지 않는다(첫 요청 때 붙음). 실제 조회는 tests/test_serving_db.py."""
+    from rebom.serving.db_repository import DbRepository
+
+    assert isinstance(build_repository(Settings(data_mode=DataMode.DB, db_dsn="host=nowhere", _env_file=None)), DbRepository)
 
 
 def test_mode_from_env(monkeypatch):
