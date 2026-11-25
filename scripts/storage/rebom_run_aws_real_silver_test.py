@@ -26,7 +26,7 @@ from rebom.storage.silver.prepare_silver_pipeline import prepare_silver_pipeline
 from rebom.storage.silver.reconcile_run_journal import reconcile_run
 from rebom.storage.silver.run_journal import journal_path, read_run
 from rebom.storage.silver.s3_run_snapshot import save_snapshot, restore_snapshot
-from rebom.storage.silver.s3_run_journal import current_stage, write_stage
+from rebom.storage.silver.s3_run_journal import current_stage, write_stage, ensure_run_order
 from rebom.storage.silver.run_journal import STAGES
 import boto3
 
@@ -381,8 +381,6 @@ def execute(args):
         return result
 
     if state_s3 is not None:
-        from rebom.storage.silver.s3_run_journal import ensure_run_order
-
         order = ensure_run_order(
             state_s3,
             args.s3_state_bucket,
