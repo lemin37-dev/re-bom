@@ -2,7 +2,7 @@
 // 2026-11-25 · 기준: 노션 "Gold 스키마 · 확정 규칙과 사진 임베딩 설계안"(11/22~) RDS 절, develop eb4e317
 // 쓰는 법: dbdiagram.io 편집 창에 통째로 붙여 넣기. 표 설명 = Table [note], 칼럼 설명·예시 = 칼럼 note('예:' 줄), 값 목록 = Enum.
 // 관리: 이 파일 = 표·칼럼 설명과 값 목록의 원본(그림은 dbdiagram.io 에 붙여 넣어 봄). 실제 DB = db/migrations/*.sql (dbdiagram export SQL 은 쓰지 않음)
-// 버전: 스키마 v0.1 = 마이그레이션 001~006. develop 머지 때 Actions(schema-version.yml)가 태그 schema-v0.1 을 담. 새 마이그레이션이면 번호를 고치고 태그가 이미 있으면 버전을 올림. RDS 적용 상태는 schema_migrations 표
+// 버전: 스키마 v0.1 = 마이그레이션 001~007. develop 머지 때 Actions(schema-version.yml)가 태그 schema-v0.1 을 담. 새 마이그레이션이면 번호를 고치고 태그가 이미 있으면 버전을 올림. RDS 적용 상태는 schema_migrations 표
 // 실제 DB 타입: enum 으로 표시한 칼럼은 실제로는 text/varchar + CHECK. 칼럼 이름이 마이그레이션과 같은지 tests/test_rds_schema_doc.py 가 확인함
 // 벡터 표 2개(image_embedding·text_embedding)는 004 에서 지우고 이 모양으로 다시 만듦(11/25: RDS 데이터 비우고 S3 동기화 처음부터, HNSW 없음)
 
@@ -337,7 +337,7 @@ Table service_notice_tag [note: '''공고에 연결한 태그 1개 = 1행. Gold 
   }
 }
 
-Table image_embedding [note: '''공고 현재 사진 칸의 검색 벡터(칸 × 버전). Gold gold_image_embedding(sha256 단위)을 칸에 펼침. 검색 후보 = 보호중 + sha256 일치 + 활성 버전. 키에 version 포함(004). 모델 등 실행 설정은 version 의 레지스트리 설정에만 두고 행에 적지 않음(006). v0.1 인덱스 없음(전체 비교), HNSW 는 실측 뒤 v0.2 에서 검토'''] {
+Table image_embedding [note: '''공고 현재 사진 칸의 검색 벡터(칸 × 버전). Gold gold_image_embedding(sha256 단위)을 칸에 펼침. 검색 후보 = 보호중 + sha256 일치 + 활성 버전. 키에 version 포함(004). 모델 등 실행 설정은 version 의 레지스트리 설정에만 두고 행에 적지 않음(006). 원천 실행 번호(photo_run_id)도 두지 않음(007): 사진은 sha256·s3_key, 반영 시점은 service_notice_photo.silver_publish_seq, 모델 실행은 gold_run_id 로 추적. v0.1 인덱스 없음(전체 비교), HNSW 는 실측 뒤 v0.2 에서 검토'''] {
   desertion_no varchar(20) [not null, note: '''공고번호
 예: 448567202600123''']
   image_slot smallint [not null, note: '''사진 칸 1~8
@@ -350,8 +350,6 @@ Table image_embedding [note: '''공고 현재 사진 칸의 검색 벡터(칸 ×
 예: 3b7a…c90d''']
   s3_key text [not null, note: '''임베딩한 원본 키
 예: bronze/rescue/images/448567202600123/popfile1_v002.jpg''']
-  photo_run_id text [not null, note: '''사진 실행 run_id
-예: 20261124T030000-ab12''']
   gold_run_id text [note: '''Gold 실행 ID''']
   embedding vector(768) [not null, note: '''768차원 벡터, 코사인 거리. v0.1 인덱스 없음
 예: [0.012, -0.034, …] (768개)''']
