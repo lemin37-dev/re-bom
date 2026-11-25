@@ -331,7 +331,7 @@ with DAG(
         name="embed-text",
         arguments=[
             "embed-text", "--silver-env", "test", "--gold-env", "test",
-            "--version", "text_embedding@2",
+            "--version", "text_embedding@3",
             "--publish-id", SILVER_PUBLISH_ID,
             "--publish-bucket", DATA_BUCKET,
             "--publish-prefix", SILVER_TEST_PUBLISH_PREFIX,
