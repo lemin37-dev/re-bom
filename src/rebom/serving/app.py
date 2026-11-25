@@ -15,9 +15,11 @@ from typing import Callable, Literal
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from rebom.common.config import Settings, get_settings
+from rebom.common.config import DataMode, Settings, get_settings
 from rebom.serving.query_embed import BadQueryImage, Embedder, QueryEmbedder, default_embedder
-from rebom.serving.repository import AnimalQuery, AnimalRepository, QueryVector, VectorKind, build_repository
+from rebom.serving.repository import (
+    AnimalQuery, AnimalRepository, QueryVector, VectorKind, VectorUnavailable, build_repository,
+)
 from rebom.serving.schemas import (
     AnimalDetail,
     AnimalPage,
@@ -86,12 +88,11 @@ def create_app(settings: Settings | None = None,
         return request.app.state.repo
 
     def embed(r: AnimalRepository, kind: VectorKind, make: Callable, data: str | bytes) -> QueryVector:
-        spec = r.vector_spec(kind)
-        if spec is None:
-            raise HTTPException(status_code=503, detail=f"{KIND_LABEL[kind]} 벡터 검색을 쓸 수 없습니다 "
-                                                        "(db 모드가 아니거나 활성 버전이 없음).")
         try:
-            return make(spec, data)
+            return make(r.vector_spec(kind), data)
+        except VectorUnavailable as exc:  # 사람이 채워야 하는 설정·키. 메시지에 할 일이 있다
+            log.error("%s 벡터 검색 불가: %s", KIND_LABEL[kind], exc)
+            raise HTTPException(status_code=503, detail=f"{KIND_LABEL[kind]} 벡터 검색을 쓸 수 없습니다. {exc}") from None
         except BadQueryImage as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
         except Exception:  # noqa: BLE001 - 키·네트워크·모델 오류. 내용은 로그에만 남긴다
@@ -109,8 +110,14 @@ def create_app(settings: Settings | None = None,
             items.append(item)
         return AnimalPage(total=result.total, matched=result.matched, page=query.page, size=query.size, items=items)
 
+    @app.get("/livez")
+    def livez() -> dict[str, str]:
+        """프로세스만 본다(liveness). DB 가 잠깐 끊겨도 파드를 재시작하지 않게 DB 를 부르지 않는다."""
+        return {"status": "ok"}
+
     @app.get("/health", response_model=Health, response_model_by_alias=True)
     def health(r: AnimalRepository = Depends(repo)) -> Health:
+        """DB 까지 본다(readiness)."""
         return Health(status="ok", data_mode=settings.data_mode.value, animal_count=r.count())
 
     @app.get("/animals", response_model=AnimalPage, response_model_by_alias=True)
@@ -119,12 +126,16 @@ def create_app(settings: Settings | None = None,
         query: AnimalQuery = Depends(filters),
         text: str | None = Query(
             None, max_length=200,
-            description="문장으로 찾기 (예: 겁이 많지만 사람을 좋아하는 아이). 공고 글 벡터와 가까운 순. 거르지 않고 순서만 바꾼다",
+            description="문장으로 찾기 (예: 겁이 많지만 사람을 좋아하는 아이). 보호중 공고의 글 벡터와 가까운 순. "
+                        "거르지 않고 순서만 바꾼다. sample 모드는 벡터가 없어 q 와 같은 단어 포함으로 거른다",
         ),
         r: AnimalRepository = Depends(repo),
     ) -> AnimalPage:
         if text and text.strip():
-            query = replace(query, vector=embed(r, "text", request.app.state.embedder.text, text))
+            if settings.data_mode == DataMode.SAMPLE:
+                query = replace(query, q=text)
+            else:
+                query = replace(query, vector=embed(r, "text", request.app.state.embedder.text, text))
         return page_of(r, query)
 
     @app.post(

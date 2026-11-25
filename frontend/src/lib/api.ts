@@ -98,7 +98,7 @@ function toQuery(p: AnimalSearchParams) {
   set('sex', p.sex)
   set('region', p.region?.join(','))
   set('shelter', p.shelter)
-  set('q', p.q?.trim())
+  set('text', p.q?.trim()) // 검색창 문장은 글 벡터와 비교한다(API text). sample 모드 API 는 단어 포함으로 거른다
   set('weight_min', p.weightMin)
   set('weight_lt', p.weightLt)
   set('tags', p.tags?.join(','))

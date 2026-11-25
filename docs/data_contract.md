@@ -600,3 +600,36 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 - 종료 30일이 지난 공고의 RDS 화면용 행 정리 배치(주기 미정). Gold 결과는 보존.
 - Silver prod 경로가 정해지면 동기화 기본 경로·DAG 값을 바꾼다. `embed_photos`(Gold prod)와 동기화(Gold test)의 환경을 맞춘다.
 - 기존 `embedding/store.py`·`cli load`·`smoke` 의 RDS 코드 정리(담당자와 리뷰).
+
+### 16.2 검색 API 벡터 검색과 활성 버전 [v0.1, 2026-11-25]
+
+검색 API(`serving/db_repository.py`, `serving/query_embed.py`)는 사용자 입력을 임베딩해 RDS 벡터와 코사인 거리로 비교한다.
+
+- **검색창 문장**: `GET /animals?text=…` 는 글 벡터(`text_embedding`)와만 비교한다. 프론트 검색창은 이 값을 보낸다(`frontend/src/lib/api.ts`). sample 모드는 벡터가 없어 단어 포함(`q`)으로 거른다.
+- **사진**: `POST /animals/photo-search` 는 사진 벡터(`image_embedding`)와 비교한다. 공고마다 지금 칸 sha256 과 같은 칸 중 가장 가까운 거리.
+- **질의 임베딩 = 활성 버전**: 질의는 `active_version.query_config` 의 `model_id`·`dim` 으로만 임베딩하고, 벡터 표에서는 `version` 이 활성 버전인 행만 비교한다. `query_config` 는 그 버전의 Gold 레지스트리 설정에서 만든다(손으로 적지 않는다).
+  - 값이 비었거나, 모델이 검색 API 가 부를 수 있는 모델(`gemini.MODEL`)이 아니면 임베딩하지 않고 503 을 돌려준다. 짐작한 값으로 임베딩하지 않는다.
+  - 질의 접두어는 `gemini.query_text`(글), 전처리는 `prep.to_jpeg`(사진)로 Gold 와 같다.
+- **종료 공고**: 거리는 보호중 공고에만 붙인다. 종료 공고(상세 노출 30일)는 벡터 순위에 섞이지 않고 결과 뒤에 원래 정렬로 남는다(`similarity` 는 null).
+- **Gemini 키**: API 파드는 `GEMINI_API_KEY` 또는 Secrets Manager `rebom/embed/prod/gemini_api_key`(`REBOM_GEMINI_SECRET_ID`)를 읽는다. 못 읽으면 503 과 함께 로그에 사람에게 권한을 요청하라고 남긴다.
+- **probe**: liveness 는 `/livez`(DB 안 봄), readiness 는 `/health`(DB 봄).
+
+**활성 버전을 바꾸는 순서 (사람이)**
+
+1. 새 버전을 Gold 레지스트리에 등록하고 Gold 벡터를 다 만든다.
+2. `query_config` UPDATE 문을 만든다(출력만, 쓰지 않음).
+
+   ```
+   python -m rebom.serving.sync.query_config --task text_embedding --version text_embedding@3 --profile rebom
+   ```
+
+   출력은 `config_hash` 도 조건에 넣어, 활성 행이 그 레지스트리 설정이 아니면 0행이 바뀐다.
+3. `active_version` 의 `version`·`config_hash` 를 바꾸고, 같은 트랜잭션에서 2번의 UPDATE 를 실행한다.
+4. 바로 `python -m rebom.serving.sync text_vector`(사진은 `photo_vector`)로 새 버전 벡터를 넣는다. 동기화는 활성 버전만 읽으므로 전환 전에 미리 넣을 수 없다. 3번과 4번 사이에는 새 버전 행이 없어 벡터 순위가 비고, 결과는 원래 정렬로 나온다. 사용이 적은 시간에 한다.
+5. `GET /animals?text=…` 에서 `similarity` 가 채워지는지 확인한다.
+
+**실측 후 보완**
+
+- API 전용 읽기 계정(SELECT 만)으로 분리. 지금은 동기화와 같은 `rebom/dev/rebom-db` 로 붙는다.
+- 연결 `statement_timeout` (예: 5초). 지금은 제한이 없다.
+- 연결 풀(`psycopg_pool`). 지금은 연결 하나를 모든 요청이 차례로 쓴다. 전체 비교 질의 시간(p50·p95)과 동시 요청 수를 잰 뒤 크기를 정한다.

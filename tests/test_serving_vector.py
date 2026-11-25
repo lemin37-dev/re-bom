@@ -41,14 +41,15 @@ class FakeDb:
     def __init__(self, dist):
         self.dist = dist  # desertion_no → 거리 (None 이면 벡터 없음). 넣은 순서가 거리 순
         self.calls = []
-        self.active = {"text_embedding": "text_embedding@3", "image_embedding": "image_embedding@1"}
+        qc = {"model_id": "gemini-embedding-2", "dim": DIM}
+        self.active = {"text_embedding": ("text_embedding@3", qc), "image_embedding": ("image_embedding@1", qc)}
 
     def rows(self, sql, args=()):
         assert sql.count("%s") == len(args), sql
         self.calls.append((sql, list(args)))
         if "FROM active_version" in sql:
-            v = self.active.get(args[0])
-            return [{"version": v, "dim": DIM}] if v else []
+            row = self.active.get(args[0])
+            return [{"version": row[0], "query_config": row[1]}] if row else []
         if sql.startswith("SELECT count(*)"):
             return [{"n": len(self.dist)}]
         if "AS dist" in sql:
@@ -89,7 +90,7 @@ def test_text_search_embeds_query_and_ranks_by_similarity(app, db):
     body = TestClient(app).get("/animals", params={"text": "겁 많은 아이", "species": "dog"}).json()
     assert [i["desertionNo"] for i in body["items"]] == ["1001", "1002", "1003"]
     assert [i["similarity"] for i in body["items"]] == [0.9, 0.6, None]
-    embedder = app.state.embedder._get(DIM)
+    embedder = app.state.embedder._by_dim[DIM]
     assert embedder.texts == ["task: search result | query: 겁 많은 아이"]
     sql, args = next(c for c in db.calls if "AS dist" in c[0])
     assert "FROM text_embedding t" in sql and "v.dist ASC NULLS LAST" in sql
@@ -107,7 +108,7 @@ def test_photo_search_uses_current_photo_slots(app, db):
                              headers={"Content-Type": "image/png"})
     assert r.status_code == 200, r.text
     assert [i["desertionNo"] for i in r.json()["items"]] == ["1001", "1002"]
-    sent = app.state.embedder._get(DIM).images[0]
+    sent = app.state.embedder._by_dim[DIM].images[0]
     assert sent[:3] == b"\xff\xd8\xff"  # Gold 와 같은 JPEG 전처리
     sql, args = next(c for c in db.calls if "AS dist" in c[0])
     assert "p.sha256 = e.sha256" in sql and args[1] == "image_embedding@1"
@@ -123,7 +124,7 @@ def test_tags_rank_first_then_similarity(app, db):
     db.dist = {"1001": 0.1, "1002": 0.2}
     repo = app.state.repo
     repo._tags = lambda nos: {"1002": frozenset({"ear.drop"})}
-    vec = QueryVector(VectorSpec("text", "text_embedding@3", DIM), (0.1,) * DIM)
+    vec = QueryVector(VectorSpec("text", "text_embedding@3", "gemini-embedding-2", DIM), (0.1,) * DIM)
     page = repo.search(AnimalQuery(tags=parse_tags("ear.drop"), vector=vec))
     assert [r["desertionNo"] for r in page.rows] == ["1002", "1001"]
     assert [r["_similarity"] for r in page.rows] == [0.8, 0.9]
@@ -145,9 +146,57 @@ def test_embedding_failure_is_503_without_details(app):
     assert r.status_code == 503 and "secret" not in r.text
 
 
-def test_sample_mode_has_no_vector_search():
+def test_sample_mode_text_falls_back_to_word_match():
     client = TestClient(create_app(Settings(data_mode=DataMode.SAMPLE, _env_file=None), embedder_factory=FakeEmbedder))
-    assert client.get("/animals", params={"text": "온순한 아이"}).status_code == 503
+    by_text = client.get("/animals", params={"text": "온순"}).json()
+    assert by_text == client.get("/animals", params={"q": "온순"}).json()
+
+
+def test_closed_notices_get_no_vector_rank(app, db):
+    TestClient(app).get("/animals", params={"text": "온순한 아이"})
+    sql = next(sql for sql, _ in db.calls if "AS dist" in sql)
+    assert "ON v.desertion_no = n.desertion_no AND n.status_group = 'PROTECTING'" in sql
+
+
+def test_missing_query_config_asks_a_human(app, db):
+    db.active["text_embedding"] = ("text_embedding@3", None)
+    r = TestClient(app).get("/animals", params={"text": "온순한 아이"})
+    assert r.status_code == 503
+    assert "python -m rebom.serving.sync.query_config --task text_embedding --version text_embedding@3" in r.json()["detail"]
+
+
+def test_other_model_is_not_embedded(app, db):
+    db.active["text_embedding"] = ("text_embedding@9", {"model_id": "other-model", "dim": DIM})
+    r = TestClient(app).get("/animals", params={"text": "온순한 아이"})
+    assert r.status_code == 503 and "other-model" in r.json()["detail"]
+    assert app.state.embedder._by_dim == {}
+
+
+def test_unreadable_key_asks_a_human(db):
+    def no_key(dim):
+        raise RuntimeError("Secrets Manager rebom/embed/prod/gemini_api_key 를 읽지 못했습니다: AccessDenied")
+
+    app = create_app(Settings(data_mode=DataMode.DB, db_dsn="postgresql://unused", _env_file=None), embedder_factory=no_key)
+    app.state.repo._rows = db.rows
+    r = TestClient(app).get("/animals", params={"text": "온순한 아이"})
+    assert r.status_code == 503 and "사람에게" in r.json()["detail"]
+
+
+def test_livez_does_not_touch_db(app, db):
+    assert TestClient(app).get("/livez").json() == {"status": "ok"}
+    assert db.calls == []
+
+
+def test_query_config_sql_is_bound_to_registry_hash():
+    from rebom.serving.sync.query_config import query_config, update_sql
+
+    qc = query_config({"model_id": "gemini-embedding-2", "dim": 768, "template_version": "A2"})
+    assert qc == {"model_id": "gemini-embedding-2", "dim": 768}
+    sql = update_sql("text_embedding", "text_embedding@3", "abc", qc)
+    assert sql == ("UPDATE active_version SET query_config = '{\"dim\": 768, \"model_id\": \"gemini-embedding-2\"}'::jsonb "
+                   "WHERE task = 'text_embedding' AND version = 'text_embedding@3' AND config_hash = 'abc';")
+    with pytest.raises(ValueError):
+        query_config({"model_id": "gemini-embedding-2"})
 
 
 def test_repository_without_vector_query_has_no_join():

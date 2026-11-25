@@ -6,6 +6,7 @@
 - 글·사진 질의 벡터: 활성 버전(active_version) 행과 코사인 거리(<=>)로 전체 비교한다(v0.1 인덱스 없음).
   사진은 service_notice_photo 와 sha256 이 같은 칸만 보고, 공고마다 가장 가까운 칸의 거리를 쓴다.
   거르지 않고 가까운 순으로 앞에 두며, 벡터가 없는 공고는 원래 정렬로 뒤에 둔다.
+  거리는 보호중 공고에만 붙인다. 종료 공고(상세 노출 30일)는 벡터 순위에 섞이지 않고 맨 뒤에 남는다.
 - 응답 모양은 sample 모드와 같다. 행을 공공 API 이름(camelCase)으로 바꿔 schemas.to_summary 에 넘긴다.
   나이·체중은 정제된 칸(birth_year·weight_kg)을 쓰고 원문 파싱(derive)을 하지 않는다.
 보호자 실명은 RDS 에 없다(동기화가 옮기지 않음).
@@ -18,7 +19,7 @@ from datetime import date
 from typing import Any, Callable, Sequence
 
 from rebom.serving.repository import (
-    MATCH_RANK, SPECIES_CODES, AnimalQuery, QueryVector, SearchPage, VectorKind, VectorSpec, _words,
+    MATCH_RANK, SPECIES_CODES, AnimalQuery, QueryVector, SearchPage, VectorKind, VectorSpec, VectorUnavailable, _words,
 )
 from rebom.serving.tags import tag_match
 
@@ -53,7 +54,8 @@ def vector_join(vector: QueryVector | None) -> tuple[str, list[Any]]:
     """질의 벡터 → 거리 v.dist 를 붙이는 LEFT JOIN 과 값. 벡터가 없으면 빈 문자열."""
     if vector is None:
         return "", []
-    sql = f"LEFT JOIN ({_DISTANCE[vector.spec.kind]}) v ON v.desertion_no = n.desertion_no"
+    sql = (f"LEFT JOIN ({_DISTANCE[vector.spec.kind]}) v "
+           f"ON v.desertion_no = n.desertion_no AND n.status_group = 'PROTECTING'")
     return sql, [vector_literal(vector.values), vector.spec.version]
 
 
@@ -250,11 +252,19 @@ class DbRepository:
     def tags_of(self, desertion_no: str) -> frozenset[str]:
         return self._tags([desertion_no]).get(desertion_no, frozenset())
 
-    def vector_spec(self, kind: VectorKind) -> VectorSpec | None:
-        """활성 버전과 질의 차원(query_config.dim, 없으면 벡터 칸의 768). 활성 버전이 없으면 None."""
-        rows = self._rows("SELECT version, coalesce((query_config ->> 'dim')::int, 768) AS dim "
-                          "FROM active_version WHERE task = %s", [VECTOR_TASKS[kind]])
-        return VectorSpec(kind, rows[0]["version"], rows[0]["dim"]) if rows else None
+    def vector_spec(self, kind: VectorKind) -> VectorSpec:
+        """활성 버전과 그 버전의 질의 모델·차원(active_version.query_config). 값을 짐작하지 않고, 없으면 사람에게 넘긴다."""
+        task = VECTOR_TASKS[kind]
+        rows = self._rows("SELECT version, query_config FROM active_version WHERE task = %s", [task])
+        if not rows:
+            raise VectorUnavailable(f"active_version 에 {task} 가 없습니다. 활성 버전 전환은 사람이 합니다.")
+        version, qc = rows[0]["version"], rows[0]["query_config"] or {}
+        if not qc.get("model_id") or not qc.get("dim"):
+            raise VectorUnavailable(
+                f"active_version.query_config 가 비어 {version} 의 질의 모델·차원을 모릅니다. 사람이 "
+                f"'python -m rebom.serving.sync.query_config --task {task} --version {version}' 가 출력한 UPDATE 를 "
+                "적용해 주세요.")
+        return VectorSpec(kind, version, str(qc["model_id"]), int(qc["dim"]))
 
     def shelters(self) -> list[tuple[dict[str, Any], int]]:
         """보호소별 대표 행과 보호중 동물 수. 보호중 많은 순 (sample 모드와 같음)."""

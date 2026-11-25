@@ -19,13 +19,19 @@ SortKey = Literal["latest", "notice_end"]
 VectorKind = Literal["text", "image"]
 
 
+class VectorUnavailable(RuntimeError):
+    """벡터 검색에 필요한 설정·키가 없다. 사람이 채워야 하며, 메시지에 무엇을 할지 적는다."""
+
+
 @dataclass(frozen=True)
 class VectorSpec:
-    """질의를 임베딩할 때 쓸 활성 버전 (RDS active_version). 벡터 표에는 이 버전 행만 비교한다."""
+    """질의를 임베딩할 조건. RDS active_version 의 version 과 query_config(그 버전의 Gold 레지스트리 model_id·dim)에서 온다.
+    저장 벡터와 같은 공간이 되도록 질의도 이 모델·차원으로만 임베딩하고, 벡터 표에서는 이 버전 행만 비교한다."""
 
     kind: VectorKind
     version: str  # 예: text_embedding@3
-    dim: int = 768
+    model: str  # 예: gemini-embedding-2
+    dim: int  # 예: 768
 
 
 @dataclass(frozen=True)
@@ -75,7 +81,9 @@ class AnimalRepository(Protocol):
 
     def tags_of(self, desertion_no: str) -> frozenset[str]: ...
 
-    def vector_spec(self, kind: VectorKind) -> VectorSpec | None: ...
+    def vector_spec(self, kind: VectorKind) -> VectorSpec:
+        """활성 버전의 질의 조건. 없으면 VectorUnavailable."""
+        ...
 
 
 def _words(q: str | None) -> list[str]:
@@ -199,8 +207,8 @@ class SampleRepository:
         protected = {r["desertionNo"] for r in self._rows if r.get("processState") == "보호중"}
         return dict(count_tags(tags for no, tags in self._tags.items() if no in protected))
 
-    def vector_spec(self, kind: VectorKind) -> VectorSpec | None:
-        return None  # 샘플에는 벡터가 없다
+    def vector_spec(self, kind: VectorKind) -> VectorSpec:
+        raise VectorUnavailable("sample 모드에는 벡터가 없습니다")
 
 
 def build_repository(settings: Settings) -> AnimalRepository:
