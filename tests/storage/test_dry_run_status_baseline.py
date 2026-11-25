@@ -137,6 +137,7 @@ def test_cli_retries_nonprotecting_previous_notice_only_in_dry_run(
     bronze_path.write_text('{"run_id": "' + RUN + '"}', encoding="utf-8")
     event_path.write_text("{}", encoding="utf-8")
     s3, notice, history = Mock(), Mock(), Mock()
+    s3.get_paginator.return_value.paginate.return_value = []
     notice.scan.return_value.to_arrow.return_value.to_pylist.return_value = [previous]
     monkeypatch.setattr(cli.boto3, "client", Mock(return_value=s3))
     monkeypatch.setattr(cli, "get_tables", Mock(return_value=(Mock(), notice, history)))
