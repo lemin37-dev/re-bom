@@ -183,6 +183,6 @@ class SampleRepository:
 def build_repository(settings: Settings) -> AnimalRepository:
     if settings.data_mode == DataMode.SAMPLE:
         return SampleRepository(settings.sample_path)
-    raise NotImplementedError(
-        "REBOM_DATA_MODE=db 는 아직 구현되지 않았습니다. 지금은 REBOM_DATA_MODE=sample 을 쓰세요."
-    )
+    from rebom.serving.db_repository import DbRepository, connect_from_settings
+
+    return DbRepository(connect_from_settings(settings.db_dsn), settings.image_base_url)
