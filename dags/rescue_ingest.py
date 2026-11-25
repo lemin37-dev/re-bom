@@ -66,6 +66,8 @@ EMBED_IMAGE = "559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/embed:dev
 DATA_BUCKET = "rebom-data-559987919299"
 # 수집 task 가 XCom 으로 넘긴 Bronze run_id. KubernetesPodOperator 의 arguments 는 템플릿이라 실행할 때 값으로 바뀐다.
 BRONZE_RUN_ID = "{{ ti.xcom_pull(task_ids='rescue_incremental')['run_id'] }}"
+SILVER_TEST_PUBLISH_PREFIX = "bench_tmp/b-storage-test/publish"
+SILVER_PUBLISH_ID = "{{ ti.xcom_pull(task_ids='silver_gold_publish')['publish_id'] }}"
 
 
 def pod_task(task_id: str, name: str, cmds: list[str] | None = None, arguments: list[str] | None = None, **kwargs):
@@ -256,10 +258,12 @@ with DAG(
             "--photo-prefix",
             "bench_tmp/b-storage-test/journals/photo_auto_runs",
             "--publish-prefix",
-            "bench_tmp/b-storage-test/publish",
+            SILVER_TEST_PUBLISH_PREFIX,
             "--pod-auth",
             "--publish",
+            "--publish-output", "/airflow/xcom/return.json",
         ],
+        do_xcom_push=True,
         env_vars={
             "REBOM_S3_BUCKET": DATA_BUCKET,
             "AWS_DEFAULT_REGION": "ap-northeast-2",
@@ -322,10 +326,24 @@ with DAG(
         arguments=["load", "--max-write", "5000", "--gold-env", "prod"],  # 시험할 때는 "--dry-run" 추가
     )
 
+    embed_text = embed_task(
+        task_id="embed_text",
+        name="embed-text",
+        arguments=[
+            "embed-text", "--silver-env", "test", "--gold-env", "test",
+            "--version", "text_embedding@2",
+            "--publish-id", SILVER_PUBLISH_ID,
+            "--publish-bucket", DATA_BUCKET,
+            "--publish-prefix", SILVER_TEST_PUBLISH_PREFIX,
+            "--limit", "2",
+        ],
+    )
+
     rescue_incremental >> [generate_ingest_events, rescue_photos]
     rescue_incremental >> silver_shelter_apply
     rescue_photos >> photos_done
     generate_ingest_events >> silver_notice_apply
     photos_done >> silver_photo_apply_enabled >> silver_photo_apply
     [silver_notice_apply, silver_photo_apply] >> silver_gold_publish
+    silver_gold_publish >> embed_text
     photos_done >> check_embedding_drift >> embed_photos >> load_photo_embeddings

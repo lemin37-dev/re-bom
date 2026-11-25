@@ -45,6 +45,23 @@
 
 AWS 테스트 READY 발행본을 직접 지정해 공고와 현재 사진 스냅샷에서 각각 1행을 읽었습니다. 같은 발행본으로 A2 카드 2건의 본문과 768차원 벡터를 Gold test에 저장했고, `gold_run_input`에서 같은 실행의 발행본 ID를 확인했습니다. 최신 READY 선택, 재시도, 역반영 방지와 공고 전용 완료 신호는 [데이터 계약 13.7절](data_contract.md#137-gold-실행-입력)을 따릅니다.
 
+## Gold 정기 실행 태스크
+
+태스크 이름은 수행할 작업을 나타냅니다. 카드 템플릿, 모델 버전, 실행 환경은 실행 설정으로 지정합니다.
+
+| 태스크 | 역할 | 상태 |
+| --- | --- | --- |
+| `silver_gold_publish` | 검증된 공고·현재 사진 스냅샷 쌍을 READY로 발행하고 `publish_id`를 전달합니다. | 기존 발행 태스크에 XCom 전달 추가 |
+| `tag_photos` | READY의 현재 사진에서 외형·품종 태그를 생성합니다. | READY 연결 후속, 이름 제안 |
+| `tag_notice_text` | READY의 공고 글에서 Jev 성격·건강 태그를 생성합니다. | 정기 실행 후속, 이름 제안 |
+| `check_embedding_drift` | 고정 사진의 벡터를 비교해 임베딩 모델 출력 변화를 점검합니다. | 기존 태스크 |
+| `embed_photos` | 현재 사진의 벡터를 생성하거나 기존 벡터를 재사용합니다. | 기존 태스크, READY 입력 전환은 후속 |
+| `embed_text` | READY의 공고·사진과 Gold 태그로 글 카드를 구성합니다. 쓰기 실행은 신규·변경 카드의 벡터를 저장합니다. | `test` 읽기 전용 연결 |
+| `sync_notice_status_to_rds` | 공고 전용 `COMPLETED`를 받아 공고 상태와 검색 노출을 갱신합니다. | RDS 동기화 후속, 이름 제안 |
+| `sync_gold_results_to_rds` | 현재 공고·사진에 맞는 활성 태그와 벡터를 서비스 DB에 반영합니다. | RDS 동기화 후속, 이름 제안 |
+
+`embed_text`는 같은 Airflow 실행의 `silver_gold_publish`에서 `publish_id`를 받습니다. 첫 연결은 `text_embedding@2`, `test`, 읽기 전용으로 실행합니다.
+
 ## 공용 로그 전환
 
 태깅과 임베딩은 공용 처리·요청 로그를 사용합니다. Canary의 API 호출도 공용 요청 로그에 기록합니다. 스키마와 Canary 점검 상태의 후속 전환은 [데이터 계약 13.5절](data_contract.md#135-gold-공용-기록-스키마)을 참고합니다.

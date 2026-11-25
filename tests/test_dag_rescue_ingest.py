@@ -257,13 +257,48 @@ def test_drift_check_runs_canary_before_embed():
     assert "trigger_rule" not in tasks["embed_photos"] and "trigger_rule" not in kw
 
 
-def test_embedding_tasks_use_gold_prod_only():
-    """임베딩 결과 원본은 Gold prod 표. DAG 는 test 표에 쓰지 않는다(docs/data_contract.md 13.4)."""
-    for task, args in ((t, ast.literal_eval(kw["arguments"])) for t, kw in _embed_tasks().items()):
+def test_photo_embedding_tasks_use_gold_prod_only():
+    """사진 임베딩과 RDS 반영은 Gold prod를 사용한다."""
+    tasks = _embed_tasks()
+    for task in ("check_embedding_drift", "embed_photos", "load_photo_embeddings"):
+        args = ast.literal_eval(tasks[task]["arguments"])
         assert args[args.index("--gold-env") + 1] == "prod", task
         assert "--profile" not in args, task  # 파드는 노드 역할로 접속
     embed = ast.literal_eval(_embed_tasks()["embed_photos"]["arguments"])
     assert embed[embed.index("--image-batch") + 1] == "1"  # 요청 기록 1행 = 사진 1장 (11-23 결정)
+
+
+def test_text_embedding_plan_uses_same_run_ready_publication_without_writing():
+    source = DAG_FILE.read_text(encoding="utf-8")
+    publisher = next(
+        {kw.arg: kw.value for kw in node.keywords}
+        for node in ast.walk(_tree())
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "id", None) == "KubernetesPodOperator"
+        and any(kw.arg == "task_id" and isinstance(kw.value, ast.Constant)
+                and kw.value.value == "silver_gold_publish" for kw in node.keywords)
+    )
+    constants = _constants()
+
+    def args(node):
+        return [constants[value.id] if isinstance(value, ast.Name) else ast.literal_eval(value)
+                for value in node.elts]
+
+    publish_args = args(publisher["arguments"])
+    plan_args = args(_embed_tasks()["embed_text"]["arguments"])
+    assert ast.literal_eval(publisher["do_xcom_push"]) is True
+    assert publish_args[publish_args.index("--publish-output") + 1] == "/airflow/xcom/return.json"
+    assert "silver_gold_publish >> embed_text" in source
+    assert plan_args[0] == "embed-text" and "--write" not in plan_args
+    assert plan_args[plan_args.index("--publish-id") + 1] == (
+        "{{ ti.xcom_pull(task_ids='silver_gold_publish')['publish_id'] }}"
+    )
+    for option in ("--gold-env", "--silver-env"):
+        assert plan_args[plan_args.index(option) + 1] == "test"
+    assert plan_args[plan_args.index("--publish-prefix") + 1] == (
+        publish_args[publish_args.index("--publish-prefix") + 1]
+    )
+    assert plan_args[plan_args.index("--publish-bucket") + 1] == publish_args[publish_args.index("--bucket") + 1]
 
 
 def test_embedding_tasks_label_openrouter_usage():
