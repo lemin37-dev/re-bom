@@ -260,10 +260,11 @@ class DbRepository:
             raise VectorUnavailable(f"active_version 에 {task} 가 없습니다. 활성 버전 전환은 사람이 합니다.")
         version, qc = rows[0]["version"], rows[0]["query_config"] or {}
         if not qc.get("model_id") or not qc.get("dim"):
+            sync = "photo_vector" if kind == "image" else "text_vector"
             raise VectorUnavailable(
-                f"active_version.query_config 가 비어 {version} 의 질의 모델·차원을 모릅니다. 사람이 "
-                f"'python -m rebom.serving.sync.query_config --task {task} --version {version}' 가 출력한 UPDATE 를 "
-                "적용해 주세요.")
+                f"active_version.query_config 가 비어 {version} 의 질의 모델·차원을 모릅니다. "
+                f"동기화 'python -m rebom.serving.sync {sync}' 가 레지스트리에서 채웁니다. 돌려도 비면 레지스트리 "
+                f"{version} 설정에 model_id·dim 이 있는지 사람에게 확인을 요청해 주세요.")
         return VectorSpec(kind, version, str(qc["model_id"]), int(qc["dim"]))
 
     def shelters(self) -> list[tuple[dict[str, Any], int]]:

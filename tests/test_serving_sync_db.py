@@ -197,3 +197,15 @@ def test_bulk_upsert_and_delete_dedupe(conn):
                                        for v in ("image_embedding@1", "image_embedding@2")])
         assert db.delete_image_vectors(conn, [("9", 1), ("9", 1)], "image_embedding@1") == 1
     assert conn.execute("SELECT version FROM image_embedding").fetchall() == [("image_embedding@2",)]
+
+
+def test_query_config_only_for_matching_active_row(conn):
+    activate(conn, "text_embedding", "text_embedding@3")
+    qc = {"model_id": "gemini-embedding-2", "dim": 768}
+    hash_ = conn.execute("SELECT config_hash FROM active_version WHERE task = 'text_embedding'").fetchone()[0]
+    assert db.set_query_config(conn, "text_embedding", "text_embedding@2", hash_, qc) is False
+    assert db.set_query_config(conn, "text_embedding", "text_embedding@3", "other-hash", qc) is False
+    assert db.set_query_config(conn, "text_embedding", "text_embedding@3", hash_, qc) is True
+    assert db.set_query_config(conn, "text_embedding", "text_embedding@3", hash_, qc) is False
+    got = conn.execute("SELECT query_config FROM active_version WHERE task = 'text_embedding'").fetchone()[0]
+    assert got == qc

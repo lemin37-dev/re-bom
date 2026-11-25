@@ -307,6 +307,19 @@ def plan_tags(notices: set[str], rep_photo: Mapping[str, str], text_inputs: Mapp
     return plan
 
 
+# ---- 검색 질의 설정 --------------------------------------------------------------------------------------------------
+
+QUERY_KEYS = ("model_id", "dim")
+
+
+def query_config(config: Mapping[str, Any]) -> dict[str, Any] | None:
+    """활성 벡터 버전의 레지스트리 설정 → active_version.query_config. 검색 API 는 사용자 입력을 이 모델·차원으로
+    임베딩해 같은 버전의 저장 벡터와 비교한다. 레지스트리에 값이 없으면 None(검색 API 는 벡터 검색을 하지 않는다)."""
+    if not all(config.get(k) for k in QUERY_KEYS):
+        return None
+    return {"model_id": str(config["model_id"]), "dim": int(config["dim"])}
+
+
 # ---- 글 벡터 ------------------------------------------------------------------------------------------------------
 
 def plan_text_vectors(notices: set[str], gold_rows: Iterable[Mapping[str, Any]],

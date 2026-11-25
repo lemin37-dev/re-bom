@@ -88,6 +88,17 @@ def active_versions(conn) -> dict[str, dict[str, Any]]:
     return {t: {"version": v, "config_hash": h} for t, v, h in rows}
 
 
+def set_query_config(conn, task: str, version: str, config_hash: str, qc: Mapping[str, Any]) -> bool:
+    """활성 행이 이 버전·설정 해시일 때만 query_config 를 바꾼다. 바뀌었으면 True (같은 값이면 False)."""
+    import json
+
+    body = json.dumps(dict(qc), sort_keys=True)
+    cur = conn.execute(
+        "UPDATE active_version SET query_config = %s::jsonb WHERE task = %s AND version = %s AND config_hash = %s "
+        "AND query_config IS DISTINCT FROM %s::jsonb", (body, task, version, config_hash, body))
+    return cur.rowcount == 1
+
+
 # ---- 공고 --------------------------------------------------------------------------------------------------------
 
 def existing_notices(conn) -> dict[str, dict[str, Any]]:

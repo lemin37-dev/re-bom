@@ -162,7 +162,7 @@ def test_missing_query_config_asks_a_human(app, db):
     db.active["text_embedding"] = ("text_embedding@3", None)
     r = TestClient(app).get("/animals", params={"text": "온순한 아이"})
     assert r.status_code == 503
-    assert "python -m rebom.serving.sync.query_config --task text_embedding --version text_embedding@3" in r.json()["detail"]
+    assert "python -m rebom.serving.sync text_vector" in r.json()["detail"]
 
 
 def test_other_model_is_not_embedded(app, db):
@@ -187,16 +187,12 @@ def test_livez_does_not_touch_db(app, db):
     assert db.calls == []
 
 
-def test_query_config_sql_is_bound_to_registry_hash():
-    from rebom.serving.sync.query_config import query_config, update_sql
+def test_query_config_comes_from_registry_model_and_dim():
+    from rebom.serving.sync.plan import query_config
 
-    qc = query_config({"model_id": "gemini-embedding-2", "dim": 768, "template_version": "A2"})
-    assert qc == {"model_id": "gemini-embedding-2", "dim": 768}
-    sql = update_sql("text_embedding", "text_embedding@3", "abc", qc)
-    assert sql == ("UPDATE active_version SET query_config = '{\"dim\": 768, \"model_id\": \"gemini-embedding-2\"}'::jsonb "
-                   "WHERE task = 'text_embedding' AND version = 'text_embedding@3' AND config_hash = 'abc';")
-    with pytest.raises(ValueError):
-        query_config({"model_id": "gemini-embedding-2"})
+    assert query_config({"model_id": "gemini-embedding-2", "dim": 768, "template_version": "A2"}) == \
+        {"model_id": "gemini-embedding-2", "dim": 768}
+    assert query_config({"model_id": "gemini-embedding-2"}) is None
 
 
 def test_repository_without_vector_query_has_no_join():

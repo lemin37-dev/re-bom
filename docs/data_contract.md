@@ -607,7 +607,7 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 
 - **검색창 문장**: `GET /animals?text=…` 는 글 벡터(`text_embedding`)와만 비교한다. 프론트 검색창은 이 값을 보낸다(`frontend/src/lib/api.ts`). sample 모드는 벡터가 없어 단어 포함(`q`)으로 거른다.
 - **사진**: `POST /animals/photo-search` 는 사진 벡터(`image_embedding`)와 비교한다. 공고마다 지금 칸 sha256 과 같은 칸 중 가장 가까운 거리.
-- **질의 임베딩 = 활성 버전**: 질의는 `active_version.query_config` 의 `model_id`·`dim` 으로만 임베딩하고, 벡터 표에서는 `version` 이 활성 버전인 행만 비교한다. `query_config` 는 그 버전의 Gold 레지스트리 설정에서 만든다(손으로 적지 않는다).
+- **질의 임베딩 = 활성 버전**: 질의는 `active_version.query_config` 의 `model_id`·`dim` 으로만 임베딩하고, 벡터 표에서는 `version` 이 활성 버전인 행만 비교한다. `query_config` 는 동기화(`photo_vector`·`text_vector`)가 같은 트랜잭션에서 그 버전의 Gold 레지스트리 설정으로 채운다. 활성 행의 `config_hash` 가 레지스트리와 같을 때만 쓰고, 손으로 넣지 않는다.
   - 값이 비었거나, 모델이 검색 API 가 부를 수 있는 모델(`gemini.MODEL`)이 아니면 임베딩하지 않고 503 을 돌려준다. 짐작한 값으로 임베딩하지 않는다.
   - 질의 접두어는 `gemini.query_text`(글), 전처리는 `prep.to_jpeg`(사진)로 Gold 와 같다.
 - **종료 공고**: 거리는 보호중 공고에만 붙인다. 종료 공고(상세 노출 30일)는 벡터 순위에 섞이지 않고 결과 뒤에 원래 정렬로 남는다(`similarity` 는 null).
@@ -617,16 +617,9 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 **활성 버전을 바꾸는 순서 (사람이)**
 
 1. 새 버전을 Gold 레지스트리에 등록하고 Gold 벡터를 다 만든다.
-2. `query_config` UPDATE 문을 만든다(출력만, 쓰지 않음).
-
-   ```
-   python -m rebom.serving.sync.query_config --task text_embedding --version text_embedding@3 --profile rebom
-   ```
-
-   출력은 `config_hash` 도 조건에 넣어, 활성 행이 그 레지스트리 설정이 아니면 0행이 바뀐다.
-3. `active_version` 의 `version`·`config_hash` 를 바꾸고, 같은 트랜잭션에서 2번의 UPDATE 를 실행한다.
-4. 바로 `python -m rebom.serving.sync text_vector`(사진은 `photo_vector`)로 새 버전 벡터를 넣는다. 동기화는 활성 버전만 읽으므로 전환 전에 미리 넣을 수 없다. 3번과 4번 사이에는 새 버전 행이 없어 벡터 순위가 비고, 결과는 원래 정렬로 나온다. 사용이 적은 시간에 한다.
-5. `GET /animals?text=…` 에서 `similarity` 가 채워지는지 확인한다.
+2. `active_version` 의 `version`·`config_hash` 를 바꾼다(사람이). `query_config` 는 건드리지 않는다.
+3. 바로 `python -m rebom.serving.sync text_vector`(사진은 `photo_vector`)를 돌린다. 새 버전 벡터를 넣고 `query_config` 를 채운다. 동기화는 활성 버전만 읽으므로 전환 전에 미리 넣을 수 없다. 2번과 3번 사이에는 새 버전 행이 없어 벡터 순위가 비고, 결과는 원래 정렬로 나온다. 사용이 적은 시간에 한다.
+4. 동기화 출력의 `query_config` 가 채워졌는지, `GET /animals?text=…` 에서 `similarity` 가 채워지는지 확인한다.
 
 **실측 후 보완**
 
