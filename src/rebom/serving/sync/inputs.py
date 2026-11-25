@@ -162,8 +162,13 @@ def image_vectors(catalog, env, version: str, config: dict[str, Any], shas: set[
     from rebom.embedding.gold_store import vectors_of
 
     table = catalog.load_table(env.table(gc.IMAGE_EMBEDDING_TABLE))
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
     arrow = table.scan(row_filter=version_filter("image_embedding", version, config, legacy=legacy),
                        selected_fields=("subject_key", "gold_run_id", "embedding")).to_arrow()
+    # 벡터를 파이썬 값으로 바꾸기 전에 필요한 사진만 남긴다 (전체 벡터를 다 바꾸면 느리다)
+    arrow = arrow.filter(pc.is_in(arrow.column("subject_key"), value_set=pa.array(sorted(shas), pa.string())))
     out: dict[str, dict[str, Any]] = {}
     for sha, run, vec in zip(arrow.column("subject_key").to_pylist(), arrow.column("gold_run_id").to_pylist(),
                              vectors_of(arrow)):

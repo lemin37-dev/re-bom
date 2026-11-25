@@ -174,3 +174,26 @@ def test_config_hash_mismatch_stops(conn, monkeypatch, capsys):
     run(capsys, "notice_status")
     with pytest.raises(RuntimeError, match="config_hash"):
         cli.main(["photo_vector"])
+
+
+def test_bulk_upsert_and_delete_dedupe(conn):
+    """COPY 로 한 번에 올릴 때 같은 키가 두 번 오면 뒤의 값을 쓰고, 지울 때는 그 버전만 지운다."""
+    from rebom.serving.sync.plan import NOTICE_COLUMNS
+
+    base = {c: None for c in NOTICE_COLUMNS}
+    rows = [{**base, "desertion_no": "9", "status_group": "PROTECTING", "species_code": "417000", "content_hash": h,
+             "closed_transition_at": None, "visible_until": None} for h in (SHA_A, SHA_B)]
+    with conn.transaction():
+        try:
+            assert db.upsert_notices(conn, rows) == 1
+        except psycopg.errors.NotNullViolation:
+            pytest.skip("공고 필수 칼럼이 늘어 이 최소 행으로는 못 넣음")
+    assert conn.execute("SELECT content_hash FROM service_notice WHERE desertion_no='9'").fetchone()[0] == SHA_B
+    with conn.transaction():
+        db.upsert_photos(conn, [{"desertion_no": "9", "image_slot": 1, "sha256": SHA_A, "photo_version": 1,
+                                 "serving_s3_key": "s", "thumb_s3_key": "t"}], 1)
+        db.upsert_image_vectors(conn, [{"desertion_no": "9", "image_slot": 1, "version": v, "photo_version": 1,
+                                        "sha256": SHA_A, "s3_key": "k", "gold_run_id": "g", "embedding": [0.5]}
+                                       for v in ("image_embedding@1", "image_embedding@2")])
+        assert db.delete_image_vectors(conn, [("9", 1), ("9", 1)], "image_embedding@1") == 1
+    assert conn.execute("SELECT version FROM image_embedding").fetchall() == [("image_embedding@2",)]

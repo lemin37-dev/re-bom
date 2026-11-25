@@ -134,19 +134,24 @@ class Runner:
 
     def photo_vector(self, conn) -> dict[str, Any]:
         rec = self.publication()
+        progress(f"Silver 사진 읽는 중 ({rec['photo_table']}@{rec['photo_snapshot_id']})")
         photos, present = plan.current_photos(
             inputs.scan(self.catalog, rec["photo_table"], snapshot_id=rec["photo_snapshot_id"], fields=PHOTO_FIELDS))
+        progress(f"Silver 사진 {len(photos)}칸")
         active = db.active_versions(conn)
         vector = None
         if "image_embedding" in active:
             version, config = self.config(active, "image_embedding")
-            shas = {p["sha256"] for p in photos.values()}
+            in_rds = db.notice_numbers(conn)  # RDS 에 없는 공고(보호중 아님)의 사진 벡터는 읽지 않는다
+            shas = {p["sha256"] for (no, _), p in photos.items() if no in in_rds and p.get("sha256")}
+            progress(f"Gold 사진 벡터 읽는 중 (필요한 사진 {len(shas)}장)")
             vector = (version, inputs.image_vectors(self.catalog, self.gold_env, version, config, shas,
                                                     legacy=self.args.legacy))
         pos = db.Position(publish_seq=rec["publish_seq"], silver_run_id=rec.get("bronze_run_id"),
                           notice_snapshot_id=rec["notice_snapshot_id"], image_snapshot_id=rec["photo_snapshot_id"])
 
         def work(c):
+            progress("RDS 사진 칸 반영 중")
             pp = plan.plan_photos(photos, present, db.notice_numbers(c), db.existing_photos(c))
             db.delete_photos(c, pp.deletes)
             db.upsert_photos(c, pp.upserts, rec["publish_seq"])
@@ -158,8 +163,10 @@ class Runner:
             final = {k: {**v, "original_s3_key": (photos.get(k) or {}).get("original_s3_key")}
                      for k, v in db.existing_photos(c).items()}
             vp = plan.plan_image_vectors(final, vectors, db.existing_image_vectors(c, version), version)
+            progress(f"RDS 사진 벡터 반영 중 (넣기 {len(vp.upserts)}, 지우기 {len(vp.deletes)})")
             db.delete_image_vectors(c, vp.deletes, version)
-            db.upsert_image_vectors(c, vp.upserts)
+            if not self.args.dry_run:  # dry-run 은 건수만. 벡터는 커서 RDS 로 올리는 데 오래 걸린다
+                db.upsert_image_vectors(c, vp.upserts)
             out["image_vector"] = {"version": version, "gold_vectors": len(vectors), **vp.stats}
             return out
 
@@ -215,7 +222,8 @@ class Runner:
         def work(c):
             tp = plan.plan_text_vectors(db.notice_numbers(c), rows, db.existing_text_vectors(c, version), version)
             db.delete_text_vectors(c, tp.deletes, version)
-            db.upsert_text_vectors(c, tp.upserts)
+            if not self.args.dry_run:  # dry-run 은 건수만. 벡터는 커서 RDS 로 올리는 데 오래 걸린다
+                db.upsert_text_vectors(c, tp.upserts)
             return {"publish_seq": rec["publish_seq"], "version": version, "gold_rows": len(rows), "text_vector": tp.stats}
 
         return self.transaction(conn, "text_vector", pos, work)
@@ -224,7 +232,7 @@ class Runner:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python -m rebom.serving.sync", description="S3(Silver·Gold) → RDS 동기화")
     ap.add_argument("route", choices=db.ROUTES)
-    ap.add_argument("--dry-run", action="store_true", help="계산·쓰기를 해 보고 되돌린다")
+    ap.add_argument("--dry-run", action="store_true", help="계산·쓰기를 해 보고 되돌린다 (사진·글 벡터는 올리지 않고 건수만)")
     ap.add_argument("--run-id", help="notice_status: Silver 공고 완료 기록의 bronze_run_id (기본: 가장 늦은 것)")
     ap.add_argument("--publish-id", help="photo_vector·tag·text_vector: READY 발행 id (기본: 가장 큰 순번)")
     ap.add_argument("--gold-env", default="test", choices=("test", "prod"), help="Gold 표 환경 (기본 test, 11/25 결정)")
@@ -236,6 +244,14 @@ def build_parser() -> argparse.ArgumentParser:
                     help="version 칸이 빈 옛 Gold 행을 레지스트리 설정의 옛 키로 읽지 않는다")
     ap.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드는 노드 역할")
     return ap
+
+
+_T0 = time.time()
+
+
+def progress(msg: str) -> None:
+    """진행 상황(표준 오류). 결과 JSON 은 표준 출력이라 섞이지 않는다."""
+    print(f"[{time.time() - _T0:6.1f}s] {msg}", file=sys.stderr, flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:

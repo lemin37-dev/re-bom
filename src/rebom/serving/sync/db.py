@@ -26,7 +26,8 @@ def connect():
 
 
 def to_vector_literal(values: Sequence[float]) -> str:
-    return "[" + ",".join(repr(float(v)) for v in values) + "]"
+    # Gold 와 pgvector 둘 다 float32 라 유효숫자 9자리면 값이 그대로다 (repr(float) 의 17자리보다 COPY 양이 절반쯤)
+    return "[" + ",".join(format(v, ".9g") for v in values) + "]"
 
 
 # ---- sync_state --------------------------------------------------------------------------------------------------
@@ -100,29 +101,52 @@ def notice_numbers(conn) -> set[str]:
     return {r[0] for r in conn.execute("SELECT desertion_no FROM service_notice")}
 
 
+_STAGE = "_sync_stage"
+
+
+def _stage(conn, table: str, columns: Sequence[str], rows: Sequence[tuple]) -> None:
+    """행을 COPY 로 임시 표에 한 번에 올린다(행마다 왕복하지 않게). 임시 표는 트랜잭션이 끝나면 사라진다."""
+    conn.execute(f"DROP TABLE IF EXISTS {_STAGE}")
+    conn.execute(f"CREATE TEMP TABLE {_STAGE} ON COMMIT DROP AS SELECT {', '.join(columns)} FROM {table} WITH NO DATA")
+    with conn.cursor() as cur, cur.copy(f"COPY {_STAGE} ({', '.join(columns)}) FROM STDIN") as cp:
+        for r in rows:
+            cp.write_row(r)
+
+
+def _dedupe(rows: Iterable[tuple], key_idx: Sequence[int]) -> list[tuple]:
+    """같은 키가 두 번 오면 뒤의 것(행마다 보내던 때와 같은 결과). ON CONFLICT 는 한 문장에서 같은 행을 두 번 못 바꾼다."""
+    out: dict[tuple, tuple] = {}
+    for r in rows:
+        out[tuple(r[i] for i in key_idx)] = r
+    return list(out.values())
+
+
 def _upsert(conn, table: str, columns: Sequence[str], key: Sequence[str], rows: Iterable[Mapping[str, Any]],
             casts: Mapping[str, str] | None = None, extra_set: str = "synced_at = now()") -> int:
-    rows = list(rows)
-    if not rows:
+    """casts 는 예전 호환용(임시 표가 대상 표와 같은 형식이라 COPY 가 바로 변환한다)."""
+    data = _dedupe((tuple(r[c] for c in columns) for r in rows), [columns.index(k) for k in key])
+    if not data:
         return 0
-    casts = casts or {}
-    values = ", ".join(f"%s{casts.get(c, '')}" for c in columns)
+    _stage(conn, table, columns, data)
     updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in columns if c not in key)
-    sql = (f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({values}) "
-           f"ON CONFLICT ({', '.join(key)}) DO UPDATE SET {updates}{', ' + extra_set if extra_set else ''}")
-    with conn.cursor() as cur:
-        cur.executemany(sql, [tuple(r[c] for c in columns) for r in rows])
-    return len(rows)
+    cols = ", ".join(columns)
+    conn.execute(f"INSERT INTO {table} ({cols}) SELECT {cols} FROM {_STAGE} "
+                 f"ON CONFLICT ({', '.join(key)}) DO UPDATE SET {updates}{', ' + extra_set if extra_set else ''}")
+    conn.execute(f"DROP TABLE {_STAGE}")
+    return len(data)
 
 
 def _delete(conn, table: str, key: Sequence[str], keys: Iterable[tuple], where: str = "", params: tuple = ()) -> int:
-    keys = list(keys)
-    if not keys:
+    data = _dedupe((tuple(k) for k in keys), range(len(key)))
+    if not data:
         return 0
-    cond = " AND ".join(f"{c} = %s" for c in key) + (f" AND {where}" if where else "")
-    with conn.cursor() as cur:
-        cur.executemany(f"DELETE FROM {table} WHERE {cond}", [tuple(k) + params for k in keys])
-    return len(keys)
+    _stage(conn, table, key, data)
+    cond = " AND ".join(f"t.{c} = k.{c}" for c in key)
+    if where:  # where 는 대상 표를 t 로 부른다 (예: t.version = %s)
+        cond += f" AND {where}"
+    conn.execute(f"DELETE FROM {table} t USING {_STAGE} k WHERE {cond}", params)
+    conn.execute(f"DROP TABLE {_STAGE}")
+    return len(data)
 
 
 def upsert_notices(conn, rows: Sequence[Mapping[str, Any]]) -> int:
@@ -165,7 +189,7 @@ def upsert_image_vectors(conn, rows: Sequence[Mapping[str, Any]]) -> int:
 
 
 def delete_image_vectors(conn, keys: Iterable[tuple[str, int]], version: str) -> int:
-    return _delete(conn, "image_embedding", ("desertion_no", "image_slot"), keys, "version = %s", (version,))
+    return _delete(conn, "image_embedding", ("desertion_no", "image_slot"), keys, "t.version = %s", (version,))
 
 
 # ---- 태그 --------------------------------------------------------------------------------------------------------
@@ -207,4 +231,4 @@ def upsert_text_vectors(conn, rows: Sequence[Mapping[str, Any]]) -> int:
 
 
 def delete_text_vectors(conn, keys: Iterable[tuple[str]], version: str) -> int:
-    return _delete(conn, "text_embedding", ("desertion_no",), keys, "version = %s AND text_kind = 'card'", (version,))
+    return _delete(conn, "text_embedding", ("desertion_no",), keys, "t.version = %s AND t.text_kind = 'card'", (version,))
