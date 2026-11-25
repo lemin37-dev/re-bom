@@ -144,7 +144,9 @@ def shelter_of(raw: dict[str, Any]) -> Shelter:
 
 def _summary_fields(raw: dict[str, Any], tags: Iterable[str] = (), today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
-    photos = _photos(raw)
+    # db 모드는 정제된 값을 _ 키로 넘긴다(원문 파싱 안 함). sample 모드는 원문에서 계산한다
+    photos = raw["_photos"] if "_photos" in raw else _photos(raw)
+    thumbnail = raw["_thumbnail"] if "_thumbnail" in raw else (photos[0] if photos else None)
     return {
         "desertion_no": raw["desertionNo"],
         "notice_no": raw.get("noticeNo"),
@@ -156,13 +158,13 @@ def _summary_fields(raw: dict[str, Any], tags: Iterable[str] = (), today: date |
         "neutered": raw.get("neuterYn"),
         "age_text": raw.get("age"),
         "weight_text": raw.get("weight"),
-        "age_years": age_years(raw.get("age"), today),
-        "age_label": age_label(raw.get("age"), today),
-        "weight_kg": weight_kg(raw.get("weight")),
+        "age_years": raw["_ageYears"] if "_ageYears" in raw else age_years(raw.get("age"), today),
+        "age_label": raw["_ageLabel"] if "_ageLabel" in raw else age_label(raw.get("age"), today),
+        "weight_kg": raw["_weightKg"] if "_weightKg" in raw else weight_kg(raw.get("weight")),
         "state": raw.get("processState"),
-        "is_protected": raw.get("processState") == "보호중",
+        "is_protected": raw["_isProtected"] if "_isProtected" in raw else raw.get("processState") == "보호중",
         "special_mark": raw.get("specialMark"),
-        "thumbnail": photos[0] if photos else None,
+        "thumbnail": thumbnail,
         "photos": photos,
         "happen_date": raw.get("happenDt"),
         "happen_place": raw.get("happenPlace"),
