@@ -1,0 +1,433 @@
+// Re:봄 서비스 DB(RDS PostgreSQL + pgvector) v0.1 — dbdiagram.io 용 DBML
+// 2026-11-25 · 기준: 노션 "Gold 스키마 · 확정 규칙과 사진 임베딩 설계안"(11/22~) RDS 절, develop eb4e317
+// 쓰는 법: dbdiagram.io 편집 창에 통째로 붙여 넣기. 표 설명 = Table [note], 칼럼 설명·예시 = 칼럼 note('예:' 줄), 값 목록 = Enum.
+// 관리: 이 파일 = 표·칼럼 설명과 값 목록의 원본(그림은 dbdiagram.io 에 붙여 넣어 봄). 실제 DB = db/migrations/*.sql (dbdiagram export SQL 은 쓰지 않음)
+// 실제 DB 타입: enum 으로 표시한 칼럼은 실제로는 text/varchar + CHECK. 칼럼 이름이 마이그레이션과 같은지 tests/test_rds_schema_doc.py 가 확인함
+// 벡터 표 2개(image_embedding·text_embedding)는 004 에서 지우고 이 모양으로 다시 만듦(11/25: RDS 데이터 비우고 S3 동기화 처음부터, HNSW 없음)
+
+// ───────── 값 목록 (Enum) ─────────
+
+// 공고 상태 묶음 (Silver cleaning/status.py)
+Enum status_group {
+  "PROTECTING" [note: '보호중. 검색 대상']
+  "CLOSED" [note: '종료(입양·반환·자연사·안락사·기증·방사·사유 미상)']
+  "UNKNOWN" [note: '상태 없음·예상 밖 값']
+}
+
+// 종료 사유 (Silver closure_reason_code)
+Enum closure_reason {
+  "입양" [note: '입양']
+  "반환" [note: '반환']
+  "자연사" [note: '자연사']
+  "안락사" [note: '안락사']
+  "기증" [note: '기증']
+  "방사" [note: '방사']
+  "사유 미상" [note: '사유 미상']
+}
+
+// 성별 (sexCd)
+Enum sex_code {
+  "M" [note: '수컷']
+  "F" [note: '암컷']
+  "Q" [note: '미상']
+}
+
+// 중성화 (neuterYn)
+Enum neuter_code {
+  "Y" [note: '예']
+  "N" [note: '아니오']
+  "U" [note: '미상']
+}
+
+// 축종 (upKindCd)
+Enum species_code {
+  "417000" [note: '개']
+  "422400" [note: '고양이']
+  "429900" [note: '기타축종']
+}
+
+// 크기 (개만, Silver 규칙)
+Enum size {
+  "small" [note: '10kg 이하']
+  "medium" [note: '25kg 미만']
+  "large" [note: '25kg 이상']
+}
+
+// 털색 계열 (color_tag 배열의 원소)
+Enum color_group {
+  "흰색계열" [note: '흰색계열']
+  "검정계열" [note: '검정계열']
+  "갈색계열" [note: '갈색계열']
+  "노랑계열" [note: '노랑계열']
+  "회색계열" [note: '회색계열']
+  "기타" [note: '기타']
+}
+
+// 무늬 (color_pattern)
+Enum color_pattern {
+  "얼룩" [note: '얼룩']
+  "줄무늬" [note: '줄무늬']
+  "삼색" [note: '삼색']
+  "턱시도" [note: '턱시도']
+  "호구" [note: '호구']
+  "호반" [note: '호반']
+  "호피" [note: '호피']
+  "반점" [note: '반점']
+  "브린들" [note: '브린들']
+}
+
+// 태그·임베딩 작업 이름 (version 앞부분)
+Enum tag_task {
+  "photo_trait" [note: '사진 외형(털·귀·눈매)']
+  "photo_breed" [note: '사진 닮은 품종']
+  "text_personality" [note: '공고 글 성격 (Jev)']
+  "text_health" [note: '공고 글 건강정보 (Jev)']
+  "image_embedding" [note: '사진 벡터']
+  "text_embedding" [note: '글 카드 벡터']
+}
+
+// 태그 출처 (11/24, Gold 옛 값 jev → text)
+Enum tag_source {
+  "photo" [note: '사진']
+  "text" [note: '공고 글']
+  "rule" [note: '공고 칸 규칙']
+}
+
+// 결과 대상 종류
+Enum subject_type {
+  "photo" [note: '사진 sha256 단위 결과']
+  "animal" [note: '공고번호 단위 결과']
+}
+
+// 태그 코드 (tagging/tag_codes.py · text_tags.py). 귀염(인상)은 목록에 없음: 태깅하지 않고 검색 태그로 만들지 않음(11/16·11/19 결정, RDS CHECK 로도 막음)
+Enum tag_code {
+  "fur.fluffy" [note: '복슬복슬 · photo_trait · 검색O 화면O']
+  "fur.short" [note: '짧은 털 · photo_trait · 검색O 화면O']
+  "ear.drop" [note: '늘어진 귀 · photo_trait']
+  "ear.semi" [note: '반쯤 선 귀 · photo_trait']
+  "ear.prick" [note: '선 귀 · photo_trait']
+  "eye.round" [note: '둥근 눈매 · photo_trait']
+  "eye.sharp" [note: '날카로운 눈매 · photo_trait']
+  "personality.gentle" [note: '순함 · text_personality (확률 0.75 이상)']
+  "personality.friendly" [note: '친화적 · text_personality']
+  "personality.timid" [note: '겁많음 · text_personality']
+  "personality.wary" [note: '경계 · text_personality']
+  "personality.active" [note: '활발 · text_personality']
+  "personality.aggressive" [note: '사나움 · text_personality']
+  "personality.sensitive" [note: '예민 · text_personality']
+  "personality.curious" [note: '호기심 · text_personality']
+  "health.info" [note: '건강정보 있음 · text_health']
+  "health.none" [note: '건강정보 없음(건강하다는 뜻 아님) · text_health']
+  "breed.<품종>" [note: '닮은 품종 · photo_breed · 화면X, 유사도 90 이상만 검색. 품종 이름은 열린 값(예시: breed_name_examples)']
+}
+
+// [열린 값 · 닫힌 목록 아님] breed.<품종> 의 품종 이름 예시. 품종 태깅은 모델 지식(전체 품종)으로 고르고 기준표 없음(11/23 확인). 아래 62종은 3년치 빈도 후보(breed_candidates_3y.json)로, 이름 표기 맞추기에만 씀. 목록 밖 품종도 모델이 쓴 이름 그대로 태그가 됨
+Enum breed_name_examples {
+  "푸들" [note: '예시']
+  "진도견" [note: '예시']
+  "말티즈" [note: '예시']
+  "포메라니안" [note: '예시']
+  "비숑 프리제" [note: '예시']
+  "라브라도 리트리버" [note: '예시']
+  "시바" [note: '예시']
+  "치와와" [note: '예시']
+  "스피츠" [note: '예시']
+  "프렌치 불독" [note: '예시']
+  "보더 콜리" [note: '예시']
+  "골든 리트리버" [note: '예시']
+  "시베리안 허스키" [note: '예시']
+  "웰시 코기 펨브로크" [note: '예시']
+  "시츄" [note: '예시']
+  "요크셔 테리어" [note: '예시']
+  "미니어쳐 핀셔" [note: '예시']
+  "라이카" [note: '예시']
+  "닥스훈트" [note: '예시']
+  "사모예드" [note: '예시']
+  "삽살개" [note: '예시']
+  "웰시 코기 카디건" [note: '예시']
+  "슈나우져" [note: '예시']
+  "노퍽 테리어" [note: '예시']
+  "포인터" [note: '예시']
+  "셰퍼드" [note: '예시']
+  "이탈리안 그레이 하운드" [note: '예시']
+  "풍산견" [note: '예시']
+  "브리타니 스파니엘" [note: '예시']
+  "동경견" [note: '예시']
+  "베들링턴 테리어" [note: '예시']
+  "비글" [note: '예시']
+  "마리노이즈" [note: '예시']
+  "잭 러셀 테리어" [note: '예시']
+  "차우차우" [note: '예시']
+  "말라뮤트" [note: '예시']
+  "코카 스파니엘" [note: '예시']
+  "빠삐용(콘티넨탈 토이 스파니엘)" [note: '예시']
+  "샤페이" [note: '예시']
+  "노리치 테리어" [note: '예시']
+  "보스턴 테리어" [note: '예시']
+  "휘펫" [note: '예시']
+  "그레이트 피레니즈" [note: '예시']
+  "아메리칸 코카 스파니엘" [note: '예시']
+  "핏불테리어" [note: '예시']
+  "페키니즈" [note: '예시']
+  "그레이 하운드" [note: '예시']
+  "오스트레일리안 켈피" [note: '예시']
+  "저먼 쇼트헤어드 포인터" [note: '예시']
+  "도베르만" [note: '예시']
+  "그레이트 덴" [note: '예시']
+  "벨지안 셰퍼드 독(테르뷰렌)" [note: '예시']
+  "퍼그" [note: '예시']
+  "비즐라" [note: '예시']
+  "불독" [note: '예시']
+  "미텔 스피츠" [note: '예시']
+  "세인트 버나드" [note: '예시']
+  "코카시안 오브차카(코카시안 셰퍼드 독)" [note: '예시']
+  "도사" [note: '예시']
+  "실키테리어" [note: '예시']
+  "달마시안" [note: '예시']
+  "아메리칸불리" [note: '예시']
+}
+
+// 동기화 경로 (11/23 동기화 분리)
+Enum sync_route {
+  "notice_status" [note: '공고 상태. Silver 공고 적재 성공 뒤, 사진 안 기다림']
+  "photo_vector" [note: '사진·벡터. 공고·사진 공통 완료본 뒤']
+  "tag" [note: '태그']
+  "text_vector" [note: '글 벡터']
+}
+
+// ───────── 표 ─────────
+
+Table service_notice [note: '''공고 화면의 기준 행(공고당 1행). 검색은 PROTECTING 만, 상세는 PROTECTING 이거나 visible_until 이 지나지 않은 종료 공고. 공개 필드만, 보호자 실명(careOwnerNm)·동물등록번호 없음. 원천: Silver silver_animal_notice + silver_shelter'''] {
+  desertion_no varchar(20) [pk, note: '''공고 고유키 (API desertionNo)
+예: 448567202600123''']
+  notice_no text [note: '''공고번호 문자열 (noticeNo)
+예: 충남-당진-2026-00542''']
+  status_group status_group [not null, note: '''공고 상태. Silver 값 그대로, RDS 가 판단하지 않음. 공고 상태 동기화 경로만 고침
+예: PROTECTING''']
+  process_state_raw text [note: '''상태 원문. 상세에 그대로 표시
+예: 보호중 / 종료(입양)''']
+  closure_reason_code closure_reason [note: '''종료 사유. 바뀌어도 30일 연장 안 함
+예: 입양''']
+  closed_transition_at timestamptz [note: '''서비스 시작 이후 보호중→종료를 처음 확인한 시각. 같은 종료 재처리 시 유지, 보호중 복귀 시 비움 (출처는 광훈 님 확인 대기)
+예: 2026-11-24 03:12:00+09''']
+  visible_until timestamptz [note: '''상세 노출 만료 = closed_transition_at + 30일. 재동기화로 늘리지 않음. 서비스 시작 전 종료 공고는 NULL(비노출)
+예: 2026-12-24 03:12:00+09''']
+  species_code species_code [not null, note: '''축종 코드. 벡터 검색의 종 필터는 이 칼럼과 JOIN (벡터 표에 복사 안 함)
+예: 417000''']
+  species_name text [note: '''축종 이름 (upKindNm)
+예: 개''']
+  breed_code varchar(10) [note: '''품종 코드 (kindCd, 앞자리 0 보존)
+예: 000114''']
+  breed_name_raw text [note: '''품종 원문 (kindNm). 화면 품종은 이 값 (태깅 결과 아님)
+예: 믹스견''']
+  breed_full_name_raw text [note: '''kindFullNm. 기타 축종은 여기에만 실제 이름
+예: [개] 믹스견''']
+  is_mix boolean [note: '''믹스 여부 (코드 000114 등 또는 이름에 '믹스')
+예: true''']
+  sex_code sex_code [note: '''성별
+예: F''']
+  neuter_code neuter_code [note: '''중성화
+예: U''']
+  birth_year smallint [note: '''출생연도. 화면은 'N년생'만, 나이는 안 보여 줌
+예: 2024''']
+  weight_raw text [note: '''체중 원문 (화면 표시)
+예: 9.00(Kg)''']
+  weight_kg numeric(6,2) [note: '''체중 kg (범위면 큰 값)
+예: 9.00''']
+  size size [note: '''크기 (개만). 크기 필터
+예: small''']
+  color_raw text [note: '''털색 원문 (colorCd)
+예: 갈색&검정''']
+  color_tag "text[]" [note: '''털색 계열 배열 (값은 color_group). 털색 필터
+예: {갈색계열,검정계열}''']
+  color_pattern color_pattern [note: '''무늬. 없으면 NULL
+예: 얼룩''']
+  special_mark text [note: '''특이사항 원문 (specialMark)
+예: 온순. 겁 조금.''']
+  sfe_soci text [note: '''특징(사회성) 원문. 상세 성격 자리
+예: 사람을 잘 따름''']
+  sfe_health text [note: '''특징(건강) 원문
+예: 피부병 치료 중''']
+  health_chk text [note: '''건강 체크 원문 (healthChk)''']
+  vaccination_chk text [note: '''접종 체크 원문 (vaccinationChk)''']
+  happen_date date [note: '''접수일 (happenDt)
+예: 2026-11-10''']
+  happen_place text [note: '''발견 장소 원문. 화면은 읍·면·동/구까지만
+예: 당진시 용연동''']
+  org_name text [note: '''관할 기관 (orgNm)
+예: 충청남도 당진시''']
+  notice_start_date date [note: '''공고 시작일 (noticeSdt)
+예: 2026-11-11''']
+  notice_end_date date [note: '''공고 종료일 (noticeEdt)
+예: 2026-11-23''']
+  care_reg_no varchar(20) [note: '''보호소 등록번호 (보호소 표는 따로 두지 않고 공고에 펼침)
+예: 344500202100001''']
+  care_name text [note: '''보호소 이름
+예: 당진시동물보호소''']
+  care_tel text [note: '''보호소 전화. 화면 표시(11/20 결정), 검색 로그로 보내지 않음
+예: 000-0000-0000''']
+  care_address text [note: '''보호소 주소
+예: 충청남도 당진시 ○○로 00''']
+  content_hash char(64) [not null, note: '''옮긴 칼럼 값의 sha256. 같으면 UPDATE 건너뜀(재반영 무해)
+예: 9f2c…e1a0 (64자)''']
+  silver_publish_seq bigint [note: '''이 행을 쓴 Silver 완료본 순번 (silver_run_id 방식이 정해지면 교체)
+예: 42''']
+  synced_at timestamptz [not null, note: '''RDS 반영 시각
+예: 2026-11-25 04:00:00+09''']
+}
+
+Table service_notice_photo [note: '''공고 화면에 보여줄 사진 칸(칸당 1행). 원천: Silver 현재 사진 표시 키. emptied 확정 칸은 행 삭제, 종료 공고는 마지막 확인 사진 유지'''] {
+  desertion_no varchar(20) [not null, note: '''공고번호
+예: 448567202600123''']
+  image_slot smallint [not null, note: '''popfile 칸 1~8. 대표 사진 = 키가 있는 가장 작은 칸
+예: 1''']
+  sha256 char(64) [not null, note: '''표시 중인 원본 사진 sha256. 태그·벡터가 지금 사진 것인지 확인하는 키
+예: 3b7a…c90d (64자)''']
+  photo_version smallint [not null, note: '''사진 교체 순번 (Silver current_version)
+예: 2''']
+  serving_s3_key text [not null, note: '''화면 이미지 키 (CloudFront /images/*)
+예: serving/rescue/images/448567202600123/popfile1_v002.webp''']
+  thumb_s3_key text [note: '''썸네일 키 (~400px WebP)
+예: thumb/rescue/images/448567202600123/popfile1_v002.webp''']
+  silver_publish_seq bigint [note: '''이 행을 쓴 Silver 공통 완료본 순번
+예: 42''']
+  synced_at timestamptz [not null, note: '''RDS 반영 시각''']
+  indexes {
+    (desertion_no, image_slot) [pk]
+  }
+}
+
+Table service_notice_tag [note: '''공고에 연결한 태그 1개 = 1행. Gold gold_animal_tag 중 활성 버전 + 현재 입력(대표 사진 sha256 / 최신 글 해시)만. 검색은 보호중 공고의 searchable, 상세는 displayable'''] {
+  desertion_no varchar(20) [not null, note: '''공고번호
+예: 448567202600123''']
+  subject_type subject_type [not null, note: '''결과 대상 종류
+예: photo''']
+  subject_key varchar(64) [not null, note: '''photo 면 대표 사진 sha256 (service_notice_photo.sha256 과 같아야 함), animal 이면 공고번호
+예: 3b7a…c90d''']
+  task tag_task [not null, note: '''태그를 만든 작업
+예: photo_trait''']
+  tag_code tag_code [not null, note: '''태그 코드 (목록은 Enum tag_code)
+예: ear.drop''']
+  tag_label text [not null, note: '''화면 이름 (적재 때 tag_codes.py 라벨 복사)
+예: 늘어진 귀''']
+  version varchar(64) [not null, note: '''이 태그를 만든 버전 task@N. active_version 과 같아야 검색·표시
+예: photo_trait@1''']
+  source tag_source [not null, note: '''출처
+예: photo''']
+  searchable boolean [not null, note: '''검색에 쓰는지 (Gold 행 값). 품종은 유사도 90 이상만 true
+예: true''']
+  displayable boolean [not null, note: '''화면에 보이는지 (Gold 행 값). breed.* 는 false
+예: true''']
+  rank smallint [note: '''품종 순위 1~3 (photo_breed 만)
+예: 1''']
+  similarity smallint [note: '''품종 유사도 평균 또는 Jev 확률×100. 화면 비표시
+예: 92''']
+  gold_run_id text [note: '''Gold 실행 ID (추적용)
+예: photo-tags-20261123T0300''']
+  synced_at timestamptz [not null, note: '''RDS 반영 시각''']
+  indexes {
+    (desertion_no, subject_type, subject_key, task, tag_code) [pk]
+  }
+}
+
+Table image_embedding [note: '''공고 현재 사진 칸의 검색 벡터(칸 × 버전). Gold gold_image_embedding(sha256 단위)을 칸에 펼침. 검색 후보 = 보호중 + sha256 일치 + 활성 버전. 키에 version 포함(004). v0.1 인덱스 없음(전체 비교), HNSW 는 실측 뒤 v0.2 에서 검토'''] {
+  desertion_no varchar(20) [not null, note: '''공고번호
+예: 448567202600123''']
+  image_slot smallint [not null, note: '''사진 칸 1~8
+예: 1''']
+  version varchar(64) [not null, note: '''image_embedding@N. 키에 포함해 같은 모델 v1·v2 공존
+예: image_embedding@1''']
+  model text [not null, note: '''모델 이름(:차원)
+예: gemini-embedding-2:768''']
+  photo_version smallint [not null, note: '''사진 교체 순번
+예: 2''']
+  sha256 char(64) [not null, note: '''임베딩한 원본 sha256. service_notice_photo.sha256 과 다르면 검색 후보에서 제외
+예: 3b7a…c90d''']
+  s3_key text [not null, note: '''임베딩한 원본 키
+예: bronze/rescue/images/448567202600123/popfile1_v002.jpg''']
+  photo_run_id text [not null, note: '''사진 실행 run_id
+예: 20261124T030000-ab12''']
+  gold_run_id text [note: '''Gold 실행 ID''']
+  embedding vector(768) [not null, note: '''768차원 벡터, 코사인 거리. v0.1 인덱스 없음
+예: [0.012, -0.034, …] (768개)''']
+  embedded_at timestamptz [not null, note: '''RDS 적재 시각''']
+  indexes {
+    (desertion_no, image_slot, version) [pk]
+  }
+}
+
+Table text_embedding [note: '''공고 카드의 글 검색 벡터(공고 × 버전). Gold gold_text_embedding 중 현재 카드 해시와 맞는 1행. 키에 version 포함·A1/A2 CHECK 제거(004). v0.1 인덱스 없음'''] {
+  desertion_no varchar(20) [not null, note: '''공고번호
+예: 448567202600123''']
+  text_kind varchar(10) [not null, note: '''글 종류 (지금은 card 하나)
+예: card''']
+  version varchar(64) [not null, note: '''text_embedding@N (템플릿 내용·지문·태그 버전 포함 설정)
+예: text_embedding@3''']
+  model_key text [not null, note: '''모델 이름(:차원)
+예: gemini-embedding-2:768''']
+  text_sha256 char(64) [not null, note: '''가린 카드 본문 sha256 (Gold source_hash)
+예: 4547c5…6206''']
+  template_version varchar(10) [not null, note: '''카드 템플릿 (Gold prompt_version)
+예: A2''']
+  tag_versions jsonb [note: '''카드에 쓴 작업별 태그 버전
+예: {"photo_trait": "photo_trait@1", "text_personality": "text_personality@1"}''']
+  gold_run_id text [note: '''Gold 실행 ID
+예: text-737c35ec…''']
+  embedding vector(768) [not null, note: '''768차원 벡터. v0.1 은 인덱스 없이 전체 비교''']
+  embedded_at timestamptz [not null, note: '''RDS 적재 시각''']
+  indexes {
+    (desertion_no, text_kind, version) [pk]
+  }
+}
+
+Table active_version [note: '''작업별 서비스 활성 버전(작업당 1행). 일일 배치는 시작 때 한 번 읽어 고정, 검색 API 는 한 요청 안에서 활성값·질의 설정·벡터를 함께 씀. 전환·롤백은 사람이 (11/23 기준안, 칼럼은 제안)'''] {
+  task tag_task [pk, note: '''작업 이름
+예: image_embedding''']
+  version varchar(64) [not null, note: '''활성 버전 (Gold gold_version_registry 등록값)
+예: image_embedding@1''']
+  config_hash char(64) [not null, note: '''Gold 레지스트리 config_hash. 전환 때 대조''']
+  query_config jsonb [note: '''검색에 필요한 설정(질의 모델·차원 등). 원본은 Gold 레지스트리
+예: {"model": "gemini-embedding-2", "dim": 768}''']
+  previous_version varchar(64) [note: '''직전 활성 버전 (롤백용)
+예: image_embedding@0''']
+  activated_at timestamptz [not null, note: '''전환 시각''']
+  activated_by text [not null, note: '''전환한 사람
+예: lemin''']
+}
+
+Table sync_state [note: '''동기화 경로별 마지막 반영 Silver 완료본 (워터마크 대신, 11/23 제안). 더 오래된 완료본은 반영 안 함. 순번 비교와 행 변경은 같은 트랜잭션 (표 자체가 제안)'''] {
+  route sync_route [pk, note: '''동기화 경로
+예: photo_vector''']
+  last_publish_seq bigint [note: '''silver_publish_log 방식일 때 마지막 반영 순번
+예: 42''']
+  last_silver_run_id text [note: '''journal COMPLETED 방식일 때 마지막 반영 실행. 둘 중 하나만 씀(미정)
+예: silver_20261124T030012-f65718''']
+  notice_snapshot_id bigint [note: '''읽은 Silver 공고 Iceberg 스냅샷
+예: 5620324469304075651''']
+  image_snapshot_id bigint [note: '''읽은 Silver 현재 사진 Iceberg 스냅샷
+예: 800755379067985557''']
+  applied_at timestamptz [not null, note: '''반영 완료 시각''']
+}
+
+// ───────── 영역 (TableGroup) ─────────
+TableGroup notice_screen [color: #2E7D32, note: '공고 화면 영역. Silver 공고·현재 사진과 Gold 태그를 공고 단위로 펼친 표. 상세·목록·필터 검색이 읽음'] {
+  service_notice
+  service_notice_photo
+  service_notice_tag
+}
+
+TableGroup search_vector [color: #1565C0, note: '검색 벡터 영역 (pgvector). Gold 임베딩 결과 중 활성 버전·현재 사진/카드와 맞는 행만. 사진·자연어 유사도 검색이 읽음'] {
+  image_embedding
+  text_embedding
+}
+
+TableGroup ops [color: #757575, note: '운영 영역. 서비스 활성 버전과 동기화 순번. 화면에 직접 쓰지 않음'] {
+  active_version
+  sync_state
+}
+
+
+Ref: service_notice_photo.desertion_no > service_notice.desertion_no [delete: cascade]
+Ref: service_notice_tag.desertion_no > service_notice.desertion_no [delete: cascade]
+Ref: image_embedding.(desertion_no, image_slot) > service_notice_photo.(desertion_no, image_slot) [delete: cascade]
+Ref: text_embedding.desertion_no > service_notice.desertion_no [delete: cascade]
