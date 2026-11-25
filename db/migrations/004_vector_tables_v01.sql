@@ -5,11 +5,11 @@
 -- 바뀌는 점: 키에 version 추가(같은 모델 v1·v2 공존), 서비스 표로 외래키, gold_run_id 추가,
 --   text_embedding 은 tag_versions 추가·template_version A1/A2 CHECK 제거.
 -- 003_service_tables.sql 을 먼저 적용해야 한다(외래키 대상). 이 표는 새 S3 동기화 기능이 채운다.
+-- 한 트랜잭션으로 돈다(python -m rebom.common.migrate 가 파일 단위로 묶음. 손으로 돌릴 때는 BEGIN/COMMIT 으로 감쌀 것).
 -- ⚠ 기존 행을 모두 지운다. 적용은 사람이 승인한 뒤 직접 실행한다.
 -- ⚠ 적용 뒤에는 기존 DAG task load_photo_embeddings(embedding/store.py, ON CONFLICT (desertion_no, image_slot, model))가
 --   실패한다. 코드는 고치지 않으므로, 적용 전에 Airflow 에서 해당 DAG 를 멈추거나 그 task 실패를 감안한다.
 
-BEGIN;
 
 DROP INDEX IF EXISTS image_embedding_hnsw_cos;
 DROP TABLE IF EXISTS image_embedding;
@@ -89,5 +89,3 @@ COMMENT ON COLUMN text_embedding.gold_run_id IS 'Gold 실행 ID
 예: text-737c35ec…';
 COMMENT ON COLUMN text_embedding.embedding IS '768차원 벡터. v0.1 은 인덱스 없이 전체 비교';
 COMMENT ON COLUMN text_embedding.embedded_at IS 'RDS 적재 시각';
-
-COMMIT;

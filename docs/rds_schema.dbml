@@ -2,6 +2,7 @@
 // 2026-11-25 · 기준: 노션 "Gold 스키마 · 확정 규칙과 사진 임베딩 설계안"(11/22~) RDS 절, develop eb4e317
 // 쓰는 법: dbdiagram.io 편집 창에 통째로 붙여 넣기. 표 설명 = Table [note], 칼럼 설명·예시 = 칼럼 note('예:' 줄), 값 목록 = Enum.
 // 관리: 이 파일 = 표·칼럼 설명과 값 목록의 원본(그림은 dbdiagram.io 에 붙여 넣어 봄). 실제 DB = db/migrations/*.sql (dbdiagram export SQL 은 쓰지 않음)
+// 버전: 스키마 v0.1 = 마이그레이션 001~005. develop 머지 커밋에 git 태그 schema-v0.1. RDS 적용 상태는 schema_migrations 표
 // 실제 DB 타입: enum 으로 표시한 칼럼은 실제로는 text/varchar + CHECK. 칼럼 이름이 마이그레이션과 같은지 tests/test_rds_schema_doc.py 가 확인함
 // 벡터 표 2개(image_embedding·text_embedding)는 004 에서 지우고 이 모양으로 다시 만듦(11/25: RDS 데이터 비우고 S3 동기화 처음부터, HNSW 없음)
 
@@ -193,6 +194,12 @@ Enum sync_route {
   "photo_vector" [note: '사진·벡터. 공고·사진 공통 완료본 뒤']
   "tag" [note: '태그']
   "text_vector" [note: '글 벡터']
+}
+
+// 마이그레이션 기록 방식 (schema_migrations.how)
+Enum migration_how {
+  "apply" [note: '도구가 파일을 실행하고 기록']
+  "baseline" [note: '표가 생기기 전에 손으로 적용한 파일의 기록만 넣음']
 }
 
 // ───────── 표 ─────────
@@ -421,11 +428,25 @@ TableGroup search_vector [color: #1565C0, note: '검색 벡터 영역 (pgvector)
   text_embedding
 }
 
-TableGroup ops [color: #757575, note: '운영 영역. 서비스 활성 버전과 동기화 순번. 화면에 직접 쓰지 않음'] {
+TableGroup ops [color: #757575, note: '운영 영역. 서비스 활성 버전, 동기화 순번, 마이그레이션 적용 기록. 화면에 직접 쓰지 않음'] {
   active_version
   sync_state
+  schema_migrations
 }
 
+
+Table schema_migrations [note: '''마이그레이션 적용 기록(파일당 1행). python -m rebom.common.migrate 가 쓴다. 적용한 파일 내용이 레포와 다르면 도구가 멈춤'''] {
+  filename text [pk, note: '''db/migrations 파일 이름
+예: 004_vector_tables_v01.sql''']
+  sha256 char(64) [not null, note: '''적용할 때 파일 내용(UTF-8, 줄바꿈 LF 기준)의 sha256. 레포 파일과 다르면 적용 뒤 파일이 고쳐진 것
+예: 9f2c…e1a0 (64자)''']
+  applied_at timestamptz [not null, default: `now()`, note: '''적용(또는 기록) 시각
+예: 2026-11-25 14:10:00+09''']
+  applied_by text [not null, note: '''적용한 사람 (--by, 없으면 PC 사용자 이름)
+예: lemin''']
+  how migration_how [not null, note: '''apply = 도구가 실행, baseline = 이미 손으로 적용한 파일의 기록만 넣음
+예: apply''']
+}
 
 Ref: service_notice_photo.desertion_no > service_notice.desertion_no [delete: cascade]
 Ref: service_notice_tag.desertion_no > service_notice.desertion_no [delete: cascade]

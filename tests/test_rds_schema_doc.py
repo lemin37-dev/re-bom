@@ -48,7 +48,7 @@ def migration_tables(texts: list[str]) -> dict[str, list[str]]:
 
 
 def test_parsers_find_tables():
-    assert len(dbml_tables(DBML.read_text(encoding="utf-8"))) == 7
+    assert len(dbml_tables(DBML.read_text(encoding="utf-8"))) == 8
     assert "service_notice" in migration_tables([p.read_text(encoding="utf-8") for p in MIGRATIONS])
 
 

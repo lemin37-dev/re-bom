@@ -47,6 +47,8 @@
    - `docs/data_contract.md` 의 해당 절.
    - `pytest tests/test_rds_schema_doc.py` 로 DBML 과 마이그레이션의 표·칼럼 이름이 같은지 확인한다.
    - dbdiagram.io 에서 내보낸 SQL 은 마이그레이션으로 쓰지 않는다(PostgreSQL ENUM 타입이 생기고 CHECK·인덱스가 빠짐).
+   - 마이그레이션 파일 안에 `BEGIN`/`COMMIT` 을 쓰지 않는다. 적용은 사람이 `python -m rebom.common.migrate apply` 로 하고, 도구가 파일마다 트랜잭션으로 묶어 `schema_migrations` 에 기록한다. AI 도구는 `status`·`apply --dry-run` 까지만 실행하고 적용 명령문을 적어 넘긴다.
+   - 스키마 버전 이름(`schema-vX.Y`, 예: v0.1 = 001~005)은 develop 머지 커밋에 사람이 git 태그로 단다.
 3. **DAG는 호출만**: `dags/` 에는 태스크 순서와 호출만 둔다. 실제 처리 로직은 `src/rebom/<역할>/` 함수로 만든다.
 4. **커밋하면 안 되는 파일**: `data/sample/` 을 제외한 `data/` 아래 파일, 모델 가중치(`*.pt`, `*.safetensors`, `*.onnx`), `*.parquet`, 로그.
 5. **인프라 적용은 사람만**: `terraform apply`·`destroy`·`import`·`state` 변경, 그리고 클라우드·클러스터 리소스를 직접 만들거나 바꾸거나 지우는 명령(aws CLI 생성·수정·삭제, `kubectl apply`·`delete`, `helm install`·`upgrade`·`uninstall` 등)은 AI 도구가 실행하지 않는다. `fmt`·`validate`·`plan` 같은 읽기 작업까지만 하고, 적용할 명령문을 적어서 사람에게 넘긴다.
