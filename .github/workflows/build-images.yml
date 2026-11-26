@@ -212,6 +212,25 @@ jobs:
       - uses: docker/setup-buildx-action@v3
         if: steps.skip.outputs.run == 'true'
 
+      # 웹 화면의 카카오 지도 키 (Secrets Manager rebom/api/kakao_java, JSON 키 NEXT_PUBLIC_KAKAO_JS_KEY).
+      # NEXT_PUBLIC_ 값은 빌드할 때 화면 코드에 박힌다. 못 읽으면 경고만 남기고 OpenStreetMap 지도로 빌드한다.
+      - name: 카카오 지도 키 읽기 (web)
+        if: steps.skip.outputs.run == 'true' && matrix.name == 'web'
+        id: kakao
+        env:
+          SECRET_ID: rebom/api/kakao_java
+        run: |
+          if raw=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" --query SecretString --output text 2>/dev/null); then
+            key=$(printf '%s' "$raw" | jq -r '.NEXT_PUBLIC_KAKAO_JS_KEY // empty' 2>/dev/null || true)
+          fi
+          if [ -n "${key:-}" ]; then
+            echo "::add-mask::$key"
+            echo "key=$key" >> "$GITHUB_OUTPUT"
+            echo "카카오 지도 키를 넣어 빌드합니다"
+          else
+            echo "::warning::$SECRET_ID 를 읽지 못했습니다(역할 권한: infra/terraform/registry ReadWebBuildSecrets). OpenStreetMap 지도로 빌드합니다"
+          fi
+
       - name: 태그 정하기
         if: steps.skip.outputs.run == 'true'
         id: tags
@@ -238,6 +257,8 @@ jobs:
           push: true
           provenance: false # ECR 에 태그 없는 부가 이미지가 쌓이지 않게
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            NEXT_PUBLIC_KAKAO_JS_KEY=${{ steps.kakao.outputs.key }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
