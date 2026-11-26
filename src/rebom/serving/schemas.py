@@ -91,6 +91,17 @@ class AnimalPage(_Model):
     items: list[AnimalSummary]
 
 
+class PlaceCount(_Model):
+    reg_no: str  # 보호소 등록번호
+    count: int  # 조건에 맞는 아이 수
+
+
+class PlaceList(_Model):
+    """지도용: 목록 검색과 같은 조건에 맞는 아이들의 보호소별 마릿수. 문장·사진은 거르지 않으므로 마릿수에 영향이 없다."""
+    total: int
+    items: list[PlaceCount]
+
+
 class ShelterList(_Model):
     total: int
     items: list[ShelterSummary]

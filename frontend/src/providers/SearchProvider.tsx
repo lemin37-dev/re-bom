@@ -45,6 +45,9 @@ type SearchState = {
   error: string | null
   retry: () => void
   centerFilter: CenterFilter | null
+  /** 지금 목록을 부른 조건과 사진 (지도가 같은 조건으로 부름) */
+  listParams: AnimalSearchParams
+  listPhoto: File | null
   /** 지금까지 불러온 동물 */
   visible: Animal[]
   /** 조건에 맞는 전체 수 */
@@ -170,7 +173,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     map, toggleMap: () => setMap(v => !v),
     searched, setSearched, searching, loadingMore, error,
     retry: () => setRetrySeq(n => n + 1),
-    centerFilter, visible, total, matched: searching ? null : result.matched, hasMore: items.length < total, loadMore,
+    centerFilter, listParams: params, listPhoto: searchPhoto, visible, total, matched: searching ? null : result.matched, hasMore: items.length < total, loadMore,
     search,
     resetAndSearch: () => search('', allFilters, []),
     focusCenter: center => { setCenterFilter(center); setFilters(allFilters); setTags([]); setQuery(''); setSubmitted(prev => ({ ...prev, query: '' })); setSearched(true); setMap(false) },

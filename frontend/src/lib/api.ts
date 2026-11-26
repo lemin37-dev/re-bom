@@ -136,6 +136,12 @@ export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSig
   return { total: page.total, matched: page.matched ?? null, items: page.items.map(toAnimal) }
 }
 
+/** 지도용: 목록과 같은 조건의 보호소별 마릿수 (GET /animals/places). 문장·사진은 거르지 않아 마릿수에 영향 없음 */
+export type PlaceCount = { regNo: string; count: number }
+export async function fetchPlaces(params: AnimalSearchParams, signal?: AbortSignal) {
+  return getJson<{ total: number; items: PlaceCount[] }>(`/animals/places?${toQuery({ ...params, page: undefined, size: undefined, sort: undefined })}`, signal)
+}
+
 export async function fetchAnimal(id: string, signal?: AbortSignal) {
   return toAnimal(await getJson<ApiAnimal>(`/animals/${encodeURIComponent(id)}`, signal))
 }

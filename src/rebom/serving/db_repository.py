@@ -19,7 +19,7 @@ from datetime import date
 from typing import Any, Callable, Sequence
 
 from rebom.serving.repository import (
-    MATCH_RANK, SPECIES_CODES, AnimalQuery, QueryVector, SearchPage, VectorKind, VectorSpec, VectorUnavailable, _words,
+    MATCH_RANK, SPECIES_CODES, AnimalQuery, count_places, shelter_list, QueryVector, SearchPage, VectorKind, VectorSpec, VectorUnavailable, _words,
 )
 from rebom.serving.tags import tag_match
 
@@ -112,8 +112,8 @@ def where(query: AnimalQuery, today: date) -> tuple[str, list[Any]]:
         cond.append("n.sex_code = %s")
         args.append(query.sex)
     if query.shelter:
-        cond.append("n.care_reg_no = %s")
-        args.append(query.shelter)
+        cond.append("n.care_reg_no = ANY(%s)")
+        args.append(list(shelter_list(query.shelter)))
     if query.regions:
         ors = []
         for token in query.regions:
@@ -245,6 +245,16 @@ class DbRepository:
             d = dist.get(r["desertionNo"])
             r["_similarity"] = None if d is None else round(1 - float(d), 4)
         return rows
+
+    def places(self, query: AnimalQuery) -> list[tuple[str, int]]:
+        cond, args = where(query, self._today())
+        if not query.tags:
+            rows = self._rows(f"SELECT n.care_reg_no, count(*) AS n FROM service_notice n WHERE {cond} "
+                              "AND n.care_reg_no IS NOT NULL GROUP BY n.care_reg_no", args)
+            return sorted(((r["care_reg_no"], r["n"]) for r in rows), key=lambda x: (-x[1], x[0]))
+        rows = self._rows(f"SELECT n.desertion_no, n.care_reg_no FROM service_notice n WHERE {cond}", args)
+        tags = self._tags([r["desertion_no"] for r in rows])
+        return count_places([(r["care_reg_no"], tags.get(r["desertion_no"])) for r in rows], query)
 
     def get(self, desertion_no: str) -> dict[str, Any] | None:
         rows = self._with_tags([{"desertion_no": desertion_no}])

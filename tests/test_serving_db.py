@@ -135,3 +135,10 @@ def test_reconnects_after_connection_drop(client):
 
 def test_age_of():
     assert db_repository.age_of(2026, TODAY) == 0 and db_repository.age_of(None, TODAY) is None
+
+
+def test_places_and_several_shelters(client):
+    places = client.get("/animals/places", params={"state": "protect"}).json()
+    assert places["total"] == client.get("/animals", params={"state": "protect"}).json()["total"]
+    regs = ",".join(p["regNo"] for p in places["items"])
+    assert client.get("/animals", params={"state": "protect", "shelter": regs}).json()["total"] == places["total"]

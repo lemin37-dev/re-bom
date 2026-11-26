@@ -22,6 +22,7 @@ export type KakaoNs = {
     load(cb: () => void): void
     LatLng: new (lat: number, lng: number) => KakaoLatLng
     Map: new (el: HTMLElement, opt: { center: KakaoLatLng; level: number; scrollwheel?: boolean }) => KakaoMap
+    Circle: new (opt: { center: KakaoLatLng; radius: number; strokeWeight?: number; strokeColor?: string; strokeOpacity?: number; fillColor?: string; fillOpacity?: number }) => KakaoOverlay
     CustomOverlay: new (opt: { position: KakaoLatLng; content: HTMLElement; xAnchor?: number; yAnchor?: number; zIndex?: number; clickable?: boolean }) => KakaoOverlay
     ZoomControl: new () => unknown
     ControlPosition: { RIGHT: unknown; TOPLEFT: unknown }

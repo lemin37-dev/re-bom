@@ -47,7 +47,7 @@ class AnimalQuery:
     sex: str | None = None  # M / F / Q
     # 시·도 이름에 들어가는 단어 중 하나라도 맞으면 통과 (예: ("서울", "경기"))
     regions: tuple[str, ...] = ()
-    shelter: str | None = None  # 보호소 등록번호(careRegNo)
+    shelter: str | None = None  # 보호소 등록번호(careRegNo), 쉼표로 여러 개 (같은 건물에 시·군마다 따로 등록된 곳)
     q: str | None = None  # 띄어쓰기로 나눈 단어 중 하나라도 특징·품종·색상·발견 장소에 있으면 통과
     age_min: int | None = None  # 추정 나이(살), 이상
     age_max: int | None = None  # 이하
@@ -75,6 +75,10 @@ class AnimalRepository(Protocol):
 
     def shelters(self) -> list[tuple[dict[str, Any], int]]: ...
 
+    def places(self, query: AnimalQuery) -> list[tuple[str, int]]:
+        """목록 검색과 같은 조건에 맞는 아이들의 보호소별 마릿수 (지도용). 많은 순."""
+        ...
+
     def count(self) -> int: ...
 
     def tag_counts(self) -> dict[str, int]: ...
@@ -84,6 +88,23 @@ class AnimalRepository(Protocol):
     def vector_spec(self, kind: VectorKind) -> VectorSpec:
         """활성 버전의 질의 조건. 없으면 VectorUnavailable."""
         ...
+
+
+def shelter_list(shelter: str | None) -> tuple[str, ...]:
+    """'311,312' → ('311', '312')."""
+    return tuple(s.strip() for s in (shelter or "").split(",") if s.strip())
+
+
+def count_places(rows: list[tuple[str | None, frozenset[str] | None]], query: AnimalQuery) -> list[tuple[str, int]]:
+    """(보호소 번호, 태그) 행 → 보호소별 마릿수. 태그를 골랐으면 목록처럼 털이 반대인 아이(tag_match None)는 뺀다. 많은 순."""
+    counts: dict[str, int] = defaultdict(int)
+    for reg, tags in rows:
+        if not reg:
+            continue
+        if query.tags and tag_match(tags or frozenset(), query.tags) is None:
+            continue
+        counts[reg] += 1
+    return sorted(counts.items(), key=lambda x: (-x[1], x[0]))
 
 
 def _words(q: str | None) -> list[str]:
@@ -101,7 +122,7 @@ def _matches(raw: dict[str, Any], query: AnimalQuery, today: date) -> bool:
         return False
     if query.sex and raw.get("sexCd") != query.sex:
         return False
-    if query.shelter and raw.get("careRegNo") != query.shelter:
+    if query.shelter and raw.get("careRegNo") not in shelter_list(query.shelter):
         return False
     if query.regions:
         names = f"{sido(raw.get('careAddr')) or ''} {sido(raw.get('orgNm')) or ''}"
@@ -180,6 +201,11 @@ class SampleRepository:
 
     def get(self, desertion_no: str) -> dict[str, Any] | None:
         return self._by_id.get(desertion_no)
+
+    def places(self, query: AnimalQuery, today: date | None = None) -> list[tuple[str, int]]:
+        today = today or date.today()
+        hits = [r for r in self._rows if _matches(r, query, today)]
+        return count_places([(r.get("careRegNo"), self.tags_of(r["desertionNo"])) for r in hits], query)
 
     def shelters(self) -> list[tuple[dict[str, Any], int]]:
         """보호소별 대표 행과 보호중 동물 수. 보호중 많은 순."""

@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/icons/Icon'
-import { IllustratedMap } from '@/components/map/IllustratedMap'
+import { SearchPlaceMap } from '@/screens/common/SearchPlaceMap'
 import { MascotState } from '@/components/mascot/MascotState'
 import { filterLabels, sortOptions } from '@/data/filters'
 import { useExperience } from '@/providers/ExperienceProvider'
@@ -22,11 +22,7 @@ export function MobileResults() {
     {!searching && matched !== null && <p className="tag-match-note">고른 태그가 모두 맞는 아이 <b>{matched}마리</b>를 먼저 보여 드려요. 나머지 아이도 그 뒤에 이어져요.</p>}
     {searched && <div className="mobile-applied-filters">{(Object.keys(filters) as FilterKey[]).map(key => <button key={key} onClick={openFilters}><span>{filterLabels[key]}</span>{filters[key]}</button>)}</div>}
     {!searching && !error && map && visible.length > 0 && <div className="mobile-search-map">
-      <IllustratedMap>
-        {visible.slice(0, 5).map((a, i) => <button key={a.id} className={`map-pin pin-${i}`} onClick={() => openAnimal(a)}><Icon name="pin" size={15} />{a.shelter.sigungu || a.center.split(' ')[0]}</button>)}
-        <span className="map-note">위치를 설명하기 위한 예시 지도</span>
-      </IllustratedMap>
-      <p>지도의 보호센터를 누르면 친구를 자세히 볼 수 있어요.</p>
+      <SearchPlaceMap onOpen={openAnimal} compact />
     </div>}
     {searching
       ? <MascotState kind="loading" />
