@@ -20,7 +20,7 @@ def client() -> TestClient:
 
 def test_health_reports_sample_mode(client):
     body = client.get("/health").json()
-    assert body == {"status": "ok", "dataMode": "sample", "animalCount": len(SAMPLE)}
+    assert body == {"status": "ok", "dataMode": "sample", "env": "prod", "animalCount": len(SAMPLE)}
 
 
 def test_list_paginates(client):

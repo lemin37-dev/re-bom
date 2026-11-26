@@ -66,6 +66,7 @@ class SearchPage:
     total: int
     rows: list[dict[str, Any]]
     matched: int | None = None  # 태그를 골랐을 때 모두 맞는(all) 아이 수
+    excluded: int = 0  # 태그를 골랐을 때 털처럼 반대면 빼는 범주가 반대라서 뺀 아이 수
 
 
 class AnimalRepository(Protocol):
@@ -189,15 +190,16 @@ class SampleRepository:
         hits = [r for r in self._rows if _matches(r, query, today)]
         key, reverse = _sort_key(query.sort, today)
         hits.sort(key=key, reverse=reverse)
-        matched = None
+        matched, excluded = None, 0
         if query.tags:
             ranked = [(r, tag_match(self.tags_of(r["desertionNo"]), query.tags)) for r in hits]
+            excluded = sum(1 for _, m in ranked if m is None)
             ranked = [(r, m) for r, m in ranked if m is not None]
             ranked.sort(key=lambda x: MATCH_RANK[x[1]])  # 안정 정렬이라 같은 단계 안에서는 고른 정렬이 유지된다
             hits = [r for r, _ in ranked]
             matched = sum(1 for _, m in ranked if m == "all")
         start = (query.page - 1) * query.size
-        return SearchPage(len(hits), hits[start : start + query.size], matched)
+        return SearchPage(len(hits), hits[start : start + query.size], matched, excluded)
 
     def get(self, desertion_no: str) -> dict[str, Any] | None:
         return self._by_id.get(desertion_no)
