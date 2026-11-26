@@ -91,8 +91,9 @@ function kakaoEngine(k: KakaoNs, box: HTMLElement): Engine {
     focus(f) {
       map.relayout()
       if (!f) { showKorea(); return }
+      // 중심을 먼저 옮기고 확대한다 (확대 애니메이션 중의 panTo 는 무시돼 먼 곳으로 못 감)
+      map.setCenter(new m.LatLng(f.lat, f.lng))
       map.setLevel(kakaoLevel(f.zoom), { animate: true })
-      map.panTo(new m.LatLng(f.lat, f.lng))
     },
     destroy() { overlays.forEach(o => o.setMap(null)); meOverlay?.setMap(null); box.innerHTML = '' },
   }

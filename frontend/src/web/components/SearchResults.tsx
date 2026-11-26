@@ -32,9 +32,9 @@ export function SearchResults() {
         : !visible.length
           ? searched ? <MascotState kind="no-results"><button className="primary-button" onClick={resetAndSearch}>조건 넓혀서 다시 찾기</button></MascotState> : <MascotState kind="empty" />
           : map
-            ? <ResultMap animals={visible} onOpen={openAnimal} />
+            ? <ResultMap animals={visible} total={total} onOpen={openAnimal} />
             : <div className="animal-grid">{visible.map(a => <PetCard key={a.id} animal={a} onOpen={openAnimal} />)}</div>}
-    {!searching && !error && !map && hasMore && <button className="load-more" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '불러오는 중' : '기다리는 친구 더 만나기'} <span>{visible.length} / {total}</span><Icon name="plus" size={15} /></button>}
+    {!searching && !error && hasMore && <button className="load-more" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '불러오는 중' : '기다리는 친구 더 만나기'} <span>{visible.length} / {total}</span><Icon name="plus" size={15} /></button>}
     <p className="fiction-note">공고 정보는 공공데이터포털 구조동물 API 샘플(2026-10-30 기준)이며, 실제 입양 가능 여부는 보호소에 확인해 주세요.</p>
   </section>
 }
