@@ -34,4 +34,5 @@
 @import '../web/styles/search.css';
 @import './components.css';
 @import './tag-search.css';
+@import './rank-debug.css'; /* dev 모드 순위 근거 */
 @import './responsive.css';

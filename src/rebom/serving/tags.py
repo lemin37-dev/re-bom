@@ -93,6 +93,21 @@ def tag_match(animal_tags: frozenset[str], groups: TagGroups) -> TagMatch | None
     return "other" if conflicted else "unknown"
 
 
+def tag_detail(animal_tags: frozenset[str], groups: TagGroups) -> list[dict]:
+    """범주마다 고른 태그·이 아이 태그·판정(match 맞음 / other 다름 / unknown 정보 없음). dev 모드 순위 근거용."""
+    out = []
+    for group in groups:
+        category = _CATEGORY_OF[next(iter(group))]
+        have = {t for t in animal_tags if _CATEGORY_OF.get(t) is category}
+        result = "match" if have & group else ("other" if have else "unknown")
+        out.append({
+            "category": category.key, "label": category.label, "exclusive": category.exclusive,
+            "picked": [c for c in category.codes if c in group], "have": [c for c in category.codes if c in have],
+            "result": result,
+        })
+    return out
+
+
 def load_sample_tags(path: Path) -> dict[str, frozenset[str]]:
     """data/sample/photo_tags.json → 공고번호별 태그. 파일이 없으면 빈 사전(태그 없이 동작)."""
     if not path.exists():

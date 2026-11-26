@@ -227,11 +227,12 @@ class DbRepository:
         rows = self._rows(select, [*join_args, *args, *order_args])
         tags = self._tags([r["desertion_no"] for r in rows])
         ranked = [(r, tag_match(tags.get(r["desertion_no"], frozenset()), query.tags)) for r in rows]
+        excluded = sum(1 for _, m in ranked if m is None)
         ranked = [(r, m) for r, m in ranked if m is not None]
         ranked.sort(key=lambda x: MATCH_RANK[x[1]])  # 안정 정렬이라 같은 단계 안에서는 거리·고른 정렬이 유지된다
         matched = sum(1 for _, m in ranked if m == "all")
         page = [r for r, _ in ranked[start:start + query.size]]
-        return SearchPage(len(ranked), self._with_tags(page, tags), matched)
+        return SearchPage(len(ranked), self._with_tags(page, tags), matched, excluded)
 
     def _with_tags(self, hits: Sequence[dict[str, Any]],
                    tags: dict[str, frozenset[str]] | None = None) -> list[dict[str, Any]]:
@@ -243,6 +244,7 @@ class DbRepository:
         for r in rows:
             r["_tags"] = tags.get(r["desertionNo"], frozenset())
             d = dist.get(r["desertionNo"])
+            r["_distance"] = None if d is None else round(float(d), 6)  # dev 모드 순위 근거(rank_debug)용
             r["_similarity"] = None if d is None else round(1 - float(d), 4)
         return rows
 

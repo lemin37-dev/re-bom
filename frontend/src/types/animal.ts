@@ -1,3 +1,4 @@
+import type { RankDebug } from './rank'
 import type { PhotoTag, TagMatch } from './tags'
 
 /** 매칭 이유 한 줄: [표시 문구, 근거 출처('문장' | '사진' | '조건')] */
@@ -62,6 +63,8 @@ export type Animal = {
   photoTags: PhotoTag[]
   /** 태그를 골라 검색했을 때 이 아이의 단계. 태그 없이 검색하면 null */
   tagMatch: TagMatch | null
+  /** API 를 REBOM_ENV=dev 로 띄웠을 때만: 순위 근거 (prod 에서는 없음) */
+  rank?: RankDebug
   // 상세에서만 오는 값
   healthCheck?: string | null
   vaccinationCheck?: string | null
