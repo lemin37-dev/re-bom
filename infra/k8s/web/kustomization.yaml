@@ -16,7 +16,7 @@ resources:
 images:
 - name: rebom-api
   newName: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/api
-  newTag: sha-cb66261
+  newTag: sha-a216c7c
 - name: rebom-web
   newName: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/web
-  newTag: sha-cb66261
+  newTag: sha-a216c7c
