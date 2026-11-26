@@ -10,5 +10,5 @@ export function ShelterDirectoryScreen() {
   const { mode } = useViewMode()
   const { focusCenter } = useSearch()
   const { navigate } = useExperience()
-  return <ShelterDirectory compact={mode === 'app'} onFind={center => { focusCenter(center); navigate(ROUTES.search) }} />
+  return <ShelterDirectory compact={mode === 'app'} onFind={center => { focusCenter({ regNo: center.regNo, name: center.name }); navigate(ROUTES.search) }} />
 }

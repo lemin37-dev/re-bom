@@ -1,0 +1,26 @@
+# 웹 화면 + 검색 API 를 deploy/dev 브랜치의 infra/k8s/web 대로 맞춘다.
+# deploy/dev 는 CI(.github/workflows/build-images.yml)만 쓰는 브랜치. 사람은 손대지 않는다.
+# 등록은 사람이: kubectl apply -f infra/k8s/argocd/apps/rebom-web.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rebom-web
+  namespace: argocd
+  finalizers:
+    # Application 을 지우면 rebom-web 리소스도 같이 지운다
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/lemin37-dev/re-bom.git # public 레포라 자격 증명 불필요
+    targetRevision: deploy/dev
+    path: infra/k8s/web
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rebom-web
+  syncPolicy:
+    automated:
+      prune: true # 레포에서 지운 리소스는 클러스터에서도 지운다
+      selfHeal: true # 손으로 바꾼 것은 레포 상태로 되돌린다
+    syncOptions:
+      - CreateNamespace=true

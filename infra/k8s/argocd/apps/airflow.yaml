@@ -1,0 +1,37 @@
+# Airflow (공식 Helm 차트) + 수집 네임스페이스·권한(infra/k8s/ingest).
+# 차트는 Helm 저장소에서, values 와 권한 매니페스트는 이 레포 develop 에서 읽는다.
+# (이미지 태그를 기록할 일이 없어서 deploy/dev 를 쓰지 않는다. develop 에 머지되면 최대 2~3분 안에 반영된다)
+# 등록은 사람이: kubectl apply -f infra/k8s/argocd/apps/airflow.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: airflow
+  namespace: argocd
+  finalizers:
+    # Application 을 지우면 Airflow 리소스도 같이 지운다 (메타 DB PVC 는 남는다)
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://airflow.apache.org
+      chart: airflow
+      targetRevision: 1.22.0 # Airflow 3.2.2, 2026-06-01 배포. 올릴 때는 나온 지 2주 지난 버전으로
+      helm:
+        releaseName: airflow
+        valueFiles:
+          - $values/infra/k8s/airflow/values.yaml
+    - repoURL: https://github.com/lemin37-dev/re-bom.git # public 레포라 자격 증명 불필요
+      targetRevision: develop
+      ref: values
+    - repoURL: https://github.com/lemin37-dev/re-bom.git
+      targetRevision: develop
+      path: infra/k8s/ingest
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: airflow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

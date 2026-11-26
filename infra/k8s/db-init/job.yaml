@@ -1,0 +1,67 @@
+# RDS(infra/terraform/database) 안에 데이터베이스·사용자를 만드는 일회성 Job. 다시 돌려도 안전하다(이미 있으면 건너뜀).
+#   airflow DB + airflow 사용자 : Airflow 메타 DB
+#   rebom   DB + rebom   사용자 : 서비스 DB (pgvector 등 스키마는 db/migrations 에서)
+# 내 PC 에서 RDS 로 직접 갈 수 없어서 클러스터 안에서 돈다. Argo CD 가 관리하지 않는다. 사람이 실행:
+#   kubectl apply -f infra/k8s/db-init/job.yaml  (순서·Secret 은 infra/terraform/database/README.md)
+# 값은 모두 Secret db-init 에서 받는다. 이 파일과 로그에 비밀번호를 남기지 않는다.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+  namespace: airflow
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        rebom/pool: main
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70 # postgres:alpine 이미지의 postgres 사용자
+      containers:
+        - name: psql
+          image: postgres:18-alpine # psql 클라이언트만 쓴다
+          envFrom:
+            - secretRef:
+                name: db-init # PGHOST, PGUSER, PGPASSWORD(관리자), AIRFLOW_DB_PASSWORD, REBOM_DB_PASSWORD
+          env:
+            - name: PGDATABASE
+              value: postgres
+            - name: PGSSLMODE
+              value: require
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              psql -v ON_ERROR_STOP=1 -q \
+                -v airflow_pw="$AIRFLOW_DB_PASSWORD" -v rebom_pw="$REBOM_DB_PASSWORD" -v admin="$PGUSER" <<'SQL'
+              -- 사용자 (없을 때만). 비밀번호는 psql 변수로만 넘긴다
+              SELECT format('CREATE ROLE airflow LOGIN PASSWORD %L', :'airflow_pw')
+                WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'airflow') \gexec
+              SELECT format('CREATE ROLE rebom LOGIN PASSWORD %L', :'rebom_pw')
+                WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rebom') \gexec
+
+              -- PostgreSQL 16 이상: 다른 사용자 소유로 DB 를 만들려면 관리자가 그 역할의 구성원이어야 한다
+              GRANT airflow TO :"admin";
+              GRANT rebom TO :"admin";
+
+              SELECT 'CREATE DATABASE airflow OWNER airflow'
+                WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow') \gexec
+              SELECT 'CREATE DATABASE rebom OWNER rebom'
+                WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'rebom') \gexec
+
+              -- 다른 사용자는 서로의 DB 에 붙지 못하게
+              REVOKE CONNECT ON DATABASE airflow FROM PUBLIC;
+              REVOKE CONNECT ON DATABASE rebom FROM PUBLIC;
+              SQL
+              echo "done: airflow, rebom (databases and users)"

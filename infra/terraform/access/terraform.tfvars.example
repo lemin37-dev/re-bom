@@ -1,0 +1,6 @@
+# 복사해서 terraform.tfvars 로 쓴다 (terraform.tfvars 는 커밋하지 않음)
+workload_account_id = ""
+identity_account_id = ""
+
+workload_profile = "rebom"
+identity_profile = "rebom-identity"

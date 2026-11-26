@@ -1,0 +1,64 @@
+# 웹 화면 (Next.js standalone). 이미지: infra/docker/web.Dockerfile
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+    spec:
+      nodeSelector:
+        rebom/pool: main
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # node:22-alpine 의 node 사용자
+      containers:
+        - name: web
+          image: rebom-web # 실제 주소·태그는 kustomization.yaml 의 images
+          imagePullPolicy: Always # 태그가 develop 이어도 새로 받게. sha- 태그면 다이제스트만 확인하고 넘어간다
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

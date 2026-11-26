@@ -1,21 +1,12 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
-import { findAnimal, searchAnimals } from '@/data/animals'
 import { AnimalDetailScreen } from '@/screens/animal-detail/AnimalDetailScreen'
 
 type Params = { params: Promise<{ id: string }> }
 
-export function generateStaticParams() {
-  return searchAnimals.map(a => ({ id: String(a.id) }))
-}
+export const metadata: Metadata = { title: '동물 상세 | RE:봄' }
 
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const animal = findAnimal(Number((await params).id))
-  return { title: animal ? `${animal.kind} · ${animal.gender} · ${animal.age}살 | RE:봄` : 'RE:봄' }
-}
-
+/** /animals/:구조번호. 공고 정보는 화면에서 검색 API로 불러옵니다. */
 export default async function AnimalPage({ params }: Params) {
-  const animal = findAnimal(Number((await params).id))
-  if (!animal) notFound()
-  return <AnimalDetailScreen animal={animal} />
+  const { id } = await params
+  return <AnimalDetailScreen id={decodeURIComponent(id)} />
 }

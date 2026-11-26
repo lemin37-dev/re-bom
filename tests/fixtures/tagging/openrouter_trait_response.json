@@ -1,0 +1,21 @@
+{
+  "id": "gen-trait-0001",
+  "model": "google/gemini-3.1-flash-lite-20260507",
+  "provider": "Google AI Studio",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "message": {
+        "role": "assistant",
+        "content": "{\"fur\": {\"evidence\": \"털이 짧아 몸 윤곽이 보인다.\", \"value\": \"매끈\"}, \"face\": {\"puppy\": \"아니오\", \"ears\": \"섬\", \"expression\": \"보통\", \"muzzle\": \"애매함\", \"eyes\": \"날카로움\"}}"
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1294,
+    "completion_tokens": 120,
+    "completion_tokens_details": {"reasoning_tokens": 40},
+    "cost": 0.000697
+  }
+}

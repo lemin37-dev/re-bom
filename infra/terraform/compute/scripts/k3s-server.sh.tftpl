@@ -1,0 +1,13 @@
+#!/bin/bash
+# k3s 서버 설치 (처음 켤 때 한 번). 로그: /var/log/cloud-init-output.log
+set -euo pipefail
+
+snap install aws-cli --classic
+${ecr_setup}
+TOKEN="$(/snap/bin/aws ssm get-parameter --region ${region} --name '${token_parameter}' --with-decryption --query Parameter.Value --output text)"
+
+# kubeconfig 는 root 만 읽는다. 내 PC 에서는 SSM 포트포워딩(6443) 후 127.0.0.1 로 접속한다.
+curl -sfL https://get.k3s.io | ${install_env} K3S_TOKEN="$TOKEN" sh -s - server \
+  --write-kubeconfig-mode 600 \
+  --tls-san 127.0.0.1 \
+  --node-label rebom/pool=main

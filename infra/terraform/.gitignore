@@ -1,0 +1,13 @@
+# Terraform 작업 파일과 상태 파일은 커밋하지 않는다
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.tfstate.lock.info

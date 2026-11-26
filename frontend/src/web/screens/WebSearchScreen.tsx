@@ -18,7 +18,7 @@ export function WebSearchScreen() {
 
   return <>
     <section className="hero"><div className="eyebrow"><Icon name="leaf" size={15} />다시 만나는, 새로운 시작</div><h1>어떤 친구를 <span>다시 봄</span>으로 만날까요?</h1><p>문장 · 사진 · 조건을 함께 넣으면, 전국 보호소 공고에서 잘 맞는 아이를 찾아드려요.</p><HeroMascot className="web-hero-mascot" /></section>
-    {centerFilter && <CenterFilterBanner center={centerFilter} onClear={clearCenter} />}
+    {centerFilter && <CenterFilterBanner center={centerFilter.name} onClear={clearCenter} />}
     <SearchCard />
     {!searched && <SearchSuggestions />}
     <SearchResults />

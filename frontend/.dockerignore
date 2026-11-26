@@ -1,0 +1,9 @@
+# web 이미지(infra/docker/web.Dockerfile) 빌드 컨텍스트 = frontend/
+node_modules
+.next
+out
+.env*
+*.tsbuildinfo
+*.log
+.claude-replay.*
+.tmp-*

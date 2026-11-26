@@ -17,7 +17,7 @@ export function MobileSearchScreen() {
   return <div className="mobile-discovery">
     <MobileHero />
     <MobileSearchForm />
-    {centerFilter && <div className="mobile-center-filter"><Icon name="pin" size={17} /><span>{centerFilter}</span><button onClick={clearCenter} aria-label="보호센터 조건 해제"><Icon name="close" size={16} /></button></div>}
+    {centerFilter && <div className="mobile-center-filter"><Icon name="pin" size={17} /><span>{centerFilter.name}</span><button onClick={clearCenter} aria-label="보호센터 조건 해제"><Icon name="close" size={16} /></button></div>}
     {!searched && <MobileSuggestions />}
     <MobileResults />
     <button className="mobile-guide-banner" onClick={() => navigate(ROUTES.guide)}><span className="soft-icon"><Icon name="leaf" size={23} /></span><span><strong>처음 입양을 고민하고 있나요?</strong><small>서두르지 않아도 괜찮아요. 함께 알아봐요.</small></span><Icon name="arrow" size={18} /></button>

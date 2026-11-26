@@ -11,3 +11,122 @@
 .guide-bottom-grid { display:grid; grid-template-columns:1.1fr 1fr; gap:28px; }
 .faq-list { border-top:1px solid var(--color-line); }.faq-item { border-bottom:1px solid var(--color-line); }.faq-item h3>button { display:flex; justify-content:space-between; align-items:center; gap:15px; padding:20px 0; width:100%; font-size:12px; font-weight:550; }.faq-item h3>button>span:first-child { display:flex; gap:10px; align-items:center; }.faq-item b { font-size:9px; color:var(--color-sage); font-weight:500; }.faq-item p { padding:0 12px 22px 28px; font-size:11px; line-height:2.1; color:var(--color-muted); }.faq-minus svg { transform:rotate(45deg); color:var(--color-peach-deep); }
 .checklist { background:white; border:1px solid var(--color-line); border-radius:18px; padding:23px; }.checklist-intro { display:flex; align-items:center; gap:11px; margin-bottom:20px; }.checklist-intro .soft-icon { width:37px; height:37px; }.checklist h3 { font-size:12px; font-weight:650; color:var(--color-forest); }.checklist-intro p { color:var(--color-muted); font-size:9px; margin-top:5px; }.check-progress { margin-left:auto; font-size:10px; color:var(--color-sage); white-space:nowrap; }.checklist-items { display:flex; flex-direction:column; gap:12px; }.checklist-items label { display:flex; align-items:center; gap:10px; font-size:11px; color:#757f69; cursor:pointer; }.checklist-items input { width:15px; height:15px; accent-color:var(--color-forest); cursor:pointer; }.checklist-items .is-checked>span { color:#a2ac97; text-decoration:line-through; }.checklist>.reference-note { font-size:9px; border-top:1px solid #efeee5; padding-top:12px; margin-top:20px; }
+
+/* v2: 구역 바로가기 · 단계 안내 · 체크리스트 */
+.step-description p.step-note { display:flex; gap:7px; align-items:flex-start; font-size:11px; line-height:1.9; color:#6f7f61; margin-top:12px; background:#f6f8f0; border-radius:10px; padding:10px 12px; }.step-note svg { flex-shrink:0; margin-top:4px; color:var(--color-sage); }
+.step-promise { margin-top:14px; background:white; border:1px solid #e1e7d8; border-radius:12px; padding:13px 16px; }.step-promise strong { font-size:12px; color:var(--color-forest); }.step-promise ul { list-style:disc; padding-left:17px; margin-top:7px; font-size:11px; line-height:2; color:#6f7f61; }
+.step-action { display:inline-flex; align-items:center; gap:7px; margin-top:15px; font-size:11px; font-weight:650; color:white; background:var(--color-forest); border-radius:999px; padding:9px 15px; }
+.guide-checklist { margin-top:26px; scroll-margin-top:25px; }
+.tier-title { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color:var(--color-forest); margin-bottom:13px; }.tier-title small { font-size:10px; font-weight:500; color:var(--color-muted); }.tier-dot { width:8px; height:8px; border-radius:50%; background:var(--color-sage); flex-shrink:0; }.tier-dot.peach { background:var(--color-peach-deep); }
+
+/* v2: 입양 안내 3페이지 탭 */
+.guide-tabs { display:flex; gap:8px; flex-wrap:wrap; margin:26px 0 4px; }.guide-tabs a { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--color-muted); background:white; border:1px solid var(--color-line); border-radius:999px; padding:9px 16px; }.guide-tabs a b { font-size:10px; color:var(--color-sage); font-weight:600; }.guide-tabs a:hover { color:var(--color-forest); border-color:var(--color-sage); }.guide-tabs a.active { background:var(--color-forest); border-color:var(--color-forest); color:white; font-weight:650; }.guide-tabs a.active b { color:#dfe9d0; }
+
+/* v2: 한반도 지도 (Leaflet) */
+.korea-map { width:100%; border-radius:18px; border:1px solid var(--color-line); overflow:hidden; background:#e8eee0; z-index:0; }
+.map-dot { display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid white; box-shadow:0 1px 4px rgba(40,50,30,.35); color:white; font-size:10px; font-weight:700; white-space:nowrap; cursor:pointer; }.map-dot.tone-muted { opacity:.8; }.map-dot.selected { outline:3px solid #f2b48f; outline-offset:1px; }
+.map-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; font-size:10px; color:var(--color-muted); }.map-legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; border:1.5px solid white; box-shadow:0 0 0 1px #d9dfd0; }.map-legend .tone-forest { background:#3f5233; }.map-legend .tone-sage { background:#8fa978; }.map-legend .tone-peach { background:#e3936a; }.map-legend .tone-muted { background:#b9bfae; }
+
+/* v2: 우리 지역 입양 지원 (/guide/support) */
+.support-explorer { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:26px; align-items:start; }
+.support-map-col { position:sticky; top:20px; display:flex; flex-direction:column; gap:10px; }
+.sido-chips { display:flex; flex-wrap:wrap; gap:6px; }.sido-chips button { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--color-forest); background:white; border:1px solid var(--color-line); border-radius:999px; padding:5px 10px; }.sido-chips small { font-size:9px; color:var(--color-muted); }.sido-chips button.active { background:var(--color-forest); color:white; border-color:var(--color-forest); }.sido-chips button.active small { color:#dfe9d0; }
+.support-side { min-width:0; }
+.support-search { display:flex; align-items:center; gap:10px; background:white; border:1px solid var(--color-line); border-radius:14px; padding:8px 8px 8px 15px; color:var(--color-sage); }.support-search input { flex:1; min-width:0; font-size:12px; color:var(--color-forest); outline:none; background:transparent; }.support-search button { font-size:12px; font-weight:650; color:white; background:var(--color-forest); border-radius:10px; padding:9px 16px; }
+.region-choices { display:flex; flex-wrap:wrap; gap:7px; align-items:center; font-size:11px; color:var(--color-muted); }.region-choices button { border:1px solid var(--color-line); background:white; border-radius:999px; padding:6px 12px; font-size:11px; color:var(--color-forest); }
+.support-overview { background:#f2f5ea; border:1px solid #e0e6d6; border-radius:16px; padding:22px; }.support-overview h3 { font-size:15px; font-weight:700; color:var(--color-forest); }.support-overview>p { font-size:11px; line-height:1.9; color:var(--color-muted); margin-top:14px; }
+.overview-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:14px; }.overview-stats>div { background:white; border-radius:12px; padding:13px; }.overview-stats strong { display:block; font-size:24px; font-weight:800; color:var(--color-forest); }.overview-stats span { display:block; font-size:10px; line-height:1.6; color:var(--color-muted); margin-top:4px; }
+.region-title { font-size:18px; font-weight:750; color:var(--color-forest); margin:10px 0 12px; letter-spacing:-.5px; }
+.back-link { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--color-sage); }.back-link svg { transform:rotate(180deg); }
+.place-list { display:grid; grid-template-columns:1fr; gap:8px; }.place-list button { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:white; border:1px solid var(--color-line); border-radius:12px; padding:12px 14px; color:var(--color-forest); }.place-list button:hover { border-color:var(--color-sage); }.place-list strong { font-size:12px; font-weight:700; white-space:nowrap; }.place-list .kind-chips { flex:1; }.place-list svg { color:var(--color-muted); flex-shrink:0; }
+.sido-level { margin-top:22px; }.sido-level h4 { font-size:12px; font-weight:700; color:var(--color-forest); margin-bottom:10px; }
+.kind-chips { display:flex; flex-wrap:wrap; gap:5px; }.kind-chip { display:inline-flex; align-items:center; gap:4px; font-size:9.5px; border-radius:999px; padding:3px 8px; background:#f0f2e8; color:#6f7f61; }.kind-chip small { font-size:8.5px; color:#9aa58d; }.kind-chip.kind-cost,.kind-chip.kind-program { background:#e3ecd5; color:#4f6a35; font-weight:650; }.kind-chip.kind-insurance { background:#fbe8da; color:#b0714a; font-weight:650; }.kind-chip.kind-basic { background:#f4f4ef; color:#9a9f90; }
+
+/* v2: 전국 입양 행사 (/guide/events) */
+.events-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.period-toggle { display:flex; gap:4px; background:white; border:1px solid var(--color-line); border-radius:999px; padding:4px; }.period-toggle button { font-size:11px; color:var(--color-muted); border-radius:999px; padding:7px 14px; }.period-toggle button.active { background:var(--color-forest); color:white; font-weight:650; }
+.events-total { font-size:11px; color:var(--color-muted); }.events-total b { color:var(--color-forest); font-size:13px; }
+.events-layout { display:grid; grid-template-columns:minmax(0,1fr) 280px; gap:20px; align-items:start; }
+.sido-counts { background:white; border:1px solid var(--color-line); border-radius:18px; padding:18px; }.sido-counts h3 { font-size:13px; font-weight:700; color:var(--color-forest); margin-bottom:12px; }.sido-counts ul { display:flex; flex-direction:column; gap:6px; }.sido-counts li button { display:grid; grid-template-columns:62px 1fr 24px; align-items:center; gap:8px; width:100%; font-size:11px; color:var(--color-forest); padding:4px 6px; border-radius:8px; }.sido-counts li button:hover,.sido-counts li button.active { background:#f2f5ea; }.sido-counts li i { height:8px; border-radius:999px; background:#e3936a; min-width:6px; }.sido-counts li b { text-align:right; }.sido-counts .back-link { margin-top:12px; }
+.events-list-title { margin-top:26px; }
+.event-card { cursor:pointer; }.event-card.selected { border-color:var(--color-peach-deep); box-shadow:0 0 0 3px #fbe8da; }.event-card.past { opacity:.7; }
+
+/* v2: 지역 지원 패널 (입양 안내 · 공고 상세 공통) */
+.region-support { display:flex; flex-direction:column; gap:22px; margin-top:6px; }
+.support-card .support-type em { font-style:normal; margin-left:auto; font-size:10px; color:var(--color-muted); }
+.region-support .support-card h3 { font-size:16px; }.region-support .support-card>p.support-summary { font-size:11px; line-height:1.8; color:#5f6f52; margin-top:8px; }
+.support-facts { display:flex; flex-direction:column; gap:7px; margin:14px 0; }.support-facts>div { display:grid; grid-template-columns:86px 1fr; gap:8px; font-size:10.5px; line-height:1.7; }.support-facts dt { color:var(--color-muted); }.support-facts dd { color:#55644a; white-space:pre-line; }
+.support-more { font-size:10.5px; color:#55644a; margin-bottom:12px; }.support-more summary { cursor:pointer; color:var(--color-sage); font-weight:600; }.support-more p { white-space:pre-line; line-height:1.8; margin-top:8px; }.support-more strong { display:block; margin-top:10px; font-size:10.5px; color:var(--color-forest); }
+.tier-note,.tier-empty { font-size:11px; line-height:1.9; color:var(--color-muted); margin-bottom:10px; }
+.ordinance-list { display:flex; flex-direction:column; gap:8px; }.ordinance-list li { display:flex; flex-direction:column; gap:7px; background:white; border:1px solid var(--color-line); border-radius:12px; padding:12px 14px; }.ordinance-list strong { font-size:11.5px; font-weight:650; color:var(--color-forest); }.ordinance-list strong em { font-style:normal; font-size:9px; margin-left:6px; color:var(--color-sage); border:1px solid #dce3cf; border-radius:999px; padding:1px 6px; }
+.support-empty { display:flex; gap:13px; align-items:flex-start; margin-top:16px; background:#fcf6f0; border:1px dashed #efd9c6; border-radius:16px; padding:18px 20px; color:var(--color-peach-deep); }.support-empty svg { flex-shrink:0; }.support-empty strong { font-size:13px; color:var(--color-forest); }.support-empty p { font-size:11px; line-height:1.9; color:var(--color-muted); margin-top:5px; }
+.region-support.compact .support-card { padding:20px; }
+.festival-block { margin-top:24px; }
+
+@media(max-width:900px) { .support-explorer,.events-layout { grid-template-columns:1fr; }.support-map-col { position:static; } }
+@media(max-width:560px) { .support-facts>div { grid-template-columns:1fr; gap:2px; }.guide-tabs a { font-size:11px; padding:8px 12px; }.korea-map { height:360px !important; } }
+.map-pill { position:absolute; transform:translate(-50%,-50%); display:inline-flex; align-items:center; white-space:nowrap; color:white; font-weight:700; border:2px solid white; border-radius:999px; padding:3px 9px; box-shadow:0 1px 5px rgba(40,50,30,.35); cursor:pointer; }.map-pill.selected { outline:3px solid #f2b48f; }
+.korea-map img { max-width:none !important; max-height:none !important; }
+
+/* v2: 지원 카드 접기·펴기 (한 줄에 하나) */
+.program-list { display:flex; flex-direction:column; gap:10px; }
+.support-card.support-fold { padding:0; }.support-fold>summary { display:block; list-style:none; cursor:pointer; padding:18px 22px; }.support-fold>summary::-webkit-details-marker { display:none; }.support-fold>summary:focus-visible { outline:2px solid var(--color-sage); outline-offset:-2px; border-radius:16px; }
+.fold-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; }.region-support .support-card .fold-head h3 { margin-top:0; }
+.fold-toggle { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:white; color:var(--color-sage); flex-shrink:0; transition:transform .2s; }.support-fold[open] .fold-toggle { transform:rotate(45deg); color:var(--color-peach-deep); }
+.region-support .support-fold .support-summary { margin-top:6px; }
+.fold-body { border-top:1px solid #dfe6d6; padding:4px 22px 18px; }.insurance-card .fold-body { border-color:#eaded2; }.fold-body>small { display:block; font-size:9px; line-height:1.9; color:#8f9983; }
+.support-fold .support-summary { font-size:11px; line-height:1.8; color:#5f6f52; margin-top:6px; }.region-support .support-fold h3 { font-size:15px; }
+
+/* v2: 혜택 중심 (확인된 혜택만) */
+.benefit-count { font-size:12px; color:var(--color-muted); }.benefit-count strong { color:var(--color-forest); }.benefit-count b { font-size:15px; color:var(--color-forest); }
+.benefit-sub { font-size:11px; color:#6f7f61; margin-top:6px; }
+.benefit-conditions { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }.benefit-conditions>span { display:inline-flex; align-items:center; gap:4px; font-size:10px; color:#4f6a35; background:white; border:1px solid #dce5cf; border-radius:999px; padding:4px 9px; }.insurance-card .benefit-conditions>span { color:#a26a46; border-color:#efdccd; }
+.support-map-note { font-size:10px; color:var(--color-muted); }
+.overview-lead { font-size:11px; line-height:1.9; color:var(--color-muted); margin-top:8px; }.support-overview h3 b { font-size:20px; }
+.benefit-index { display:flex; flex-direction:column; gap:7px; margin-top:14px; }.benefit-index button { display:grid; grid-template-columns:auto auto 1fr auto; align-items:center; gap:9px; width:100%; text-align:left; background:white; border:1px solid var(--color-line); border-radius:12px; padding:11px 13px; color:var(--color-forest); }.benefit-index button:hover { border-color:var(--color-sage); }.benefit-index strong { font-size:12px; white-space:nowrap; }.benefit-index span:not(.kind-chip) { font-size:11px; color:#5f6f52; }.benefit-index svg { color:var(--color-muted); }
+.support-overview .overview-note { font-size:10px; line-height:1.8; color:var(--color-muted); margin-top:12px; }
+.sido-subtitle { font-size:12px; font-weight:700; color:var(--color-forest); margin:16px 0 10px; }
+.place-benefits { flex:1; font-size:11px; color:#5f6f52; }
+@media(max-width:560px) { .benefit-index button { grid-template-columns:auto 1fr auto; }.benefit-index span:not(.kind-chip) { grid-column:1 / -1; } }
+
+/* v2: 읽기 쉽게 — 입양 안내 페이지 글씨 +5px, 진한 색, 단계 설명은 문장마다 한 줄 */
+.guide-page { --guide-text:#3d4a33; --guide-sub:#5b6a4e; }
+.guide-page .section-heading>p { font-size:15px; color:var(--guide-sub); }
+.guide-page .page-heading p { font-size:16px; color:var(--guide-sub); }
+.guide-page .adoption-stepper strong { font-size:15px; color:#6b785e; }.guide-page .adoption-stepper .active-step strong { color:var(--color-forest); }
+.guide-page .step-description>div { max-width:100%; }.guide-page .step-description .eyebrow { font-size:13px; }.guide-page .step-description h3 { font-size:24px; }
+.guide-page .step-detail { margin-top:12px; }.guide-page .step-description .step-detail p { font-size:17px; line-height:1.9; color:var(--guide-text); margin-top:0; max-width:none; }
+.guide-page .step-tip { font-size:16px; color:#4f6a35; }
+.guide-page .step-description p.step-note { font-size:16px; color:var(--guide-text); }
+.guide-page .step-promise strong { font-size:17px; }.guide-page .step-promise ul { font-size:16px; color:var(--guide-text); }
+.guide-page .step-action { font-size:15px; padding:11px 18px; }
+.guide-page .tier-title { font-size:17px; }.guide-page .tier-title small { font-size:13px; }
+.guide-page .checklist h3 { font-size:17px; }.guide-page .checklist-intro p { font-size:14px; color:var(--guide-sub); }.guide-page .checklist-items label { font-size:16px; color:var(--guide-text); }.guide-page .check-progress { font-size:14px; }.guide-page .checklist>.reference-note { font-size:14px; }
+.guide-page .faq-item h3>button { font-size:17px; }.guide-page .faq-item b { font-size:13px; }.guide-page .faq-item p { font-size:16px; color:var(--guide-text); }
+.guide-page .reference-note { font-size:14px; color:var(--guide-sub); }
+/* 혜택 카드 · 지역 */
+.guide-page .support-search input { font-size:16px; }.guide-page .support-search button { font-size:15px; }
+.guide-page .support-map-note,.guide-page .map-legend { font-size:13px; }.guide-page .sido-chips button { font-size:14px; }
+.guide-page .support-overview h3 { font-size:19px; }.guide-page .overview-lead,.guide-page .support-overview .overview-note { font-size:15px; color:var(--guide-sub); }
+.guide-page .benefit-index strong { font-size:16px; }.guide-page .benefit-index span:not(.kind-chip) { font-size:15px; color:var(--guide-text); }.guide-page .kind-chip { font-size:13px; }
+.guide-page .region-title { font-size:22px; }.guide-page .sido-subtitle { font-size:16px; }.guide-page .back-link { font-size:14px; }
+.guide-page .benefit-count { font-size:16px; color:var(--guide-sub); }
+.guide-page .support-type { font-size:14px; }.guide-page .support-card .support-type em { font-size:13px; }
+.guide-page .region-support .support-fold h3 { font-size:20px; }
+.guide-page .benefit-sub { font-size:16px; color:var(--guide-text); }
+.guide-page .benefit-conditions>span { font-size:14px; }
+.guide-page .support-facts>div { font-size:15.5px; grid-template-columns:120px 1fr; }.guide-page .support-facts dt { color:var(--guide-sub); }.guide-page .support-facts dd { color:var(--guide-text); }
+.guide-page .fold-body>small { font-size:13px; color:var(--guide-sub); }
+.guide-page .support-empty strong { font-size:17px; }.guide-page .support-empty p { font-size:15px; color:var(--guide-sub); }
+.guide-page .place-list strong { font-size:16px; }.guide-page .place-benefits { font-size:15px; color:var(--guide-text); }
+/* 행사 */
+.guide-page .period-toggle button { font-size:14px; }.guide-page .events-total { font-size:14px; }
+.guide-page .sido-counts h3 { font-size:16px; }.guide-page .sido-counts li button { font-size:14px; }
+.guide-page .event-card h3 { font-size:16px; }.guide-page .event-card p { font-size:13px; color:var(--guide-sub); }.guide-page .event-badge { font-size:12px; color:var(--guide-sub); }.guide-page .event-date span { font-size:12px; }
+/* 내 위치 */
+.locate-button { display:inline-flex; align-items:center; gap:7px; align-self:flex-start; font-size:14px; font-weight:650; color:var(--color-forest); background:white; border:1px solid var(--color-line); border-radius:999px; padding:9px 15px; }.locate-button:hover { border-color:var(--color-sage); }.locate-button:disabled { opacity:.6; }
+.locate-status { font-size:14px; color:var(--guide-sub,#5b6a4e); }
+.near-list { display:flex; flex-direction:column; gap:7px; margin-top:12px; }
+.map-me { display:block; width:18px; height:18px; border-radius:50%; background:#2f7de1; border:3px solid white; box-shadow:0 0 0 6px rgba(47,125,225,.25); }
+@media(max-width:560px) { .guide-page .support-facts>div { grid-template-columns:1fr; } .guide-page .step-description h3 { font-size:20px; } }
+.provider-kakao .map-pill { position:static; transform:none; }

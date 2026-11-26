@@ -1,0 +1,70 @@
+# 검색 API (FastAPI). 이미지: infra/docker/api.Dockerfile
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      nodeSelector:
+        rebom/pool: main
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: api
+          image: rebom-api # 실제 주소·태그는 kustomization.yaml 의 images
+          imagePullPolicy: Always # 태그가 develop 이어도 새로 받게. sha- 태그면 다이제스트만 확인하고 넘어간다
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: REBOM_DATA_MODE
+              value: db
+            # 브라우저는 같은 주소(/api)로 부르므로 CORS 는 필요 없다. 로컬 개발 기본값만 둔다
+            - name: REBOM_CORS_ORIGINS
+              value: http://localhost:3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          # liveness 는 DB 를 보지 않는다(/livez). RDS 가 잠깐 끊겨도 재시작하지 않고 readiness(/health)로만 빠진다
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

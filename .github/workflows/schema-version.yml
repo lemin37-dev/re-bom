@@ -1,0 +1,56 @@
+# RDS 스키마 버전 확인·태그
+# - PR(develop 대상): docs/rds_schema.dbml 머리 줄의 버전·범위가 마이그레이션과 맞는지, 이미 달린 태그와 어긋나지 않는지,
+#   스키마 문서·마이그레이션 테스트가 통과하는지 본다.
+# - develop 에 머지(push)되면: 머리 줄의 이름(예: schema-v0.1)으로 태그가 없을 때만 그 커밋에 단다.
+# 머리 줄 예: // 버전: 스키마 v0.1 = 마이그레이션 001~005. …   (규칙: AGENTS.md 2번, docs/data_contract.md 16절)
+name: 스키마 버전 태그
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "db/migrations/**"
+      - "docs/rds_schema.dbml"
+      - "src/rebom/common/migrate.py"
+      - "tests/test_rds_schema_doc.py"
+      - "tests/test_migrate.py"
+      - ".github/scripts/schema_tag.py"
+      - ".github/workflows/schema-version.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "db/migrations/**"
+      - "docs/rds_schema.dbml"
+  workflow_dispatch:
+
+permissions:
+  contents: write  # 태그 push
+
+# 태그 다는 실행은 한 번에 하나만. PR 확인은 PR 마다 따로.
+concurrency:
+  group: schema-version-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'develop' }}
+  cancel-in-progress: false
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 스키마 문서·마이그레이션 테스트
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pip install --quiet "pytest>=8"
+          python -m pytest -q tests/test_rds_schema_doc.py tests/test_migrate.py
+      - name: 버전 머리 줄 확인
+        if: github.event_name == 'pull_request'
+        run: python3 .github/scripts/schema_tag.py check
+      - name: 태그 달기
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 .github/scripts/schema_tag.py tag

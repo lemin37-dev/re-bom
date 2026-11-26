@@ -5,8 +5,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ROUTES } from '@/constants/routes'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import type { Animal } from '@/types/animal'
-import type { ViewMode } from '@/types/view-mode'
-import { useSearch } from './SearchProvider'
 import { useViewMode } from './ViewModeProvider'
 
 type Experience = {
@@ -22,17 +20,15 @@ type Experience = {
   openAnimal: (animal: Animal) => void
   /** 검색 결과로 돌아가기 (이전 스크롤 위치 복원) */
   backToResults: () => void
-  switchMode: (mode: ViewMode) => void
 }
 
 const ExperienceContext = createContext<Experience | null>(null)
 
-/** 화면 이동·스크롤 복원·웹/앱 전환처럼 화면 전체에 걸친 동작을 제공합니다. */
+/** 화면 이동·스크롤 복원처럼 화면 전체에 걸친 동작을 제공합니다. */
 export function ExperienceProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { mode, setMode } = useViewMode()
-  const { closeFilters } = useSearch()
+  const { mode } = useViewMode()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [actionTarget, setActionTarget] = useState<HTMLDivElement | null>(null)
   const [mascotOpen, setMascotOpen] = useState(false)
@@ -52,7 +48,6 @@ export function ExperienceProvider({ children }: { children: ReactNode }) {
     navigate: href => go(href, 0),
     openAnimal: animal => go(ROUTES.animal(animal.id), 0),
     backToResults: () => go(ROUTES.search, null),
-    switchMode: next => { if (next === mode) return; closeFilters(); setMode(next) },
   }
   return <ExperienceContext.Provider value={value}>{children}</ExperienceContext.Provider>
 }

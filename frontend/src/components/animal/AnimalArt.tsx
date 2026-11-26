@@ -2,8 +2,8 @@ import type { Animal } from '@/types/animal'
 
 /** 실제 사진 대신 사용하는 동물 일러스트 */
 export function AnimalArt({ animal: a, small = false }: { animal: Animal; small?: boolean }) {
-  const pointed = a.id === 3 || a.cat
-  const dark = a.id === 4
+  const pointed = a.cat || /진도|시바|셰퍼드|허스키/.test(a.kind)
+  const dark = a.coat === '#494039'
   return <svg viewBox="0 0 320 200" className={`animal-art ${small ? 'small-art' : ''}`} role="img" aria-label={`${a.color} ${a.kind} 일러스트`}>
     {!small && <><ellipse cx="160" cy="193" rx="79" ry="6" fill={a.ear} opacity=".09" /><path d="M35 165c-7-10-6-18-4-24 7 4 11 12 4 24Zm0 0c2-12 8-16 14-17 0 9-5 15-14 17" fill={a.ear} opacity=".13" /><circle cx="265" cy="66" r="3" fill="white" opacity=".65" /><circle cx="59" cy="67" r="2" fill="white" opacity=".7" /><path d="m252 147 3 3 3-3-3-3Z" fill={a.ear} opacity=".15" /></>}
     <path d="M105 201v-17c0-28 22-46 55-46s55 18 55 46v17" fill={a.coat} />
