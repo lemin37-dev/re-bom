@@ -22,7 +22,7 @@ export function MobileSearchForm() {
             <button type="button" onClick={() => setPhoto(null)} aria-label="첨부 사진 삭제"><Icon name="close" size={16} /></button>
           </div>
         : <button className="mobile-add-photo" type="button" onClick={pickPhoto}><Icon name="image" />사진으로도 찾기<Icon name="plus" size={15} /></button>}
-      <input ref={file} type="file" accept="image/*" className="hidden-input" onChange={e => { const selected = e.target.files?.[0]; if (selected) setPhoto(URL.createObjectURL(selected)); e.target.value = '' }} />
+      <input ref={file} type="file" accept="image/*" className="hidden-input" onChange={e => { const selected = e.target.files?.[0]; if (selected) setPhoto(selected); e.target.value = '' }} />
     </div>
     <div className="mobile-condition-row"><button type="button" className="mobile-filter-trigger" onClick={openFilters}><Icon name="grid" size={16} />생활 조건<span>5</span><Icon name="plus" size={14} /></button><span>{filters.region} · {filters.type} · {filters.size.split(' ')[0]}</span></div>
     <TagPicker compact />

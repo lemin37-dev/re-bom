@@ -24,7 +24,7 @@ export function SearchResults() {
       </div>
     </div>
     {!searching && matched !== null && <p className="tag-match-note">고른 태그가 모두 맞는 아이 <b>{matched}마리</b>를 먼저 보여 드려요. 태그가 일부만 맞거나 태그 정보가 없는 아이는 그 뒤에 이어져요.</p>}
-    {searched && <p className="demo-search-note">지금은 문장을 단어 단위로만 찾아요. 문장의 뜻{photo ? '과 첨부한 사진' : ''}으로 찾는 인공지능 분석은 아직 연결되어 있지 않아요.</p>}
+    {searched && <p className="demo-search-note">{photo ? '첨부한 사진과 닮은 공고 사진 순서로 보여 줘요. 사진이 있으면 문장은 순서에 쓰지 않아요.' : '입력한 문장과 뜻이 가까운 공고 글 순서로 보여 줘요.'}</p>}
     {searching
       ? <MascotState kind="loading" />
       : error
