@@ -87,6 +87,7 @@ def to_raw(row: dict[str, Any], photos: Sequence[dict[str, Any]], image_base: st
         "updTm": row["synced_at"].isoformat() if row.get("synced_at") else None,
         "endReason": row.get("closure_reason_code"), "healthChk": row.get("health_chk"),
         "vaccinationChk": row.get("vaccination_chk"), "sfeSoci": row.get("sfe_soci"), "sfeHealth": row.get("sfe_health"),
+        "_birthYear": int(row["birth_year"]) if row.get("birth_year") is not None else None,
         "_ageYears": years,
         "_ageLabel": None if years is None else ("1살 미만" if years == 0 else f"{years}살"),
         "_weightKg": float(row["weight_kg"]) if row.get("weight_kg") is not None else None,

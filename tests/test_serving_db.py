@@ -89,6 +89,7 @@ def test_summary_fields_from_clean_columns(client):
     assert item["photos"] == ["https://cdn.example/images/1001/1.webp", "https://cdn.example/images/1001/2.webp"]
     assert item["thumbnail"] == "https://cdn.example/images/1001/1_thumb.webp"
     assert (item["ageYears"], item["ageLabel"], item["weightKg"], item["isProtected"]) == (3, "3살", 5.0, True)
+    assert (item["birthYear"], item["size"]) == (2023, "small")
     assert item["happenDate"] == "20261120" and item["shelter"]["sido"] == "서울특별시"
     assert [t["code"] for t in item["photoTags"]] == ["fur.fluffy", "ear.drop"]
     assert not any("owner" in k.lower() for k in item)
