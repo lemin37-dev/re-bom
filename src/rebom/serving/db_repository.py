@@ -19,7 +19,8 @@ from datetime import date
 from typing import Any, Callable, Sequence
 
 from rebom.serving.repository import (
-    MATCH_RANK, SPECIES_CODES, AnimalQuery, count_places, shelter_list, QueryVector, SearchPage, VectorKind, VectorSpec, VectorUnavailable, _words,
+    MATCH_RANK, SPECIES_CODES, STATS_NTH, AnimalQuery, count_places, shelter_list, QueryVector, SearchPage, VectorKind,
+    VectorSpec, VectorStats, VectorUnavailable, _words,
 )
 from rebom.serving.tags import tag_match
 
@@ -279,6 +280,21 @@ class DbRepository:
                 f"동기화 'python -m rebom.serving.sync {sync}' 가 레지스트리에서 채웁니다. 돌려도 비면 레지스트리 "
                 f"{version} 설정에 model_id·dim 이 있는지 사람에게 확인을 요청해 주세요.")
         return VectorSpec(kind, version, str(qc["model_id"]), int(qc["dim"]))
+
+    def vector_stats(self, query: AnimalQuery) -> VectorStats | None:
+        """검색과 같은 조건·거리로 전체를 한 번 더 훑는다(dev 모드에서만 부르므로 prod 비용은 없다)."""
+        if query.vector is None:
+            return None
+        cond, args = where(query, self._today())
+        join, join_args = vector_join(query.vector)
+        row = self._rows(
+            f"WITH d AS (SELECT v.dist FROM service_notice n {join} WHERE {cond}) "
+            "SELECT count(dist) AS scored, count(*) - count(dist) AS missing, 1 - min(dist) AS top, "
+            "1 - percentile_cont(0.5) WITHIN GROUP (ORDER BY dist) AS median, "
+            "(SELECT 1 - dist FROM d WHERE dist IS NOT NULL ORDER BY dist LIMIT 1 OFFSET %s) AS nth FROM d",
+            [*join_args, *args, STATS_NTH - 1])[0]
+        sim = {k: None if row[k] is None else round(float(row[k]), 4) for k in ("top", "nth", "median")}
+        return VectorStats(scored=row["scored"], missing=row["missing"], **sim)
 
     def shelters(self) -> list[tuple[dict[str, Any], int]]:
         """보호소별 대표 행과 보호중 동물 수. 보호중 많은 순 (sample 모드와 같음)."""

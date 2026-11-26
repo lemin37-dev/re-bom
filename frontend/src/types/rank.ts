@@ -34,4 +34,16 @@ export type PageDebug = {
   order: string[]
   excluded: number
   vector: { kind: string; version: string; model: string; dim: number } | null
+  /** 질의 벡터가 있을 때만: 필터를 통과한 공고 전체의 similarity 분포 (털 반대 제외 전) */
+  similarity?: SimilarityStats | null
+}
+export type SimilarityStats = {
+  scored: number
+  /** 거리가 없는 공고 수 (벡터 없음 또는 종료 공고). 맨 뒤에 놓임 */
+  missing: number
+  top: number | null
+  /** nth 가 몇 번째 값인지 (100) */
+  nthRank: number
+  nth: number | null
+  median: number | null
 }

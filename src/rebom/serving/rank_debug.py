@@ -13,7 +13,7 @@ from datetime import date
 from typing import Any
 
 from rebom.serving.derive import age_years, sido, weight_kg
-from rebom.serving.repository import AnimalQuery, SearchPage, _words, shelter_list
+from rebom.serving.repository import STATS_NTH, AnimalQuery, SearchPage, VectorStats, _words, shelter_list
 from rebom.serving.tags import tag_detail, tag_match
 
 TEXT_FIELDS = ("specialMark", "kindFullNm", "colorCd", "happenPlace", "sfeSoci")  # 검색어(q)를 찾는 칸
@@ -84,8 +84,8 @@ def explain(raw: dict[str, Any], tags: frozenset[str], query: AnimalQuery, posit
 
 
 def page_debug(query: AnimalQuery, result: SearchPage, *, env: str, data_mode: str,
-               text_as_words: str | None = None) -> dict[str, Any]:
-    """페이지 단위 설명: 정렬 순서 한 줄씩, 제외한 수, 질의 벡터 (schemas.PageDebug 모양)."""
+               text_as_words: str | None = None, stats: VectorStats | None = None) -> dict[str, Any]:
+    """페이지 단위 설명: 정렬 순서 한 줄씩, 제외한 수, 질의 벡터, similarity 분포 (schemas.PageDebug 모양)."""
     applied = _applied_filters(query)
     order = [f"필터(WHERE): {', '.join(applied) if applied else '없음'}"]
     if text_as_words:
@@ -105,7 +105,11 @@ def page_debug(query: AnimalQuery, result: SearchPage, *, env: str, data_mode: s
     if query.vector:
         spec = query.vector.spec
         vector = {"kind": spec.kind, "version": spec.version, "model": spec.model, "dim": spec.dim}
-    return {"env": env, "data_mode": data_mode, "order": order, "excluded": result.excluded, "vector": vector}
+    similarity = None if stats is None else {
+        "scored": stats.scored, "missing": stats.missing, "top": stats.top, "nth_rank": STATS_NTH, "nth": stats.nth,
+        "median": stats.median}
+    return {"env": env, "data_mode": data_mode, "order": order, "excluded": result.excluded, "vector": vector,
+            "similarity": similarity}
 
 
 def _applied_filters(query: AnimalQuery) -> list[str]:
