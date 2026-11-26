@@ -90,6 +90,26 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/** 사진 파일을 본문 그대로 보낸다 (POST /animals/photo-search). 422 는 서버가 사진 문제를 문장으로 알려 준다. */
+async function postPhoto<T>(path: string, photo: File, signal?: AbortSignal): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST', body: photo, signal,
+      headers: { Accept: 'application/json', 'Content-Type': photo.type || 'application/octet-stream' },
+    })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e
+    throw new ApiError(0, '검색 서버에 연결할 수 없어요.')
+  }
+  if (res.status === 422) {
+    const detail = await res.json().then(b => (typeof b?.detail === 'string' ? b.detail : null)).catch(() => null)
+    throw new ApiError(422, detail ?? '이 사진으로는 찾을 수 없어요.')
+  }
+  if (!res.ok) throw new ApiError(res.status, `검색 서버 오류 (${res.status})`)
+  return res.json() as Promise<T>
+}
+
 function toQuery(p: AnimalSearchParams) {
   const q = new URLSearchParams()
   const set = (key: string, value: string | number | undefined) => { if (value !== undefined && value !== '') q.set(key, String(value)) }
@@ -108,8 +128,11 @@ function toQuery(p: AnimalSearchParams) {
   return q.toString()
 }
 
-export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSignal) {
-  const page = await getJson<ApiPage>(`/animals?${toQuery(params)}`, signal)
+/** photo 가 있으면 사진 벡터로 줄 세운다(문장은 쓰지 않음, API 는 벡터 하나로만 줄 세움). 없으면 문장은 글 벡터로. */
+export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSignal, photo?: File | null) {
+  const page = photo
+    ? await postPhoto<ApiPage>(`/animals/photo-search?${toQuery({ ...params, q: undefined })}`, photo, signal)
+    : await getJson<ApiPage>(`/animals?${toQuery(params)}`, signal)
   return { total: page.total, matched: page.matched ?? null, items: page.items.map(toAnimal) }
 }
 

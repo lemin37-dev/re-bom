@@ -24,7 +24,7 @@ export function SearchCard() {
             <button type="button" className="icon-button" onClick={() => setPhoto(null)} aria-label="첨부 사진 삭제"><Icon name="close" size={16} /></button>
           </div>
         : <button type="button" className="photo-add" onClick={pickPhoto}><Icon name="image" />사진으로 찾기</button>}
-      <input ref={fileRef} className="hidden-input" type="file" accept="image/*" onChange={e => { const file = e.target.files?.[0]; if (file) setPhoto(URL.createObjectURL(file)); e.target.value = '' }} />
+      <input ref={fileRef} className="hidden-input" type="file" accept="image/*" onChange={e => { const file = e.target.files?.[0]; if (file) setPhoto(file); e.target.value = '' }} />
       <button className="search-button" type="submit" disabled={searching}><Icon name="search" size={20} />{searching ? '찾고 있어요' : '찾아보기'}</button>
     </form>
     <div className="search-bottom">

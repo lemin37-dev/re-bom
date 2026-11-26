@@ -36,6 +36,6 @@ export function MobileResults() {
           ? searched ? <MascotState kind="no-results"><button className="primary-button" onClick={resetAndSearch}>조건 넓혀서 다시 찾기</button></MascotState> : <MascotState kind="empty" />
           : <div className="mobile-pet-list">{cards.map((a, i) => <MobilePetCard key={a.id} animal={a} onOpen={openAnimal} featured={i === 0 && !map} />)}</div>}
     {!searching && !error && !map && hasMore && <button className="mobile-load-more" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '불러오는 중' : '다른 친구도 만나기'}<span>{visible.length} / {total}</span><Icon name="plus" size={17} /></button>}
-    <p className="mobile-data-note">공공데이터 구조동물 샘플 · 2026-10-30 기준<br />문장의 뜻·사진으로 찾는 인공지능 분석은 아직 연결되어 있지 않아요.</p>
+    <p className="mobile-data-note">공공데이터 구조동물 샘플 · 2026-10-30 기준<br />문장은 공고 글과, 첨부한 사진은 공고 사진과 닮은 순서로 앞에 보여 줘요.</p>
   </section>
 }
