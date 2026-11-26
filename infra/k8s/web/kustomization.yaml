@@ -19,4 +19,4 @@ images:
   newTag: sha-203f241
 - name: rebom-web
   newName: 559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/web
-  newTag: sha-203f241
+  newTag: sha-a84c9ae
