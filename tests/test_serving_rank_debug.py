@@ -118,3 +118,9 @@ def test_dev_db_text_search_shows_distance_and_model(db_app):
     assert debug["dataMode"] == "db" and debug["vector"] == {
         "kind": "text", "version": "text_embedding@3", "model": "gemini-embedding-2", "dim": DIM}
     assert debug["order"][1].startswith("1순위 글 벡터 코사인 거리") and "임계값 없음" in debug["order"][1]
+    assert debug["similarity"] == {"scored": 2, "missing": 1, "top": 0.9, "nthRank": 100, "nth": None, "median": 0.75}
+
+
+def test_dev_without_vector_has_no_similarity_stats(tmp_path):
+    debug = sample_client(tmp_path, AppEnv.DEV).get("/animals", params=PARAMS).json()["debug"]
+    assert debug["similarity"] is None

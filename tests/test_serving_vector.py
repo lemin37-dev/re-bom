@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import statistics
 from datetime import date
 
 import pytest
@@ -50,6 +51,12 @@ class FakeDb:
         if "FROM active_version" in sql:
             row = self.active.get(args[0])
             return [{"version": row[0], "query_config": row[1]}] if row else []
+        if sql.startswith("WITH d AS"):
+            dists = sorted(d for d in self.dist.values() if d is not None)
+            nth = args[-1]
+            return [{"scored": len(dists), "missing": len(self.dist) - len(dists),
+                     "top": 1 - dists[0] if dists else None, "median": 1 - statistics.median(dists) if dists else None,
+                     "nth": 1 - dists[nth] if len(dists) > nth else None}]
         if sql.startswith("SELECT count(*)"):
             return [{"n": len(self.dist)}]
         if "AS dist" in sql:

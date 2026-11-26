@@ -81,12 +81,24 @@ class QueryVectorInfo(_Model):
     dim: int
 
 
+class SimilarityStats(_Model):
+    """질의 벡터와의 similarity 분포. 필터를 통과한 공고 전체 기준(털 반대 제외 전)."""
+
+    scored: int  # 거리가 있는 공고 수
+    missing: int  # 거리가 없는 공고 수 (벡터 없음 또는 종료 공고). 이 공고들은 맨 뒤
+    top: float | None = None
+    nth_rank: int  # nth 가 몇 번째 값인지 (100)
+    nth: float | None = None  # similarity 높은 순 nth_rank 번째 값. 공고가 그보다 적으면 null
+    median: float | None = None
+
+
 class PageDebug(_Model):
     env: str
     data_mode: str
     order: list[str]  # 정렬 순서 설명 (위에서부터 적용)
     excluded: int  # 반대 태그로 뺀 아이 수
     vector: QueryVectorInfo | None = None
+    similarity: SimilarityStats | None = None  # 질의 벡터가 있을 때만
 
 
 class Shelter(_Model):

@@ -121,7 +121,8 @@ def create_app(settings: Settings | None = None,
         page = AnimalPage(total=result.total, matched=result.matched, page=query.page, size=query.size, items=items)
         if settings.rank_debug:
             page.debug = PageDebug(**page_debug(query, result, env=settings.env.value,
-                                                data_mode=settings.data_mode.value, text_as_words=text_as_words))
+                                                data_mode=settings.data_mode.value, text_as_words=text_as_words,
+                                                stats=r.vector_stats(query)))
         return page
 
     @app.get("/livez")
