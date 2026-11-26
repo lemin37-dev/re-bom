@@ -119,6 +119,15 @@ def test_age_and_weight_filters(client):
     assert items and all(2 <= i["ageYears"] <= 7 for i in items)
     items = client.get("/animals", params={"weight_min": 8, "weight_lt": 15, "size": 100}).json()["items"]
     assert items and all(8 <= i["weightKg"] < 15 for i in items)
+    items = client.get("/animals", params={"weight_min": 10, "weight_lt": 25, "species": "dog", "size": 100}).json()["items"]
+    assert items and all(10 <= i["weightKg"] < 25 and i["size"] == "medium" for i in items)
+
+
+def test_summary_has_birth_year_and_dog_size(client):
+    for i in client.get("/animals", params={"size": 100}).json()["items"]:
+        assert i["birthYear"] is None or str(i["birthYear"]) == i["ageText"][:4]
+        if i["speciesCode"] != "417000" or i["weightKg"] is None:
+            assert i["size"] is None
 
 
 def test_text_query_matches_any_word(client):

@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
-from rebom.serving.derive import age_label, age_years, sido, sigungu, weight_kg
+from rebom.serving.derive import age_label, age_years, birth_year, sido, sigungu, size, weight_kg
 from rebom.serving.tags import TagMatch, chips
 
 PHOTO_KEYS = tuple(f"popfile{i}" for i in range(1, 9))
@@ -54,7 +54,9 @@ class AnimalSummary(_Model):
     weight_text: str | None = None  # 원문 그대로 (예: "0.8~0.9(Kg)")
     age_years: int | None = None  # 출생연도 기준 추정 나이 (sample 모드 임시 파싱)
     age_label: str | None = None  # "60일 미만", "1살 미만", "3살"
-    weight_kg: float | None = None  # 범위는 평균 (sample 모드 임시 파싱)
+    birth_year: int | None = None  # 출생 연도 (db 모드: RDS birth_year, sample 모드: 원문 앞 네 자리)
+    weight_kg: float | None = None  # Silver weight_kg 와 같음: 범위는 큰 값, g→kg, 이상치 None
+    size: str | None = None  # 개만 small / medium / large (10kg 미만 · 25kg 미만 · 이상). weight_kg 로 계산
     state: str | None = None  # 보호중 / 종료(입양) ...
     is_protected: bool
     special_mark: str | None = None
@@ -145,6 +147,7 @@ def shelter_of(raw: dict[str, Any]) -> Shelter:
 
 def _summary_fields(raw: dict[str, Any], tags: Iterable[str] = (), today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
+    kg = raw["_weightKg"] if "_weightKg" in raw else weight_kg(raw.get("weight"), raw.get("upKindNm"))
     # db 모드는 정제된 값을 _ 키로 넘긴다(원문 파싱 안 함). sample 모드는 원문에서 계산한다
     photos = raw["_photos"] if "_photos" in raw else _photos(raw)
     thumbnail = raw["_thumbnail"] if "_thumbnail" in raw else (photos[0] if photos else None)
@@ -161,7 +164,9 @@ def _summary_fields(raw: dict[str, Any], tags: Iterable[str] = (), today: date |
         "weight_text": raw.get("weight"),
         "age_years": raw["_ageYears"] if "_ageYears" in raw else age_years(raw.get("age"), today),
         "age_label": raw["_ageLabel"] if "_ageLabel" in raw else age_label(raw.get("age"), today),
-        "weight_kg": raw["_weightKg"] if "_weightKg" in raw else weight_kg(raw.get("weight")),
+        "birth_year": raw["_birthYear"] if "_birthYear" in raw else birth_year(raw.get("age")),
+        "weight_kg": kg,
+        "size": size(kg, raw.get("upKindCd")),
         "state": raw.get("processState"),
         "is_protected": raw["_isProtected"] if "_isProtected" in raw else raw.get("processState") == "보호중",
         "special_mark": raw.get("specialMark"),

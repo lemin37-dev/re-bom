@@ -116,7 +116,7 @@ def _matches(raw: dict[str, Any], query: AnimalQuery, today: date) -> bool:
         if query.age_max is not None and age > query.age_max:
             return False
     if query.weight_min is not None or query.weight_lt is not None:
-        kg = weight_kg(raw.get("weight"))
+        kg = weight_kg(raw.get("weight"), raw.get("upKindNm"))
         if kg is None:
             return False
         if query.weight_min is not None and kg < query.weight_min:
