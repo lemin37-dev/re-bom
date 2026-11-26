@@ -1,4 +1,5 @@
 import type { Animal, AnimalShelter, ShelterSummary, SizeLabel, Species } from '@/types/animal'
+import type { PageDebug, RankDebug } from '@/types/rank'
 import type { PhotoTag, TagCatalog, TagMatch, TagSpecies } from '@/types/tags'
 
 /**
@@ -44,6 +45,8 @@ export type ApiAnimal = {
   photoTags?: PhotoTag[]
   /** 태그를 골라 검색했을 때만 옴 */
   tagMatch?: TagMatch | null
+  /** API REBOM_ENV=dev 에서만: 순위 근거. prod 응답에는 키가 없음 */
+  rank?: RankDebug
   // 상세
   endReason?: string | null
   healthCheck?: string | null
@@ -52,7 +55,7 @@ export type ApiAnimal = {
   healthNote?: string | null
 }
 /** matched: 태그를 골랐을 때 고른 범주가 모두 맞는 아이 수 (목록 맨 앞) */
-export type ApiPage = { total: number; matched?: number | null; page: number; size: number; items: ApiAnimal[] }
+export type ApiPage = { total: number; matched?: number | null; page: number; size: number; items: ApiAnimal[]; debug?: PageDebug }
 
 export type AnimalSearchParams = {
   species?: Species
@@ -133,7 +136,7 @@ export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSig
   const page = photo
     ? await postPhoto<ApiPage>(`/animals/photo-search?${toQuery({ ...params, q: undefined })}`, photo, signal)
     : await getJson<ApiPage>(`/animals?${toQuery(params)}`, signal)
-  return { total: page.total, matched: page.matched ?? null, items: page.items.map(toAnimal) }
+  return { total: page.total, matched: page.matched ?? null, items: page.items.map(toAnimal), debug: page.debug ?? null }
 }
 
 /** 지도용: 목록과 같은 조건의 보호소별 마릿수 (GET /animals/places). 문장·사진은 거르지 않아 마릿수에 영향 없음 */
@@ -207,6 +210,7 @@ export function toAnimal(a: ApiAnimal): Animal {
     photos: a.photos,
     photoTags: a.photoTags ?? [],
     tagMatch: a.tagMatch ?? null,
+    ...(a.rank ? { rank: a.rank } : {}),
     healthCheck: a.healthCheck,
     vaccinationCheck: a.vaccinationCheck,
     sociality: a.sociality,

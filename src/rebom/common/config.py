@@ -18,6 +18,13 @@ class DataMode(str, Enum):
     DB = "db"  # RDS 서비스 표 (S3 → RDS 동기화가 채움, serving/db_repository.py)
 
 
+class AppEnv(str, Enum):
+    """실행 환경. dev 면 검색 응답에 순위 근거(rank·debug)를 붙인다(serving/rank_debug.py). 배포는 기본값 prod."""
+
+    DEV = "dev"
+    PROD = "prod"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="REBOM_",
@@ -27,6 +34,8 @@ class Settings(BaseSettings):
     )
 
     data_mode: DataMode = DataMode.SAMPLE
+    # REBOM_ENV=dev 면 검색 결과마다 순위 근거를 응답에 넣는다(로컬 개발용). 비우면 prod: 근거 키가 응답에서 빠진다
+    env: AppEnv = AppEnv.PROD
     sample_path: Path = DEFAULT_SAMPLE_PATH
     # db 모드 접속. 비우면 Secrets Manager(rebom/dev/rebom-db, REBOM_DB_HOST·PORT 덮어쓰기)로 붙는다. 로컬 시험용
     db_dsn: str | None = None
@@ -34,6 +43,10 @@ class Settings(BaseSettings):
     image_base_url: str = ""
     # 쉼표로 구분한 허용 출처. 프론트 개발 서버 기본값
     cors_origins: str = "http://localhost:3000"
+
+    @property
+    def rank_debug(self) -> bool:
+        return self.env == AppEnv.DEV
 
     @property
     def cors_origin_list(self) -> list[str]:

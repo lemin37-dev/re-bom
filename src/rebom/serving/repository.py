@@ -66,6 +66,21 @@ class SearchPage:
     total: int
     rows: list[dict[str, Any]]
     matched: int | None = None  # 태그를 골랐을 때 모두 맞는(all) 아이 수
+    excluded: int = 0  # 태그를 골랐을 때 털처럼 반대면 빼는 범주가 반대라서 뺀 아이 수
+
+
+@dataclass(frozen=True)
+class VectorStats:
+    """질의 벡터와의 similarity 분포. 필터(WHERE)를 통과한 공고 전체 기준(털 반대 제외 전). dev 모드 순위 근거용."""
+
+    scored: int  # 거리가 있는 공고 수
+    missing: int  # 거리가 없는 공고 수 (벡터 없음 또는 종료 공고)
+    top: float | None  # 가장 높은 similarity
+    nth: float | None  # similarity 높은 순 NTH 번째 값 (공고가 그보다 적으면 None)
+    median: float | None
+
+
+STATS_NTH = 100
 
 
 class AnimalRepository(Protocol):
@@ -87,6 +102,10 @@ class AnimalRepository(Protocol):
 
     def vector_spec(self, kind: VectorKind) -> VectorSpec:
         """활성 버전의 질의 조건. 없으면 VectorUnavailable."""
+        ...
+
+    def vector_stats(self, query: AnimalQuery) -> VectorStats | None:
+        """query.vector 와의 similarity 분포 (dev 모드에서만 부른다). 벡터가 없으면 None."""
         ...
 
 
@@ -189,15 +208,16 @@ class SampleRepository:
         hits = [r for r in self._rows if _matches(r, query, today)]
         key, reverse = _sort_key(query.sort, today)
         hits.sort(key=key, reverse=reverse)
-        matched = None
+        matched, excluded = None, 0
         if query.tags:
             ranked = [(r, tag_match(self.tags_of(r["desertionNo"]), query.tags)) for r in hits]
+            excluded = sum(1 for _, m in ranked if m is None)
             ranked = [(r, m) for r, m in ranked if m is not None]
             ranked.sort(key=lambda x: MATCH_RANK[x[1]])  # 안정 정렬이라 같은 단계 안에서는 고른 정렬이 유지된다
             hits = [r for r, _ in ranked]
             matched = sum(1 for _, m in ranked if m == "all")
         start = (query.page - 1) * query.size
-        return SearchPage(len(hits), hits[start : start + query.size], matched)
+        return SearchPage(len(hits), hits[start : start + query.size], matched, excluded)
 
     def get(self, desertion_no: str) -> dict[str, Any] | None:
         return self._by_id.get(desertion_no)
@@ -235,6 +255,9 @@ class SampleRepository:
 
     def vector_spec(self, kind: VectorKind) -> VectorSpec:
         raise VectorUnavailable("sample 모드에는 벡터가 없습니다")
+
+    def vector_stats(self, query: AnimalQuery) -> VectorStats | None:
+        return None
 
 
 def build_repository(settings: Settings) -> AnimalRepository:

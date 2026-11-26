@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date
-from typing import Any
+from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_serializer
 from pydantic.alias_generators import to_camel
 
 from rebom.serving.derive import age_label, age_years, birth_year, sido, sigungu, size, weight_kg
@@ -20,6 +20,85 @@ PHOTO_KEYS = tuple(f"popfile{i}" for i in range(1, 9))
 
 class _Model(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class _DevOnly(_Model):
+    """dev 모드에서만 채우는 칸(_dev_only)이 비어 있으면 응답에서 키를 아예 뺀다. prod 응답에 null 로도 보이지 않게."""
+
+    _dev_only: ClassVar[tuple[str, ...]] = ()
+
+    @model_serializer(mode="wrap")
+    def _drop_dev_only(self, handler):
+        data = handler(self)
+        if isinstance(data, dict):
+            for name in self._dev_only:
+                field = type(self).model_fields[name]
+                for key in (name, field.alias):
+                    if key in data and data[key] is None:
+                        del data[key]
+        return data
+
+
+# ---- dev 모드 순위 근거 (serving/rank_debug.py) ----
+
+class FilterHit(_Model):
+    name: str  # species / state / sex / shelter / region / age / weight / q
+    condition: str  # 질의에서 고른 값 (예: dog, 서울,경기, 10.0kg 미만)
+    value: str | None = None  # 이 공고의 실제 값 (예: 개 (417000), 8.0kg, 검색어→걸린 칸)
+
+
+class TagCheck(_Model):
+    category: str  # fur / ear / eye
+    label: str
+    exclusive: bool  # True 면 반대일 때 결과에서 뺀다 (지금은 털만)
+    picked: list[str]  # 고른 태그
+    have: list[str]  # 이 아이의 그 범주 태그
+    result: Literal["match", "other", "unknown"]  # 맞음 / 다름 / 정보 없음
+
+
+class VectorHit(_Model):
+    kind: str  # text / image
+    version: str  # 비교한 활성 버전 (예: text_embedding@3)
+    model: str
+    distance: float | None = None  # 코사인 거리. 벡터가 없거나 종료 공고면 null
+    similarity: float | None = None  # 1 - 거리
+
+
+class RankDebug(_Model):
+    position: int  # 전체 결과에서 몇 번째 (1부터)
+    filters: list[FilterHit]
+    tag_match: TagMatch | None = None
+    tags: list[TagCheck] = []
+    vector: VectorHit | None = None
+    sort_key: str  # 마지막 정렬 칸: happenDate / noticeEnd
+    sort_value: str | None = None
+
+
+class QueryVectorInfo(_Model):
+    kind: str
+    version: str
+    model: str
+    dim: int
+
+
+class SimilarityStats(_Model):
+    """질의 벡터와의 similarity 분포. 필터를 통과한 공고 전체 기준(털 반대 제외 전)."""
+
+    scored: int  # 거리가 있는 공고 수
+    missing: int  # 거리가 없는 공고 수 (벡터 없음 또는 종료 공고). 이 공고들은 맨 뒤
+    top: float | None = None
+    nth_rank: int  # nth 가 몇 번째 값인지 (100)
+    nth: float | None = None  # similarity 높은 순 nth_rank 번째 값. 공고가 그보다 적으면 null
+    median: float | None = None
+
+
+class PageDebug(_Model):
+    env: str
+    data_mode: str
+    order: list[str]  # 정렬 순서 설명 (위에서부터 적용)
+    excluded: int  # 반대 태그로 뺀 아이 수
+    vector: QueryVectorInfo | None = None
+    similarity: SimilarityStats | None = None  # 질의 벡터가 있을 때만
 
 
 class Shelter(_Model):
@@ -41,7 +120,8 @@ class PhotoTag(_Model):
     label: str  # 예: 늘어진 귀
 
 
-class AnimalSummary(_Model):
+class AnimalSummary(_DevOnly):
+    _dev_only: ClassVar[tuple[str, ...]] = ("rank",)
     desertion_no: str
     notice_no: str | None = None
     species: str | None = None  # 개 / 고양이 / 기타축종
@@ -72,6 +152,7 @@ class AnimalSummary(_Model):
     photo_tags: list[PhotoTag] = []  # 대표 사진을 보고 모델이 붙인 태그 (serving/tags.py)
     tag_match: TagMatch | None = None  # 태그를 골랐을 때만: all · some · unknown · other
     similarity: float | None = None  # 글·사진으로 찾을 때만: 1 - 코사인 거리. 벡터가 없는 공고는 null
+    rank: RankDebug | None = None  # REBOM_ENV=dev 에서만: 순위 근거. prod 에서는 키가 없다
 
 
 class AnimalDetail(AnimalSummary):
@@ -83,12 +164,14 @@ class AnimalDetail(AnimalSummary):
     etc_note: str | None = None  # etcBigo
 
 
-class AnimalPage(_Model):
+class AnimalPage(_DevOnly):
+    _dev_only: ClassVar[tuple[str, ...]] = ("debug",)
     total: int
     matched: int | None = None  # 태그를 골랐을 때 고른 범주가 모두 맞는 아이 수 (이 아이들이 맨 앞)
     page: int
     size: int
     items: list[AnimalSummary]
+    debug: PageDebug | None = None  # REBOM_ENV=dev 에서만: 정렬 순서 설명. prod 에서는 키가 없다
 
 
 class PlaceCount(_Model):
@@ -128,6 +211,7 @@ class TagCatalog(_Model):
 class Health(_Model):
     status: str
     data_mode: str
+    env: str  # dev / prod
     animal_count: int
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
+from datetime import date
 from typing import Callable, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -17,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from rebom.common.config import DataMode, Settings, get_settings
 from rebom.serving.query_embed import BadQueryImage, Embedder, QueryEmbedder, default_embedder
+from rebom.serving.rank_debug import explain, page_debug
 from rebom.serving.repository import (
     AnimalQuery, AnimalRepository, QueryVector, VectorKind, VectorUnavailable, build_repository,
 )
@@ -24,8 +26,10 @@ from rebom.serving.schemas import (
     AnimalDetail,
     AnimalPage,
     Health,
+    PageDebug,
     PlaceCount,
     PlaceList,
+    RankDebug,
     ShelterList,
     ShelterSummary,
     TagCatalog,
@@ -101,16 +105,25 @@ def create_app(settings: Settings | None = None,
             log.exception("질의 임베딩 실패 (%s)", kind)
             raise HTTPException(status_code=503, detail="질의를 임베딩하지 못했습니다. 잠시 뒤 다시 시도해 주세요.") from None
 
-    def page_of(r: AnimalRepository, query: AnimalQuery) -> AnimalPage:
+    def page_of(r: AnimalRepository, query: AnimalQuery, text_as_words: str | None = None) -> AnimalPage:
+        """text_as_words: sample 모드에서 문장을 단어 포함(q)으로 바꿨을 때 그 문장 (dev 모드 설명용)."""
         result = r.search(query)
+        start, today = (query.page - 1) * query.size, date.today()
         items = []
-        for x in result.rows:
+        for i, x in enumerate(result.rows):
             tags = x["_tags"] if "_tags" in x else r.tags_of(x["desertionNo"])  # db 모드는 한 번에 읽어 둔다
             item = to_summary(x, tags)
             if query.tags:
                 item.tag_match = tag_match(tags, query.tags)
+            if settings.rank_debug:  # REBOM_ENV=dev 에서만. prod 응답에는 rank 키가 없다
+                item.rank = RankDebug(**explain(x, tags, query, start + i + 1, today))
             items.append(item)
-        return AnimalPage(total=result.total, matched=result.matched, page=query.page, size=query.size, items=items)
+        page = AnimalPage(total=result.total, matched=result.matched, page=query.page, size=query.size, items=items)
+        if settings.rank_debug:
+            page.debug = PageDebug(**page_debug(query, result, env=settings.env.value,
+                                                data_mode=settings.data_mode.value, text_as_words=text_as_words,
+                                                stats=r.vector_stats(query)))
+        return page
 
     @app.get("/livez")
     def livez() -> dict[str, str]:
@@ -120,7 +133,7 @@ def create_app(settings: Settings | None = None,
     @app.get("/health", response_model=Health, response_model_by_alias=True)
     def health(r: AnimalRepository = Depends(repo)) -> Health:
         """DB 까지 본다(readiness)."""
-        return Health(status="ok", data_mode=settings.data_mode.value, animal_count=r.count())
+        return Health(status="ok", data_mode=settings.data_mode.value, env=settings.env.value, animal_count=r.count())
 
     @app.get("/animals", response_model=AnimalPage, response_model_by_alias=True)
     def list_animals(
@@ -133,12 +146,13 @@ def create_app(settings: Settings | None = None,
         ),
         r: AnimalRepository = Depends(repo),
     ) -> AnimalPage:
+        as_words = None
         if text and text.strip():
             if settings.data_mode == DataMode.SAMPLE:
-                query = replace(query, q=text)
+                query, as_words = replace(query, q=text), text
             else:
                 query = replace(query, vector=embed(r, "text", request.app.state.embedder.text, text))
-        return page_of(r, query)
+        return page_of(r, query, as_words)
 
     @app.get("/animals/places", response_model=PlaceList, response_model_by_alias=True)
     def animal_places(
