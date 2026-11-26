@@ -53,12 +53,15 @@ export function placeMarker(id: string, count: number, tooltip: string, tone: Ma
   return { id, lat: Number(id.split(',')[0]), lng: Number(id.split(',')[1]), radius: Math.min(24, 11 + Math.sqrt(count) * 1.4), tone: count ? tone : 'muted', tooltip, label: count ? String(count) : '' }
 }
 
-/** 내 위치: 브라우저 위치 권한을 받아 한 번 읽음. 화면에서만 쓰고 저장·전송하지 않음 */
-export function readMyLocation(): Promise<Point> {
+/** 위치를 받지 못했을 때 가까운 순의 기준: 서울 강남구청 */
+export const DEFAULT_BASE: Point & { label: string } = { lat: 37.51735, lng: 127.04739, label: '서울 강남구' }
+
+/** 내 위치: 브라우저 위치 권한을 받아 한 번 읽음(accuracy: 오차 m). 화면에서만 쓰고 저장·전송하지 않음 */
+export function readMyLocation(): Promise<Point & { accuracy: number }> {
   return new Promise((resolve, reject) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) { reject(new Error('unsupported')); return }
     navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: Math.round(pos.coords.accuracy || 0) }),
       reject,
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     )

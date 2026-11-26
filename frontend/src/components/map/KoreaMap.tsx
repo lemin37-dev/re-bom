@@ -21,7 +21,8 @@ export type MapMarker = {
   /** true 면 원 대신 글자 길이에 맞춘 알약 모양 (예: '경기 23') */
   pill?: boolean
 }
-type Point = { lat: number; lng: number }
+/** 내 위치. accuracy(m)가 있으면 오차 범위를 원으로 그림 */
+type Point = { lat: number; lng: number; accuracy?: number }
 type Focus = { lat: number; lng: number; zoom: number } | null
 
 /** 지도 엔진: 카카오 · Leaflet 이 같은 일을 하도록 */
@@ -29,6 +30,8 @@ type Engine = {
   setMarkers(markers: MapMarker[], selectedId: string | null | undefined, onSelect: (id: string) => void): void
   setMe(me: Point | null): void
   focus(f: Focus): void
+  /** 칸 크기가 바뀌었을 때 지도를 다시 맞춤 (마지막 위치 유지) */
+  resize(): void
   destroy(): void
 }
 
@@ -73,7 +76,8 @@ function kakaoEngine(k: KakaoNs, box: HTMLElement): Engine {
   const showKorea = () => { map.setLevel(13); map.setCenter(new m.LatLng(35.85, 127.75)) }
   showKorea()
   let overlays: KakaoOverlay[] = []
-  let meOverlay: KakaoOverlay | null = null
+  let meOverlays: KakaoOverlay[] = []
+  let last: Focus = null
   return {
     setMarkers(markers, selectedId, onSelect) {
       overlays.forEach(o => o.setMap(null))
@@ -84,18 +88,29 @@ function kakaoEngine(k: KakaoNs, box: HTMLElement): Engine {
       })
     },
     setMe(me) {
-      meOverlay?.setMap(null)
-      meOverlay = me ? new m.CustomOverlay({ position: new m.LatLng(me.lat, me.lng), content: meElement(), xAnchor: 0.5, yAnchor: 0.5, zIndex: 20 }) : null
-      meOverlay?.setMap(map)
+      meOverlays.forEach(o => o.setMap(null))
+      meOverlays = []
+      if (me) {
+        const at = new m.LatLng(me.lat, me.lng)
+        if (me.accuracy) meOverlays.push(new m.Circle({ center: at, radius: me.accuracy, strokeWeight: 1, strokeColor: '#2f7de1', strokeOpacity: 0.6, fillColor: '#2f7de1', fillOpacity: 0.12 }))
+        meOverlays.push(new m.CustomOverlay({ position: at, content: meElement(), xAnchor: 0.5, yAnchor: 0.5, zIndex: 20 }))
+      }
+      meOverlays.forEach(o => o.setMap(map))
     },
     focus(f) {
+      last = f
       map.relayout()
       if (!f) { showKorea(); return }
       // 중심을 먼저 옮기고 확대한다 (확대 애니메이션 중의 panTo 는 무시돼 먼 곳으로 못 감)
       map.setCenter(new m.LatLng(f.lat, f.lng))
       map.setLevel(kakaoLevel(f.zoom), { animate: true })
     },
-    destroy() { overlays.forEach(o => o.setMap(null)); meOverlay?.setMap(null); box.innerHTML = '' },
+    resize() {
+      map.relayout()
+      if (!last) showKorea()
+      else { map.setCenter(new m.LatLng(last.lat, last.lng)); map.setLevel(kakaoLevel(last.zoom)) }
+    },
+    destroy() { overlays.forEach(o => o.setMap(null)); meOverlays.forEach(o => o.setMap(null)); box.innerHTML = '' },
   }
 }
 
@@ -114,12 +129,14 @@ async function leafletEngine(box: HTMLElement): Promise<Engine> {
     },
     setMe(me) {
       meLayer.clearLayers()
+      if (me?.accuracy) L.circle([me.lat, me.lng], { radius: me.accuracy, weight: 1, color: '#2f7de1', opacity: 0.6, fillColor: '#2f7de1', fillOpacity: 0.12 }).addTo(meLayer)
       if (me) L.marker([me.lat, me.lng], { icon: L.divIcon({ className: '', html: meElement(), iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 2000 }).addTo(meLayer)
     },
     focus(f) {
       if (f) map.flyTo([f.lat, f.lng], f.zoom, { duration: 0.6 })
       else map.flyToBounds(KOREA, { duration: 0.6 })
     },
+    resize() { map.invalidateSize() },
     destroy() { map.remove() },
   }
 }
@@ -159,6 +176,19 @@ export function KoreaMap({ markers, selectedId, onSelect, focus, me = null, heig
   useEffect(() => { engine?.setMarkers(markers, selectedId, id => select.current?.(id)) }, [engine, markers, selectedId])
   useEffect(() => { engine?.setMe(me) }, [engine, me])
   useEffect(() => { engine?.focus(focus ?? null) }, [engine, focus])
+  // 지도를 만든 뒤 칸 크기가 바뀌면(옆 목록이 채워지는 등) 지도가 일부만 그려지거나 한쪽으로 치우친다
+  useEffect(() => {
+    if (!engine || !box.current) return
+    let width = box.current.clientWidth
+    const watch = new ResizeObserver(([entry]) => {
+      const next = Math.round(entry.contentRect.width)
+      if (next !== width) { width = next; engine.resize() }
+    })
+    watch.observe(box.current)
+    // 지도를 만들 때 잰 크기와 지금 크기가 다를 수 있어 준비되면 한 번 맞춘다
+    const first = requestAnimationFrame(() => engine.resize())
+    return () => { watch.disconnect(); cancelAnimationFrame(first) }
+  }, [engine])
 
   return <div className={`korea-map${provider ? ` provider-${provider}` : ''}`} ref={box} style={{ height }} role="region" aria-label={label} />
 }

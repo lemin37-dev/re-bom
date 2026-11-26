@@ -160,3 +160,25 @@ def test_notice_end_sort(client):
 def test_etc_species_breed_uses_full_name(client):
     items = client.get("/animals", params={"species": "etc", "size": 100}).json()["items"]
     assert items and all(i["breed"] and "기타축종" not in i["breed"] for i in items)
+
+
+def test_places_count_matches_list_total(client):
+    params = {"state": "protect", "species": "dog"}
+    places = client.get("/animals/places", params=params).json()
+    assert places["total"] == client.get("/animals", params={**params, "size": 1}).json()["total"]
+    assert places["total"] == sum(p["count"] for p in places["items"])
+    counts = [p["count"] for p in places["items"]]
+    assert counts == sorted(counts, reverse=True)
+    # 마릿수는 보호소 하나만 골라 찾은 수와 같다
+    top = places["items"][0]
+    assert client.get("/animals", params={**params, "shelter": top["regNo"], "size": 1}).json()["total"] == top["count"]
+
+
+def test_shelter_accepts_several_reg_numbers(client):
+    items = client.get("/animals/places", params={"state": "protect"}).json()["items"][:2]
+    both = client.get("/animals", params={"state": "protect", "shelter": ",".join(p["regNo"] for p in items), "size": 1}).json()
+    assert both["total"] == items[0]["count"] + items[1]["count"]
+
+
+def test_places_route_is_not_an_animal_id(client):
+    assert client.get("/animals/places").status_code == 200

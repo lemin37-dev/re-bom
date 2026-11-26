@@ -24,6 +24,8 @@ from rebom.serving.schemas import (
     AnimalDetail,
     AnimalPage,
     Health,
+    PlaceCount,
+    PlaceList,
     ShelterList,
     ShelterSummary,
     TagCatalog,
@@ -43,7 +45,7 @@ def filters(
     state: Literal["protect", "ended"] | None = None,
     sex: Literal["M", "F", "Q"] | None = None,
     region: str | None = Query(None, max_length=100, description="시·도 단어, 쉼표로 여러 개 (예: 서울,경기)"),
-    shelter: str | None = Query(None, max_length=30, description="보호소 등록번호(careRegNo)"),
+    shelter: str | None = Query(None, max_length=600, description="보호소 등록번호(careRegNo), 쉼표로 여러 개"),
     q: str | None = Query(None, max_length=200, description="띄어쓰기로 나눈 단어 중 하나라도 포함"),
     age_min: int | None = Query(None, ge=0, le=40),
     age_max: int | None = Query(None, ge=0, le=40),
@@ -137,6 +139,19 @@ def create_app(settings: Settings | None = None,
             else:
                 query = replace(query, vector=embed(r, "text", request.app.state.embedder.text, text))
         return page_of(r, query)
+
+    @app.get("/animals/places", response_model=PlaceList, response_model_by_alias=True)
+    def animal_places(
+        query: AnimalQuery = Depends(filters),
+        text: str | None = Query(None, max_length=200, description="GET /animals 와 같음. 거르지 않으므로 db 모드는 쓰지 않는다"),
+        r: AnimalRepository = Depends(repo),
+    ) -> PlaceList:
+        """지도용: GET /animals 와 같은 조건에 맞는 아이들의 보호소별 마릿수. page·size·sort 는 쓰지 않는다.
+        문장·사진은 순서만 바꾸므로 마릿수가 같다(sample 모드의 문장은 단어 포함으로 거름)."""
+        if text and text.strip() and settings.data_mode == DataMode.SAMPLE:
+            query = replace(query, q=text)
+        items = [PlaceCount(reg_no=reg, count=n) for reg, n in r.places(query)]
+        return PlaceList(total=sum(i.count for i in items), items=items)
 
     @app.post(
         "/animals/photo-search", response_model=AnimalPage, response_model_by_alias=True,

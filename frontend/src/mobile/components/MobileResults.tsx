@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/icons/Icon'
-import { AnimalPlaceMap } from '@/screens/common/AnimalPlaceMap'
+import { SearchPlaceMap } from '@/screens/common/SearchPlaceMap'
 import { MascotState } from '@/components/mascot/MascotState'
 import { filterLabels, sortOptions } from '@/data/filters'
 import { useExperience } from '@/providers/ExperienceProvider'
@@ -22,7 +22,7 @@ export function MobileResults() {
     {!searching && matched !== null && <p className="tag-match-note">고른 태그가 모두 맞는 아이 <b>{matched}마리</b>를 먼저 보여 드려요. 나머지 아이도 그 뒤에 이어져요.</p>}
     {searched && <div className="mobile-applied-filters">{(Object.keys(filters) as FilterKey[]).map(key => <button key={key} onClick={openFilters}><span>{filterLabels[key]}</span>{filters[key]}</button>)}</div>}
     {!searching && !error && map && visible.length > 0 && <div className="mobile-search-map">
-      <AnimalPlaceMap animals={visible} total={total} onOpen={openAnimal} compact />
+      <SearchPlaceMap onOpen={openAnimal} compact />
     </div>}
     {searching
       ? <MascotState kind="loading" />
@@ -31,7 +31,7 @@ export function MobileResults() {
         : !visible.length
           ? searched ? <MascotState kind="no-results"><button className="primary-button" onClick={resetAndSearch}>조건 넓혀서 다시 찾기</button></MascotState> : <MascotState kind="empty" />
           : <div className="mobile-pet-list">{cards.map((a, i) => <MobilePetCard key={a.id} animal={a} onOpen={openAnimal} featured={i === 0 && !map} />)}</div>}
-    {!searching && !error && hasMore && <button className="mobile-load-more" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '불러오는 중' : '다른 친구도 만나기'}<span>{visible.length} / {total}</span><Icon name="plus" size={17} /></button>}
+    {!searching && !error && !map && hasMore && <button className="mobile-load-more" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '불러오는 중' : '다른 친구도 만나기'}<span>{visible.length} / {total}</span><Icon name="plus" size={17} /></button>}
     <p className="mobile-data-note">공공데이터 구조동물 샘플 · 2026-10-30 기준<br />문장은 공고 글과, 첨부한 사진은 공고 사진과 닮은 순서로 앞에 보여 줘요.</p>
   </section>
 }
