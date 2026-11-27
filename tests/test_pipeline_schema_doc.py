@@ -5,7 +5,7 @@ RDS 는 tests/test_rds_schema_doc.py 가 마이그레이션과 비교한다. 이
           사진 현재 스냅샷 칸(photo_snapshot), 사진 manifest 키(rescue_photos), 수집 상태 키
   Silver  표 생성 스크립트(scripts/storage/rebom_create_aws_silver_tables.py · rebom_create_silver_tables.py), 발행 기록(publish_log)
   Gold    src/rebom/common/gold_catalog.py 의 schemas()
-  (운영 기록 ops_* 는 RDS 표라 docs/rds_schema.dbml 과 마이그레이션 008 에 있고 test_rds_schema_doc.py 가 본다)
+  (운영 기록 ops_* 는 RDS 표라 docs/schema/rds.dbml 과 마이그레이션 008 에 있고 test_rds_schema_doc.py 가 본다)
 코드는 import 하지 않고 ast 로 읽는다(pyiceberg·boto3 없이 돈다). 한쪽만 고치면 실패한다.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "docs" / "schema"
 LAYER_FILES = {name: SCHEMA / f"{name}.dbml" for name in ("bronze", "silver", "gold")}
-RDS = ROOT / "docs" / "rds_schema.dbml"
+RDS = ROOT / "docs" / "schema" / "rds.dbml"
 LINKS = SCHEMA / "links.dbml"
 
 # 구조 원본이 아직 없어 이름 비교를 하지 않는 표 (원본이 생기면 지우고 비교에 넣는다)

@@ -1,4 +1,4 @@
-"""docs/rds_schema.dbml(설명 원본)과 db/migrations/*.sql(실제 DB)의 표·칼럼 이름이 같은지 본다.
+"""docs/schema/rds.dbml(설명 원본)과 db/migrations/*.sql(실제 DB)의 표·칼럼 이름이 같은지 본다.
 
 DBML 은 dbdiagram.io 에 붙여 넣어 그림·설명을 보는 문서이고, 실제 DB 는 마이그레이션 파일이 만든다.
 둘 중 하나만 고치면 이 테스트가 실패한다. 벡터 표의 version 키처럼 아직 마이그레이션이 없는 목표 칼럼은
@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DBML = ROOT / "docs" / "rds_schema.dbml"
+DBML = ROOT / "docs" / "schema" / "rds.dbml"
 MIGRATIONS = sorted((ROOT / "db" / "migrations").glob("*.sql"))
 
 # DBML 에는 있고 마이그레이션에는 아직 없는 목표 칼럼 (다음 번호 마이그레이션에서 추가)

@@ -72,7 +72,7 @@
    ],
    "fingerprint": "0cabad9697a48f6e2eb03a3431ef187b546cb8f2d9d0b465f388cf61ee2e4be7",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "bronze_image_current": {
    "columns": [
@@ -978,7 +978,7 @@
    ],
    "fingerprint": "fad819dfe3793031bcce5965bd8503ef4b019b8cd5ae113a0febb324c0758441",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "ops_failure": {
    "columns": [
@@ -1041,7 +1041,7 @@
    ],
    "fingerprint": "f9fbaf45d12cabd70a9596a84b788e1642b68113a40060409fbae2848ee3ef82",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "ops_run_summary": {
    "columns": [
@@ -1108,7 +1108,7 @@
    ],
    "fingerprint": "3e6ade835a57b0ce45256bceb44ab0e8330401a2740e339ae00ba56e48885f81",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "ops_schema_snapshot": {
    "columns": [
@@ -1155,7 +1155,7 @@
    ],
    "fingerprint": "012aedb86971adc7b01e01b3de55ce737318824a84d3edae83e64f98f3793f8a",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "rescue_state": {
    "columns": [
@@ -1197,7 +1197,7 @@
    ],
    "fingerprint": "d8ac35b2429696c59f56ee4273b50b032585e2e3bbc8becd7a0c4e5347186e76",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "service_notice": {
    "columns": [
@@ -1360,7 +1360,7 @@
    ],
    "fingerprint": "3fb1b74fb76280f0307e541f58cbe133b14cd1a11d6aaef60e39e8f117df6a3d",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "service_notice_photo": {
    "columns": [
@@ -1399,7 +1399,7 @@
    ],
    "fingerprint": "2d89584f6c026917c987eb6645bfb3ffdd333d134d6d8bf221a08ba36f187832",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "service_notice_tag": {
    "columns": [
@@ -1462,7 +1462,7 @@
    ],
    "fingerprint": "50349874f262c642057c161fe2f622d2408602a711546041bc76e5f16394500f",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "silver_animal_image": {
    "columns": [
@@ -1911,7 +1911,7 @@
    ],
    "fingerprint": "ed0c7cd1ba5c6a1b6ba3ed78dba187b93d9e27c353ad0ee6e62ff6ff4d2ce37b",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   },
   "text_embedding": {
    "columns": [
@@ -1946,7 +1946,7 @@
    ],
    "fingerprint": "98248cd0a03b658ef3dc4b9ee759762a170dd8c26b1896e9be9257be5735c69d",
    "layer": "rds",
-   "source": "docs/rds_schema.dbml"
+   "source": "docs/schema/rds.dbml"
   }
  }
 }

@@ -47,13 +47,13 @@ def repo(tmp_path, monkeypatch):
     _git(tmp_path, "init", "-q", "--bare", str(remote))
     work = tmp_path / "work"
     (work / "db" / "migrations").mkdir(parents=True)
-    (work / "docs").mkdir()
+    (work / "docs" / "schema").mkdir(parents=True)
     _git(tmp_path, "init", "-q", str(work))
     for k, v in (("user.name", "t"), ("user.email", "t@example.com")):
         _git(work, "config", k, v)
     _git(work, "remote", "add", "origin", str(remote))
     monkeypatch.setattr(st, "ROOT", work)
-    monkeypatch.setattr(st, "DBML", work / "docs" / "rds_schema.dbml")
+    monkeypatch.setattr(st, "DBML", work / "docs" / "schema" / "rds.dbml")
     monkeypatch.setattr(st, "MIGRATIONS", work / "db" / "migrations")
     return work
 
@@ -61,7 +61,7 @@ def repo(tmp_path, monkeypatch):
 def _commit(work: Path, version: str, last: int) -> None:
     for n in range(1, last + 1):
         (work / "db" / "migrations" / f"{n:03d}_m.sql").write_text("SELECT 1;\n", encoding="utf-8")
-    (work / "docs" / "rds_schema.dbml").write_text(f"// 버전: 스키마 {version} = 마이그레이션 001~{last:03d}. x\n", encoding="utf-8")
+    (work / "docs" / "schema" / "rds.dbml").write_text(f"// 버전: 스키마 {version} = 마이그레이션 001~{last:03d}. x\n", encoding="utf-8")
     _git(work, "add", "-A")
     _git(work, "commit", "-q", "-m", f"{version} {last}")
 

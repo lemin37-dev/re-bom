@@ -1,6 +1,6 @@
 """층별 DBML 을 하나로 합친다 (dbdiagram.io 에 붙여 넣기·운영 화면 탭2 입력).
 
-원본: docs/schema/bronze.dbml · silver.dbml · gold.dbml, docs/rds_schema.dbml(운영 기록 ops_* 포함), 층 사이 연결 docs/schema/links.dbml.
+원본: docs/schema/bronze.dbml · silver.dbml · gold.dbml, docs/schema/rds.dbml(운영 기록 ops_* 포함), 층 사이 연결 docs/schema/links.dbml.
 합본은 만들 때마다 같은 내용이 나오므로 커밋하지 않는다(data/ 아래나 임시 경로에 둔다).
 
   python scripts/schema/merge_pipeline_dbml.py --out data/pipeline_schema.dbml
@@ -17,7 +17,7 @@ SOURCES = (
     ROOT / "docs" / "schema" / "bronze.dbml",
     ROOT / "docs" / "schema" / "silver.dbml",
     ROOT / "docs" / "schema" / "gold.dbml",
-    ROOT / "docs" / "rds_schema.dbml",
+    ROOT / "docs" / "schema" / "rds.dbml",
     ROOT / "docs" / "schema" / "links.dbml",  # Ref 만. 표가 모두 나온 뒤에 와야 한다
 )
 

@@ -147,7 +147,7 @@ Table gold_animal_tag [note: '''태그 1개 = 1행. 사진 태그는 사진 sha2
 예: photo''']
   subject_key string [not null, note: '''사진 sha256 또는 공고번호
 예: 3b7a…c90d''']
-  tag_code string [not null, note: '''태그 코드 (docs/rds_schema.dbml Enum tag_code)
+  tag_code string [not null, note: '''태그 코드 (docs/schema/rds.dbml Enum tag_code)
 예: ear.drop''']
   source string [not null, note: '''출처 photo · text · rule (모델 이름 아님)
 예: photo''']

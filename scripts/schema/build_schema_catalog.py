@@ -22,7 +22,7 @@ LAYERS = (
     ("bronze", ROOT / "docs" / "schema" / "bronze.dbml"),
     ("silver", ROOT / "docs" / "schema" / "silver.dbml"),
     ("gold", ROOT / "docs" / "schema" / "gold.dbml"),
-    ("rds", ROOT / "docs" / "rds_schema.dbml"),
+    ("rds", ROOT / "docs" / "schema" / "rds.dbml"),
 )
 MIGRATIONS = ROOT / "db" / "migrations"
 TABLE = re.compile(r"^Table (\w+)[^{]*\{\n(.*?)^\}", re.S | re.M)
@@ -58,7 +58,7 @@ def build() -> dict:
                                        "fingerprint": fingerprint(cols)}
     for path in sorted(MIGRATIONS.glob("*.sql")):
         catalog["migrations"].append({"filename": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    header = HEADER.search((ROOT / "docs" / "rds_schema.dbml").read_text(encoding="utf-8"))
+    header = HEADER.search((ROOT / "docs" / "schema" / "rds.dbml").read_text(encoding="utf-8"))
     catalog["rds_version"] = header.group(1) if header else None
     return catalog
 
