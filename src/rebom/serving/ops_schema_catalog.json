@@ -2880,7 +2880,7 @@
     {
      "example": "photo_trait@1",
      "notNull": false,
-     "note": "task@N",
+     "note": "레지스트리 등록 버전 task@N (사진·글 태그 모두)",
      "pk": false
     }
    ],
@@ -2957,7 +2957,7 @@
    "fingerprint": "df714032d6016acfa516a484225bb826fdb42c00c47401e6f46fd457efc9d0e9",
    "group": "gold",
    "layer": "gold",
-   "note": "태그 1개 = 1행. 사진 태그는 사진 sha256, 글 태그는 공고번호가 키. 같은 대상·질문지 버전으로 다시 태깅할 때만 그 범위를 교체하고, 이전 버전 태그는 남긴다. RDS service_notice_tag 의 원천",
+   "note": "태그 1개 = 1행. 사진 태그는 사진 sha256, 글 태그는 공고번호가 키. 같은 대상·버전으로 다시 태깅할 때만 그 범위를 교체하고(글 태그는 version + source_hash, 데이터 계약 15.5), 이전 버전 태그는 남긴다. RDS service_notice_tag 의 원천",
    "source": "docs/schema/gold.dbml"
   },
   "gold_embedding_canary": {

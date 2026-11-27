@@ -5,8 +5,8 @@
 - 버전 행이 없으면: 옛 행의 version 을 task@1 로 채운다 (같은 사진에 @1 결과가 두 벌 생기지 않게 이 경우만 채움)
 작업마다 overwrite 한 번(커밋 하나)이라 중간에 실패해도 반쯤 바뀐 상태로 남지 않는다. 사진 태깅이 도는 중에는 돌리지 않는다.
 
-글 태그(text_personality·text_health)는 다루지 않는다: run_text_tags 가 아직 version 칸을 쓰지 않아,
-채워도 다음 실행이 version 빈 행을 다시 만들고 처리 기록(version=질문지 버전)과도 어긋난다.
+글 태그(text_personality·text_health)는 다루지 않는다: scripts/serve/fill_legacy_text_tag_versions.py 가 맡는다
+(run_text_tags 는 등록 버전 task@1 로 태그·처리 기록을 쓴다).
 
     python scripts/serve/fill_legacy_photo_tag_versions.py --profile rebom            # 건수만
     python scripts/serve/fill_legacy_photo_tag_versions.py --profile rebom --apply    # 실제로 씀

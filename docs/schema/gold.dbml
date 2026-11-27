@@ -142,7 +142,7 @@ Table gold_model_request_log [note: '''모델 API 요청 1번 = 1행 (append 만
 예: photo_trait@1''']
 }
 
-Table gold_animal_tag [note: '''태그 1개 = 1행. 사진 태그는 사진 sha256, 글 태그는 공고번호가 키. 같은 대상·질문지 버전으로 다시 태깅할 때만 그 범위를 교체하고, 이전 버전 태그는 남긴다. RDS service_notice_tag 의 원천'''] {
+Table gold_animal_tag [note: '''태그 1개 = 1행. 사진 태그는 사진 sha256, 글 태그는 공고번호가 키. 같은 대상·버전으로 다시 태깅할 때만 그 범위를 교체하고(글 태그는 version + source_hash, 데이터 계약 15.5), 이전 버전 태그는 남긴다. RDS service_notice_tag 의 원천'''] {
   subject_type string [not null, note: '''photo · animal
 예: photo''']
   subject_key string [not null, note: '''사진 sha256 또는 공고번호
@@ -175,7 +175,7 @@ Table gold_animal_tag [note: '''태그 1개 = 1행. 사진 태그는 사진 sha2
 예: photo-20261127T040211''']
   gold_updated_at timestamptz [note: '''만든 시각
 예: 2026-11-27 04:10:02+09''']
-  version string [note: '''task@N
+  version string [note: '''레지스트리 등록 버전 task@N (사진·글 태그 모두)
 예: photo_trait@1''']
   indexes {
     (subject_type, subject_key, task, prompt_version, tag_code) [pk]

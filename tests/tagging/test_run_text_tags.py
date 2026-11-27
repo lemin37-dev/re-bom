@@ -26,7 +26,7 @@ def notice(no, text, status="PROTECTING", species="417000", special=None):
 
 
 def log_row(no, task, h, status, attempts=1):
-    return {"subject_type": "animal", "subject_key": no, "task": task, "version": tt.VERSIONS[task], "input_hash": h,
+    return {"subject_type": "animal", "subject_key": no, "task": task, "version": rtt.REGISTERED[task], "input_hash": h,
             "status": status, "attempts": attempts}
 
 
@@ -155,11 +155,12 @@ def test_same_text_called_once_and_rows_for_each_animal():
     g = next(r for r in first if r["tag_code"] == "personality.gentle")
     assert g["source"] == "text" and g["subject_type"] == "animal" and g["similarity"] == 97
     assert g["prompt_version"] == "text-personality-v1" and g["source_hash"] == rtt.text_hash("순함")
+    assert g["version"] == "text_personality@1" and scope[0][2] in ("text_personality@1", "text_health@1")
     detail = json.loads(g["detail"])
     assert detail["request_id"] == "gen-test-0001" and detail["input_text"] == "순함"
     h = next(r for r in first if r["tag_code"] == "health.info")
     assert json.loads(h["detail"])["input_text"] == "순함"
-    assert ("2", P, "text-personality-v1", rtt.text_hash("순함")) in scope
+    assert ("2", P, "text_personality@1", rtt.text_hash("순함")) in scope
     reqs = [o.request for o in outcomes]
     assert len(reqs) == 2 and reqs[0]["task"] == "text_jev" and reqs[0]["prompt_version"] == "text-personality-v1+text-health-v1"
     assert json.loads(reqs[0]["raw_answer"])["trait_soon"]["noul"] == 0.97
@@ -175,7 +176,7 @@ def test_no_personality_tag_is_no_result():
     assert outcomes[0].statuses == {P: "NO_RESULT", H: "OK"}
     scope, rows = rtt.replaced_tag_rows(outcomes)
     assert [r["tag_code"] for r in rows] == ["health.info"]
-    assert ("1", P, "text-personality-v1", rtt.text_hash("목줄 착용")) in scope
+    assert ("1", P, "text_personality@1", rtt.text_hash("목줄 착용")) in scope
 
 
 def test_failed_text_not_replaced_and_counted():
@@ -183,7 +184,7 @@ def test_failed_text_not_replaced_and_counted():
                                    "r", concurrency=1, now=lambda: TS)
     assert stop is None and outcomes[0].statuses == {P: "FAILED", H: "FAILED"}
     assert rtt.replaced_tag_rows(outcomes) == ([], [])
-    logs = rtt.inference_rows(outcomes, {("animal", "1", P, "text-personality-v1", rtt.text_hash("순함")): {"attempts": 2}}, "r", TS)
+    logs = rtt.inference_rows(outcomes, {("animal", "1", P, "text_personality@1", rtt.text_hash("순함")): {"attempts": 2}}, "r", TS)
     assert next(r for r in logs if r["task"] == P)["attempts"] == 3
 
 
@@ -244,3 +245,85 @@ def test_jev_client_account_error_and_retry():
     assert res.attempts == 2 and waits == [3.0]
     with pytest.raises(OpenRouterError):
         jev_client.JevClient("X", key="k", session=FakeSession([FakeResp(400, {"error": {"code": 400}})])).decide("a", {})
+
+
+def test_registered_versions_and_runtime_config():
+    """처리 기록·태그 version 은 레지스트리 이름(task@1). 설정은 민혁 님 fill/legacy 스크립트가 등록한 값과 같다."""
+    import importlib.util
+    from pathlib import Path
+
+    assert rtt.REGISTERED == {P: "text_personality@1", H: "text_health@1"}
+    path = Path(__file__).resolve().parents[2] / "scripts" / "serve" / "legacy_version_config.py"
+    spec = importlib.util.spec_from_file_location("legacy_version_config", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    for task in (P, H):
+        assert rtt.runtime_config(task) == mod.config_for(task)
+    rows = rtt.no_text_rows(["1"], "r", rtt._now())
+    assert {r["version"] for r in rows} == {"text_personality@1", "text_health@1"}
+
+
+def test_jev_key_sources():
+    """auto 는 환경변수·.env 우선, 없으면 Secrets Manager. secrets 는 .env 키가 있어도 Secrets Manager 만."""
+    def env_ok(name):
+        return "local-key"
+
+    def env_missing(name):
+        raise RuntimeError(f"{name} 없음")
+
+    calls = []
+
+    def reader(secret_id, profile):
+        calls.append((secret_id, profile))
+        return "prod-key"
+
+    assert rtt.load_jev_key("auto", env_loader=env_ok, secret_reader=reader, environ={})[0] == "local-key"
+    key, where = rtt.load_jev_key("auto", env_loader=env_missing, secret_reader=reader, environ={}, profile="p")
+    assert key == "prod-key" and calls[-1] == ("rebom/tag/prod/jev_api_key", "p") and "Secrets Manager" in where
+    key, _ = rtt.load_jev_key("secrets", env_loader=env_ok, secret_reader=reader,
+                              environ={"REBOM_JEV_SECRET_ID": "rebom/tag/test/x"})
+    assert key == "prod-key" and calls[-1][0] == "rebom/tag/test/x"
+    with pytest.raises(RuntimeError):
+        rtt.load_jev_key("env", env_loader=env_missing, secret_reader=reader, environ={})
+    with pytest.raises(ValueError):
+        rtt.load_jev_key("x")
+
+
+def test_key_from_secret_formats():
+    assert rtt.key_from_secret("sk-or-abc\n") == "sk-or-abc"
+    assert rtt.key_from_secret('{"jev_api_key": "sk-or-1"}') == "sk-or-1"
+    assert rtt.key_from_secret('{"anything": "sk-or-2"}') == "sk-or-2"
+    assert rtt.key_from_secret('{"a": "", "b": ""}') is None
+
+
+def test_version_option_parses_and_defaults_to_registered():
+    assert rtt.registered_versions([]) == rtt.REGISTERED
+    assert rtt.registered_versions(["text_personality@2"]) == {P: "text_personality@2", H: "text_health@1"}
+    for bad in (["photo_trait@1"], ["text_personality"], ["text_personality@x"], ["text_health@2", "text_health@3"]):
+        with pytest.raises(ValueError):
+            rtt.registered_versions(bad)
+
+
+def test_run_follows_target_file_versions():
+    saved = {P: "text_personality@2", H: "text_health@1"}
+    assert rtt.run_versions([], saved) == saved  # select 때 정한 버전을 따른다
+    assert rtt.run_versions(["text_personality@2"], saved) == saved
+    assert rtt.run_versions([], None) == rtt.REGISTERED  # versions 없는 옛 목록
+    with pytest.raises(ValueError, match="다릅니다"):
+        rtt.run_versions(["text_personality@3"], saved)
+
+
+def test_candidate_version_goes_to_logs_tags_and_scope():
+    v = rtt.registered_versions(["text_personality@2"])
+    outcomes, _ = rtt.tag_texts(rtt.group_by_text(targets_for(("1", "순함"))), FakeClient([fixture_result()]), "r",
+                                concurrency=1, now=lambda: TS, versions=v)
+    scope, rows = rtt.replaced_tag_rows(outcomes, v)
+    assert {(r["task"], r["version"]) for r in rows} == {(P, "text_personality@2"), (H, "text_health@1")}
+    assert ("1", P, "text_personality@2", rtt.text_hash("순함")) in scope
+    logs = rtt.inference_rows(outcomes, {}, "r", TS, v)
+    assert {(r["task"], r["version"]) for r in logs} == {(P, "text_personality@2"), (H, "text_health@1")}
+    assert {r["version"] for r in rtt.no_text_rows(["9"], "r", TS, v)} == {"text_personality@2", "text_health@1"}
+    # @1 로 끝난 처리 기록은 @2 후보에서는 끝난 것으로 보지 않는다
+    done = [log_row("1", P, rtt.text_hash("순함"), "OK"), log_row("1", H, rtt.text_hash("순함"), "OK")]
+    targets, _ = rtt.select_targets([notice("1", "순함")], done, versions=v)
+    assert [t.tasks for t in targets] == [(P,)]
