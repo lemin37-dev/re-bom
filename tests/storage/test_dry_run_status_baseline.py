@@ -147,7 +147,7 @@ def test_cli_retries_nonprotecting_previous_notice_only_in_dry_run(
     monkeypatch.setattr("rebom.storage.silver.dry_run_previous_bronze.fetch_previous_day_bronze", fetch)
     monkeypatch.setattr("rebom.storage.silver.load_silver_events.load_silver_events", Mock(return_value=verified))
 
-    def prepare(*args, apply, dry_run_baseline_rows=None):
+    def prepare(*args, apply, dry_run_baseline_rows=None, report=None):
         rows = [previous] if dry_run_baseline_rows is None else dry_run_baseline_rows
         result = validate_closure_evidence(verified, rows)
         if not result["ready"]:

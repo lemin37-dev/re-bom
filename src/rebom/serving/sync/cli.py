@@ -268,17 +268,70 @@ def progress(msg: str) -> None:
     print(f"[{time.time() - _T0:6.1f}s] {msg}", file=sys.stderr, flush=True)
 
 
+def ops_rows(args: argparse.Namespace, started_at: str, result: dict[str, Any] | None = None,
+             exc: BaseException | None = None):
+    """운영 기록 줄 (rds_<경로> 단계 1줄 + 실패 0~1줄). bronze_run_id 를 모르면 쓰지 않는다. --dry-run 도 쓰지 않는다."""
+    from rebom.common import ops_log
+
+    if args.dry_run:
+        return [], []
+    result = result or {}
+    run_id = result.get("silver_run_id") or args.run_id
+    publish_id = result.get("publish_id") or args.publish_id
+    if not run_id and publish_id and publish_id.startswith("silver_"):
+        run_id = publish_id[len("silver_"):]
+    if not run_id:
+        return [], []
+    env, stage, at = os.environ.get("REBOM_OPS_ENV", "test"), f"rds_{args.route}", ops_log.now()
+    failures = []
+    if exc is None:
+        status = "ok"
+    else:
+        if isinstance(exc, db.StaleInput):
+            status, reason, blocking = "warn", "stale_input", False
+        elif "config_hash" in str(exc):
+            status, reason, blocking = "failed", "config_hash_mismatch", True
+        else:
+            status, reason, blocking = "failed", "sync_error", True
+        failures.append(ops_log.failure_row(env, run_id, stage, "route", args.route, reason, observed_at=at,
+                                            message=f"{type(exc).__name__}: {exc}", blocking=blocking,
+                                            publish_id=publish_id))
+    stats = {k: v for k, v in result.items() if k not in ("route", "dry_run")}
+    stage_row = ops_log.stage_row(env, run_id, stage, status, started_at=started_at, finished_at=at,
+                                  publish_id=publish_id, failed_count=len(failures), stats=stats)
+    return [stage_row], failures
+
+
+def _record_ops(args: argparse.Namespace, started_at: str, result=None, exc=None) -> None:
+    from rebom.common import ops_log
+
+    try:
+        stages, failures = ops_rows(args, started_at, result, exc)
+    except Exception as err:  # noqa: BLE001 - 운영 기록 실패로 동기화 결과를 바꾸지 않는다
+        print(f"OPS_LOG_SKIPPED: {type(err).__name__}: {err}", file=sys.stderr)
+        return
+    if stages:
+        ops_log.safe_write(stages=stages, failures=failures)
+
+
 def main(argv: list[str] | None = None) -> int:
+    from rebom.common.ops_log import now
+
     args = build_parser().parse_args(argv)
     runner = Runner(args)
-    t0 = time.time()
+    t0, started_at = time.time(), now()
     try:
         with db.connect() as conn:
             result = getattr(runner, args.route)(conn)
     except db.StaleInput as exc:
         print(f"동기화 중단: {exc}", file=sys.stderr)
+        _record_ops(args, started_at, exc=exc)
         return 4
+    except Exception as exc:
+        _record_ops(args, started_at, exc=exc)
+        raise
     result["seconds"] = round(time.time() - t0, 1)
+    _record_ops(args, started_at, result=result)
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     return 0
 

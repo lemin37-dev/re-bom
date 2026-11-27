@@ -89,9 +89,18 @@ def load_history_observation(history_rows):
     return max(dates) if dates else None
 
 
+def ops_report(args, s3):
+    """--apply 일 때만 운영 기록용 건수 JSON 을 S3 에 남긴다 (rebom.storage.silver.ops_stats)."""
+    if not args.apply or s3 is None or not args.s3_state_bucket:
+        return None
+    from rebom.storage.silver.ops_stats import reporter
+
+    return reporter(s3, args.s3_state_bucket, args.environment)
+
+
 def prepare_new(
     bronze_path, event_path, notice, history,
-    dry_run_baseline_rows=None, apply=False,
+    dry_run_baseline_rows=None, apply=False, report=None,
 ):
     if apply and dry_run_baseline_rows is not None:
         raise RuntimeError("DRY_RUN_BASELINE_FORBIDDEN_FOR_APPLY")
@@ -104,6 +113,9 @@ def prepare_new(
         previous_observed_on=load_history_observation(previous_history),
         dry_run_baseline_rows=dry_run_baseline_rows,
     )
+    if report is not None:
+        # 운영 기록(건수·충돌 목록)은 멈추기 전에 남긴다. 실패해도 Silver 처리에는 영향 없음
+        report(prepared, previous_notice)
     if not prepared.get("ready"):
         raise RuntimeError(f"Silver preparation failed: {prepared.get('stage')}; {prepared.get('conflicts')}")
 
@@ -229,6 +241,7 @@ def execute(args):
             prepared, notice_arrow, history_arrow = prepare_new(
                 args.bronze_manifest, args.event_manifest, notice, history,
                 apply=args.apply,
+                report=ops_report(args, state_s3),
             )
         except RuntimeError as exc:
             if (
