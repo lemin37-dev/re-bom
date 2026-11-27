@@ -33,6 +33,7 @@ src/
 │  ├─ guide/             # /guide        입양 절차 안내
 │  ├─ shelters/          # /shelters     보호센터
 │  ├─ about/             # /about        서비스 소개
+│  ├─ ops/               # /ops          운영 모니터링 (비밀번호, 서비스 틀·메뉴 없음)
 │  └─ not-found.tsx
 │
 ├─ web/                  # 웹(넓은 화면) 전용 화면 구성·배치
@@ -54,6 +55,7 @@ src/
 │  ├─ adoption-guide/    # AdoptionGuide
 │  ├─ shelter-directory/ # ShelterDirectory
 │  ├─ about/             # AboutPage
+│  ├─ ops/               # OpsScreen: 로그인, 탭1 수집·처리 현황, 탭2 흐름 ERD·스키마 비교 (ops.css 는 .ops 범위만)
 │  └─ common/            # Checklist, SupportCards, RegionSelect (여러 화면에서 사용)
 ├─ components/           # 공통 UI
 │  ├─ layout/            # ExperienceShell(웹/앱 틀 조립), SiteFooter
@@ -102,6 +104,8 @@ src/
 - 순위 근거(개발용): 루트 `.env` 에 `REBOM_ENV=dev` 를 넣고 API 를 띄우면 응답에 `rank`(카드별: 순위, 통과한 필터와 실제 값, 태그 단계·범주별 판정, 벡터 거리·similarity, 정렬값)와 `debug`(정렬 순서 설명)가 붙고, 카드 아래 `RankDebugBox`·목록 위 `RankOrderNote` 에 보입니다. 프론트 스위치는 따로 없고 API 가 보낼 때만 그립니다. prod(기본)에서는 키 자체가 없습니다.
 - 매칭 점수·이유·거리는 아직 API에 없어 화면에서 숨겨집니다(`Animal`의 선택 필드). 문장 검색은 단어 일치, 사진 검색은 미연결입니다.
 - 사진 태그 검색: `TagPicker`는 먼저 강아지·고양이를 고르게 하고(생활 조건의 종류와 같은 값), 그 종의 태그 세트 `/tags?species=dog|cat`(범주별 상세 태그·추천 태그)를 보여 줍니다. 고양이 태그 세트는 준비 중이라 비어 있고, 종별 태그 세트는 API `serving/tags.py`의 `TAG_SETS` 표 하나로 정합니다. 종류가 전체(처음 상태)면 종 선택과 안내만 보이고, 종을 고르면 그 종의 태그가 나타납니다. 종류가 바뀌면 고른 태그는 지워집니다. 화면은 고른 태그를 `/animals?tags=`로 보냅니다. 태그는 거르지 않고 순서만 정합니다(모두 맞음 → 일부 맞음 → 태그 정보 없음 → 다른 태그, 응답 `tagMatch`·`matched`). 털이 고른 것과 반대인 아이만 빠집니다. 태그를 누르면 마지막으로 제출한 문장으로 바로 다시 검색합니다. sample 모드 태그는 `data/sample/photo_tags.json`(실제 태거 결과)이며 `/tags`를 받지 못하면 태그 영역을 숨깁니다.
+
+- 운영 모니터링(`/ops`): 서버 데이터는 `src/lib/ops-api.ts`(쿠키를 보내려고 `credentials: 'include'`)로만 부르고 응답 모양은 `src/types/ops.ts`. API 가 db 모드이고 `REBOM_OPS_PASSWORD_HASH`·`REBOM_OPS_SESSION_SECRET` 가 있어야 열린다(없으면 화면이 안내 문구를 보임). 로컬 http 에서는 루트 `.env` 에 `REBOM_OPS_COOKIE_SECURE=false`. `ExperienceShell` 은 `/ops` 에서 서비스 헤더·탭·푸터를 그리지 않는다.
 
 ## 휴대폰에서 테스트 (같은 Wi-Fi)
 

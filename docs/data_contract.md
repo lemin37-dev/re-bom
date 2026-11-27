@@ -675,8 +675,10 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 | `GET /ops/runs?days=14` | 실행별 단계 상태·건수 (추이) | `ops_run_summary` |
 | `GET /ops/failures?run_id=…&stage=&reason_code=&blocking=` | 실패 건별 목록과 증거(`evidence`, 원문 위치 `evidence_ref`) | `ops_failure` |
 | `GET /ops/animals/{desertion_no}` | 공고 하나 추적: 그 공고·사진 칸(`번호#칸`)의 실패 기록과 서비스 표 상태(보호 상태·사진·태그 수) | `ops_failure`, `service_notice` |
+| `GET /ops/erd` | 문서(DBML) 흐름 ERD: 층·영역(TableGroup)·표·칼럼 설명과 예시(`예:` 줄)·값 목록(Enum)·연결(`links.dbml` 처리 연결 + RDS 외래키, 키 이름·색) | `ops_schema_catalog.json` (DB 안 읽음) |
 | `GET /ops/schema` | 문서(DBML) 칼럼 vs 실제 칼럼(Silver·Gold 는 `ops_schema_snapshot`, RDS 는 `information_schema`), 마이그레이션 적용·sha256 일치 | `ops_schema_catalog.json`, `schema_migrations` |
 
 - **카드 규칙**: 수집 실패 = bronze·photo 실패 중 알려진 예외·재시도로 받아낸 건을 뺀 수, 정제 = Silver 의 차단(`blocking`) 건만(11/27 결정), 모델 = `gold_*` 단계 `failed_count` 합, 동기화 = `rds_*` 실패 수. 원인별 목록은 `count`·`knownException`·`recovered`·`actionable` 을 함께 준다.
 - **스키마 비교**: 층마다 타입 표기가 달라(DBML·Iceberg·PostgreSQL) 칼럼 **이름**만 비교하고(`missingInReal`·`extraInReal`), 실제 지문·`schema_id`·바뀐 횟수는 관측값 그대로 보여 준다. 문서 쪽은 API 이미지에 docs/ 가 없어 `src/rebom/serving/ops_schema_catalog.json` 으로 옮겨 둔다. DBML·마이그레이션을 고치면 `python scripts/schema/build_schema_catalog.py` 로 다시 만들고, 안 만들면 `tests/test_ops_api.py` 와 PR CI(`schema-version.yml`)가 실패한다.
-- **아직 안 하는 것**: Gold 건별 실패 보기(API 이미지에 Iceberg 읽기 없음), 화면(4단계, `frontend/`).
+- **화면**: `frontend/` 의 `/ops` (`src/screens/ops/`). 서비스 화면 틀 없이 그리고 메뉴에 넣지 않는다. 탭1 수집·처리 현황(수집 상태, 카드, 단계 띠, 실패 원인 → 건별 → 증거, 공고 하나 추적, 최근 실행 추이), 탭2 테이블 흐름(`/ops/erd`)·스키마 비교·마이그레이션. 원인 코드·단계 설명은 DBML Enum(`ops_reason_code`) note 를 그대로 쓴다. 로그인 쿠키를 보내려고 요청마다 `credentials: 'include'`, 로컬 개발(웹 3000 → API 8000)을 위해 API CORS 는 `allow_credentials` 를 켠다(허용 주소는 `REBOM_CORS_ORIGINS` 목록만).
+- **아직 안 하는 것**: Gold 건별 실패·모델 추적(작업·버전·비용, API 이미지에 Iceberg 읽기 없음).

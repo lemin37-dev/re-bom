@@ -148,6 +148,27 @@ def test_catalog_is_up_to_date_with_dbml_and_migrations():
     assert catalog["migrations"][-1]["filename"].startswith("009_")
 
 
+def test_erd_view_has_notes_examples_values_and_links():
+    view = ops_api.erd_view(ops_api.load_catalog())
+    assert view["layers"] == ["bronze", "silver", "gold", "rds"]
+    by_name = {t["table"]: t for t in view["tables"]}
+    notice = by_name["silver_animal_notice"]
+    assert notice["layer"] == "silver" and notice["group"] == "silver" and notice["note"]
+    first = notice["columns"][0]
+    assert first["name"] == "desertion_no" and first["pk"] and first["note"] and first["example"]
+    status = next(c for c in by_name["service_notice"]["columns"] if c["name"] == "status_group")
+    assert status["notNull"] and {v["value"] for v in status["values"]} >= {"PROTECTING", "CLOSED"}
+    # 설명이 없는 칼럼이 없어야 화면에서 비지 않는다
+    assert all(c["note"] for t in view["tables"] for c in t["columns"])
+    links = [r for r in view["refs"] if r["kind"] == "link"]
+    fks = [r for r in view["refs"] if r["kind"] == "fk"]
+    assert links and fks and all(r["key"] for r in view["refs"])
+    assert all(r["from"]["table"] in by_name and r["to"]["table"] in by_name for r in view["refs"])
+    sample = next(r for r in links if r["from"]["table"] == "silver_animal_notice")
+    assert sample["to"] == {"table": "bronze_rescue_record", "columns": ["desertionNo"]} and sample["color"]
+    assert {g["group"] for g in view["groups"]} >= {"bronze", "silver", "gold", "notice_screen", "ops_record"}
+
+
 # ───────── 라우터 ─────────
 
 class FakeStore:
@@ -271,6 +292,8 @@ def test_endpoints_pass_filters_and_validate_input():
     assert client.get("/ops/animals/abc").status_code == 422
     runs = client.get("/ops/runs", params={"days": 3}).json()
     assert runs["runs"][0]["stages"]["bronze"]["status"] == "ok"
+    erd = client.get("/ops/erd").json()
+    assert erd["tables"] and erd["refs"]
     schema = client.get("/ops/schema").json()
     assert schema["rdsVersion"] == "v0.3" and schema["pendingMigrations"]  # 적용 기록이 없으면 모두 남은 것
 
