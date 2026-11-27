@@ -31,6 +31,21 @@
 3. Argo CD 설치와 Application 등록: `infra/k8s/argocd/README.md`
 4. develop 에 머지 → Actions "이미지 빌드 (ECR)" 성공 → `deploy/dev` 브랜치가 생기고 Argo CD 가 배포
 
+### 운영 화면(/ops) 비밀번호 (사람이 직접)
+
+`/ops` 는 Secret `rebom-ops` 가 없으면 503 이다(다른 API 는 그대로). PC 에서 값을 만들고 Secret 을 만든다.
+
+```
+python -m rebom.serving.ops_auth hash     # 비밀번호를 두 번 입력 → pbkdf2_sha256$... 한 줄
+python -m rebom.serving.ops_auth secret   # 쿠키 서명 키
+kubectl -n rebom-web create secret generic rebom-ops \
+  --from-literal=REBOM_OPS_PASSWORD_HASH='<hash 줄>' \
+  --from-literal=REBOM_OPS_SESSION_SECRET='<secret 줄>'
+kubectl -n rebom-web rollout restart deploy/api
+```
+
+비밀번호를 바꾸면 hash 만, 모든 로그인을 끊으려면 secret 도 바꾼다. 값은 레포·노션에 적지 않는다.
+
 수동 실행: Actions → "이미지 빌드 (ECR)" → Run workflow → 브랜치 **develop** → target `all` (기본 브랜치가 develop 이라 버튼이 보인다).
 AWS 역할은 develop 브랜치 워크플로만 맡을 수 있어서, 다른 브랜치로 돌리면 로그인 단계에서 실패한다(정상). deploy job 도 develop 에서만 돈다.
 

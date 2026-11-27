@@ -24,6 +24,7 @@ on:
       - "docs/schema/**"
       - "scripts/schema/**"
       - "src/rebom/common/ops_log.py"
+      - "src/rebom/serving/ops_schema_catalog.json"
       - ".github/scripts/schema_tag.py"
       - ".github/scripts/migration_guard.py"
       - ".github/workflows/schema-version.yml"
@@ -59,6 +60,8 @@ jobs:
           python -m pip install --quiet "pytest>=8"
           python -m pytest -q tests/test_rds_schema_doc.py tests/test_migrate.py tests/test_schema_tag.py \
             tests/test_migration_guard.py tests/test_pipeline_schema_doc.py tests/test_ops_log.py
+      - name: 운영 화면 스키마 카탈로그가 DBML·마이그레이션과 같은지
+        run: python3 scripts/schema/build_schema_catalog.py --check
       - name: 이미 있는 마이그레이션 수정 막기
         if: github.event_name == 'pull_request'
         run: python3 .github/scripts/migration_guard.py "origin/${{ github.base_ref }}"

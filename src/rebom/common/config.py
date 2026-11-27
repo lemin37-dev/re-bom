@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     image_base_url: str = ""
     # 쉼표로 구분한 허용 출처. 프론트 개발 서버 기본값
     cors_origins: str = "http://localhost:3000"
+    # 운영 화면(/ops) 로그인. 둘 다 있어야 열린다(serving/ops_auth.py). 비밀번호는 해시만, 서명 키는 쿠키용
+    ops_password_hash: str | None = None
+    ops_session_secret: str | None = None
+    ops_cookie_secure: bool = True  # 로컬 http 시험만 false
+    ops_session_hours: float = 12
+    # 운영 기록의 환경(test|prod). 동기화 기록(REBOM_OPS_ENV)과 같은 값
+    ops_env: str = "test"
+
+    @property
+    def ops_enabled(self) -> bool:
+        return bool(self.ops_password_hash and self.ops_session_secret)
 
     @property
     def rank_debug(self) -> bool:

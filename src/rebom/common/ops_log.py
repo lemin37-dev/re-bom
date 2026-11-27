@@ -1,9 +1,9 @@
-"""운영 기록(RDS ops_run_summary · ops_failure · ops_schema_snapshot, 마이그레이션 008) 쓰기.
+"""운영 기록(RDS ops_run_summary · ops_failure · ops_schema_snapshot, 마이그레이션 008·009) 쓰기.
 
 운영 모니터링 화면(/ops)의 숫자와 실패 원인의 출처다. 규칙:
 - 기록은 본 작업을 멈추지 않는다. safe_write 는 예외를 삼키고 이유 문자열만 돌려준다(표가 아직 없어도, DB 가 안 닿아도).
 - 같은 실행·단계를 다시 쓰면 덮어쓴다(요약은 UPSERT, 실패 목록은 그 단계 것을 지우고 다시 넣음). 재실행해도 두 벌이 되지 않는다.
-- 값 목록은 008 의 CHECK 와 같다(docs/rds_schema.dbml Enum ops_*). 목록 밖 값은 쓰기 전에 ValueError.
+- 값 목록은 008·009 의 CHECK 와 같다(docs/rds_schema.dbml Enum ops_*). 목록 밖 값은 쓰기 전에 ValueError.
 - evidence 에는 보호자 실명·연락처를 넣지 않는다. 혹시 들어와도 SENSITIVE_KEYS 는 지운다.
 - Gold 모델 실패는 여기 쓰지 않는다. 화면이 gold_inference_log · gold_model_request_log 를 gold_run_id 로 바로 읽는다.
 
@@ -23,12 +23,14 @@ ENVS = ("test", "prod")
 STAGE = re.compile(r"^(bronze|photo|silver_notice|silver_photo|silver_publish|gold_[a-z_]+|rds_[a-z_]+)$")
 STATUSES = ("ok", "warn", "failed", "skipped")
 SUBJECT_TYPES = ("animal", "photo_slot", "partition", "route", "run")
-# 008 의 CHECK 와 같은 순서·같은 값 (tests/test_ops_log.py 가 마이그레이션·DBML 과 비교)
+# 008·009 의 CHECK 와 같은 순서·같은 값 (tests/test_ops_log.py 가 마이그레이션·DBML 과 비교)
 REASON_CODES = (
     "aborted", "count_mismatch", "dropped_row", "not_found", "replaced_not_found", "gave_up",
     "download_failed", "raw_content_conflict", "silver_transform_conflict",
     "status_history_conflict", "partition_incomplete", "publish_blocked", "stale_input",
     "config_hash_mismatch", "no_active_version", "fk_skipped", "sync_error",
+    # 009: 수집 API 오류 종류와 형식이 틀린 구간
+    "api_result_error", "api_timeout", "api_http_error", "invalid_partition",
 )
 LAYERS = ("silver", "gold")
 SENSITIVE_KEYS = frozenset({"careOwnerNm", "callName", "callTel", "care_owner_name", "owner_name", "owner_tel"})

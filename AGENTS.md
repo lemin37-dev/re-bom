@@ -47,6 +47,8 @@
    - `docs/rds_schema.dbml`: 표 `note`(한 줄 설명), 칼럼 `note`(설명 + 둘째 줄 `예: 값`), 값이 정해진 칼럼은 `Enum`(태그는 값마다 설명), 표 영역은 `TableGroup`. 실제 DB 의 구조는 마이그레이션이 기준이고 DBML 은 설명용이다(Enum 은 DB 에서 text + CHECK).
    - `docs/data_contract.md` 의 해당 절.
    - `pytest tests/test_rds_schema_doc.py` 로 DBML 과 마이그레이션의 표·칼럼 이름이 같은지 확인한다.
+   - 파이프라인 층 표(Bronze·Silver·Gold·ops)를 바꾸면 `docs/schema/*.dbml` 도 고치고 `pytest tests/test_pipeline_schema_doc.py` 로 확인한다.
+   - DBML 이나 마이그레이션을 바꾸면 `python scripts/schema/build_schema_catalog.py` 로 `src/rebom/serving/ops_schema_catalog.json` 을 다시 만들어 같이 커밋한다(CI 가 `--check` 로 막는다).
    - dbdiagram.io 에서 내보낸 SQL 은 마이그레이션으로 쓰지 않는다(PostgreSQL ENUM 타입이 생기고 CHECK·인덱스가 빠짐).
    - 마이그레이션 파일 안에 `BEGIN`/`COMMIT` 을 쓰지 않는다. 적용은 사람이 `python -m rebom.common.migrate apply` 로 하고, 도구가 파일마다 트랜잭션으로 묶어 `schema_migrations` 에 기록한다. AI 도구는 `status`·`apply --dry-run` 까지만 실행하고 적용 명령문을 적어 넘긴다.
    - 스키마 버전 이름은 `docs/rds_schema.dbml` 머리 줄(`// 버전: 스키마 v0.1 = 마이그레이션 001~007.`)에 적는다. 새 마이그레이션을 추가하면 이 줄의 마지막 번호를 고치고, 이미 태그가 달린 이름이면 버전을 올린다(v0.1 → v0.2). develop 에 머지되면 `.github/workflows/schema-version.yml` 이 `schema-vX.Y` 태그를 자동으로 단다(사람이 손으로 달지 않는다). PR 에서도 같은 검사가 돈다.

@@ -177,3 +177,31 @@ def test_stops_when_max_calls_exceeded():
     with _patch_get(*[_http(403, GATEWAY_30)] * 3):
         with pytest.raises(SystemExit):
             ri.Fetcher(max_calls=2)._get({})
+
+
+def test_retried_error_kinds_are_counted_for_manifest():
+    """재시도해서 넘어간 오류도 종류별로 센다(운영 화면의 'API 오류 종류'). 시간 초과·HTTP 오류·resultCode 00 아님."""
+    responses = [requests.Timeout("t"), _http(500, ValueError("no json")), _http(200, _normal("03")),
+                 _http(200, _normal("00", 0))]
+    fx = ri.Fetcher(max_calls=10)
+    with patch("rebom.ingestion.rescue_api.requests.get", side_effect=responses):
+        assert fx._get({}).ok
+    assert ri.api_errors(fx.errors) == {"timeout": 1, "http_error": 1, "result_code": {"03": 1}}
+    assert ri.api_errors(fx.error_total) == ri.api_errors(fx.errors)
+
+
+def test_partition_line_carries_api_errors_only_when_retried():
+    def fake_get(self, params):
+        if params.get("bgnde") == "20260101" and not getattr(self, "_once", False):
+            self._once = True
+            self._error("timeout")
+        return ApiResult(status_code=200, result_code="00", total_count=1,
+                         items=[{"desertionNo": f"A{params['bgnde']}", "happenDt": params["bgnde"]}])
+
+    with patch.object(ri.Fetcher, "_get", fake_get):
+        fx = ri.Fetcher(max_calls=10)
+        _, summary = fx.fetch("updated", {}, [("20260101", "20260131"), ("20260201", "20260228")])
+    first, second = summary["partitions"]
+    assert first["api_errors"] == {"timeout": 1} and "api_errors" not in second
+    assert first["complete"] and second["complete"]  # 재시도해서 받았으면 구간은 완전
+    assert ri.api_errors(fx.error_total) == {"timeout": 1}
