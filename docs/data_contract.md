@@ -477,7 +477,7 @@ Canary 점검 결과는 전용 테이블에 저장하고 공용 요청 로그의
 ### 15.3 호출과 질문지 (v1)
 
 - OpenRouter Decisions API(`POST /api/alpha/decisions`), 모델 `typesafe/jev-1.14`, 공급자 TypeSafe 고정(`allow_fallbacks: false`).
-  키 `OPENROUTER_KEY_TAG_JEV`: PC 시험은 로컬 테스트 키(.env). 운영 키는 Secrets Manager `rebom/tag/prod/jev_api_key`(2026-11-26)이며 `run --key-source secrets` 로 그 키만 쓴다. 서버 파드는 노드 역할로 읽는다(`rebom/` 접두어). 이름을 바꾸면 `REBOM_JEV_SECRET_ID`, 지역은 `AWS_DEFAULT_REGION`(기본 ap-northeast-2, 임베딩 키와 같은 규칙). **이 키를 실제로 읽는 시험은 아직 하지 않았습니다**(서버 연결 때 확인).
+  키 `OPENROUTER_KEY_TAG_JEV`: PC 시험은 로컬 테스트 키(.env). 운영 키는 Secrets Manager `rebom/tag/prod/jev_api_key`(2026-11-26)이며 `run --key-source secrets` 로 그 키만 쓴다. 서버 파드는 노드 역할로 읽는다(`rebom/` 접두어). 이름을 바꾸면 `REBOM_JEV_SECRET_ID`, 지역은 `AWS_DEFAULT_REGION`(기본 ap-northeast-2, 임베딩 키와 같은 규칙). 2026-11-27 PC(`aws login` 프로필)에서 `load_jev_key('secrets')` 로 읽기를 확인했습니다(값은 출력하지 않음). 서버 파드의 노드 역할로 읽는 것은 서버 연결 때 확인합니다.
 - 글 1건당 요청 1번에 질문 9개를 함께 보냅니다: 성격 예/아니오(noul) 8개 + 건강정보 선택형(choice) 1개.
   시험(402건)에서 입력 평균 3,919토큰, 1건당 약 $0.000165 였습니다(따로 보낼 때보다 약 7% 적음).
 - 질문 문구는 jev_final_test 에서 시험한 질문을 글자 그대로 옮겼습니다. 이 레포의 버전 이름은 v1 입니다.
