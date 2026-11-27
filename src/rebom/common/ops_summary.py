@@ -4,7 +4,8 @@
     python -m rebom.common.ops_summary --run-id 20261127T030011-9c41a2 --env test --dry-run  # 쓰지 않고 JSON 만 출력
 
 모으는 곳 (모두 이미 남는 기록이고, 없으면 그 단계는 skipped):
-  bronze          bronze/rescue/raw/dt=/run_id=/manifest.json            구간별 total·received, 중단, 버린 행
+  bronze          bronze/rescue/raw/dt=/run_id=/manifest.json            구간별 total·received, API 오류 종류, 중단, 버린 행
+                  state/rescue_state.json                                마지막 성공 실행(last_run_id)
   photo           bronze/rescue/image_runs/dt=/run_id=/manifest.json     bronze_run_id 가 같은 사진 실행의 저장·실패 칸
   silver_notice   ops/<env>/silver_notice/<run_id>.json                  Silver 가 멈추기 전에 남긴 건수·충돌 (storage/silver/ops_stats.py)
   silver_publish  <발행 prefix>/silver_<run_id>.json                     READY 발행 기록
@@ -21,6 +22,7 @@ import json
 import re
 import sys
 from collections import Counter, defaultdict
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
 from rebom.common import ops_log
@@ -29,8 +31,10 @@ DATA_BUCKET = "rebom-data-559987919299"
 RAW_PREFIX = "bronze/rescue/raw"
 IMAGE_RUNS_PREFIX = "bronze/rescue/image_runs"
 PUBLISH_PREFIX = "bench_tmp/b-storage-test/publish"  # DAG SILVER_TEST_PUBLISH_PREFIX 와 같음
+KST = timezone(timedelta(hours=9))
 RUN_ID = re.compile(r"^(\d{4})(\d{2})(\d{2})T\d{6}-[0-9a-f]{6}$")
 PHOTO_REASONS = {"not_found", "replaced_not_found"}
+STATE_KEY = "state/rescue_state.json"  # 수집 상태 파일 (rescue_incremental.STATE_KEY 와 같음)
 
 
 def run_dt(run_id: str) -> str:
@@ -42,45 +46,121 @@ def run_dt(run_id: str) -> str:
 
 # ───────── 단계별로 줄 만들기 (S3·Iceberg 없이 시험할 수 있는 순수 함수) ─────────
 
-def bronze_rows(env: str, manifest: Mapping[str, Any], *, manifest_key: str | None = None):
+# totalCount 가 실제보다 1건 큰 날 (API 가 null 레코드를 세어서. 받은 쪽은 dropped_count 로 셈). 이 날만으로 어긋난
+# count_mismatch 는 "알려진 예외"로 남기고 단계 상태를 warn 으로 만들지 않는다. 날짜를 더하면 근거를 같이 적는다.
+KNOWN_COUNT_EXCEPTIONS = {
+    "2023-02-11": "API null 레코드 때문에 totalCount 가 1건 큼",
+    "2024-05-09": "API null 레코드 때문에 totalCount 가 1건 큼",
+    "2025-09-09": "API null 레코드 때문에 totalCount 가 1건 큼",
+}
+API_ERROR_REASONS = {"timeout": "api_timeout", "http_error": "api_http_error", "result_code": "api_result_error"}
+PARTITION_REASONS = {"api_result_error": "api_result_error", "invalid_date": "invalid_partition",
+                     "invalid_date_range": "invalid_partition", "invalid_count": "invalid_partition"}
+
+
+def known_exception(part: Mapping[str, Any]) -> str | None:
+    """count_mismatch 구간의 차이가 구간 안 알려진 예외 날짜 수와 정확히 같으면 그 설명."""
+    if part.get("reason") != "count_mismatch":
+        return None
+    days = [d for d in KNOWN_COUNT_EXCEPTIONS if str(part.get("start_date")) <= d <= str(part.get("end_date"))]
+    try:
+        diff = int(part.get("total_count")) - int(part.get("received_count"))
+    except (TypeError, ValueError):
+        return None
+    if days and diff == len(days):
+        return f"알려진 예외({', '.join(days)}): {KNOWN_COUNT_EXCEPTIONS[days[0]]}"
+    return None
+
+
+def _part_key(p: Mapping[str, Any]) -> str:
+    return f"{p.get('kind')} {p.get('start_date')}~{p.get('end_date')}"
+
+
+def bronze_rows(env: str, manifest: Mapping[str, Any], *, manifest_key: str | None = None,
+                state: Mapping[str, Any] | None = None):
+    """수집 manifest → bronze 단계 줄과 실패 줄.
+
+    실패 줄: 불완전 구간(원인별), 재시도한 API 오류(종류별, 받아냈으면 evidence.recovered), 중단, 버린 항목.
+    알려진 예외 구간과 재시도해서 받아낸 API 오류는 목록에는 남기되 단계 상태를 warn 으로 만들지 않는다.
+    state: 수집 상태 파일(state/rescue_state.json). 마지막 성공 실행을 stats 에 남긴다.
+    """
     run_id = manifest["run_id"]
     at = manifest.get("fetched_at") or ops_log.now()
     parts = manifest.get("partitions") or []
     files = manifest.get("files") or []
-    failures = []
+    failures, serious, known = [], 0, 0
+
+    def add(row, counts=True):
+        nonlocal serious
+        failures.append(row)
+        serious += int(counts)
+
     for p in parts:
-        if p.get("complete", True):
-            continue
-        reason = p.get("reason") if p.get("reason") in ops_log.REASON_CODES else "count_mismatch"
-        key = f"{p.get('kind')} {p.get('start_date')}~{p.get('end_date')}"
-        failures.append(ops_log.failure_row(
-            env, run_id, "bronze", "partition", key, reason, observed_at=at,
-            message=f"total {p.get('total_count')} / received {p.get('received_count')}",
-            evidence={k: p.get(k) for k in ("kind", "start_date", "end_date", "result_code", "total_count",
-                                            "received_count", "complete", "reason")},
-            evidence_ref=manifest_key))
+        key = _part_key(p)
+        evidence = {k: p.get(k) for k in ("kind", "start_date", "end_date", "result_code", "total_count",
+                                          "received_count", "dropped_count", "complete", "reason")}
+        if not p.get("complete", True):
+            raw = p.get("reason")
+            reason = raw if raw in ops_log.REASON_CODES else PARTITION_REASONS.get(raw, "count_mismatch")
+            note = known_exception(p)
+            known += int(bool(note))
+            message = f"total {p.get('total_count')} / received {p.get('received_count')}"
+            add(ops_log.failure_row(
+                env, run_id, "bronze", "partition", key, reason, observed_at=at,
+                message=f"{note} · {message}" if note else message,
+                evidence={**evidence, "known_exception": bool(note), **({"known_reason": note} if note else {})},
+                evidence_ref=manifest_key), counts=not note)
+        for kind, n in (p.get("api_errors") or {}).items():
+            codes = n if isinstance(n, Mapping) else None
+            total = sum(int(v) for v in codes.values()) if codes else int(n)
+            recovered = bool(p.get("complete", True))
+            detail = f"resultCode {', '.join(f'{c}×{v}' for c, v in sorted(codes.items()))}" if codes else f"{total}번"
+            add(ops_log.failure_row(
+                env, run_id, "bronze", "partition", key, API_ERROR_REASONS.get(kind, "api_http_error"),
+                observed_at=at, attempts=total,
+                message=f"{detail} · {'재시도해서 받음' if recovered else '구간 불완전'}",
+                evidence={"kind": p.get("kind"), "start_date": p.get("start_date"), "end_date": p.get("end_date"),
+                          "error": kind, "count": total, "codes": codes, "recovered": recovered},
+                evidence_ref=manifest_key), counts=not recovered)
     aborted = manifest.get("status") == "aborted"
     if aborted:
-        failures.append(ops_log.failure_row(
+        add(ops_log.failure_row(
             env, run_id, "bronze", "run", run_id, "aborted", observed_at=at, blocking=True,
             message="; ".join(manifest.get("warnings") or [])[:300], evidence_ref=manifest_key))
     dropped = int(manifest.get("dropped_count") or 0)
     if dropped:
-        failures.append(ops_log.failure_row(
+        # null 레코드(알려진 예외 날)도 여기에 세인다. 알려진 예외 구간 수만큼이면 warn 으로 보지 않는다
+        add(ops_log.failure_row(
             env, run_id, "bronze", "run", run_id, "dropped_row", observed_at=at,
-            message=f"버린 항목 {dropped}건", evidence={"dropped_count": dropped}, evidence_ref=manifest_key))
-    status = "failed" if aborted else ("warn" if failures else "ok")
+            message=f"버린 항목 {dropped}건" + (f" (알려진 예외 구간 {known}개 포함)" if known else ""),
+            evidence={"dropped_count": dropped, "known_exception_partitions": known,
+                      "known_exception": dropped <= known}, evidence_ref=manifest_key),
+            counts=dropped > known)
+    status = "failed" if aborted else ("warn" if serious else "ok")
+    last = (state or {}).get("last_run_id")
     stage = ops_log.stage_row(
         env, run_id, "bronze", status, started_at=at,
         input_count=sum(int(p.get("total_count") or 0) for p in parts),
         output_count=sum(int(f.get("record_count") or 0) for f in files),
-        failed_count=len(failures),
-        stats={"mode": manifest.get("mode"), "calls": manifest.get("calls"),
+        failed_count=serious,
+        stats={"mode": manifest.get("mode"), "calls": manifest.get("calls"), "run_status": manifest.get("status"),
                "duplicate_count": manifest.get("duplicate_count"), "dropped_count": dropped,
                "files": {f.get("kind"): f.get("record_count") for f in files},
-               "incomplete_partitions": sum(1 for p in parts if not p.get("complete", True))},
+               "incomplete_partitions": sum(1 for p in parts if not p.get("complete", True)),
+               "known_exception_partitions": known, "api_errors": manifest.get("api_errors") or {},
+               "last_success_run_id": last, "last_success_at": run_started_at(last),
+               "last_enupd": (state or {}).get("last_enupd")},
         code_version=manifest.get("code_version"))
     return stage, failures
+
+
+def run_started_at(run_id: str | None) -> str | None:
+    """수집 run_id(YYYYMMDDTHHMMSS-xxxxxx, KST 시각)의 시작 시각. 형식이 다르면 None."""
+    m = re.fullmatch(r"(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})-[0-9a-f]{6}", run_id or "")
+    if not m:
+        return None
+    y, mo, d, h, mi, se = m.groups()
+    return f"{y}-{mo}-{d}T{h}:{mi}:{se}+09:00"
 
 
 def photo_rows(env: str, manifest: Mapping[str, Any], *, manifest_key: str | None = None):
@@ -207,12 +287,23 @@ def _skipped(env: str, run_id: str, stage: str, why: str) -> dict[str, Any]:
     return ops_log.stage_row(env, run_id, stage, "skipped", started_at=ops_log.now(), stats={"why": why})
 
 
+def latest_manifest_run(s3, bucket: str, dt: str) -> str | None:
+    """그날(dt=YYYY-MM-DD) 수집 manifest 중 가장 늦은 실행 id. 중단(aborted)된 실행은 XCom 을 넘기지 않아서 이것으로 찾는다."""
+    best, best_at = None, ""
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=f"{RAW_PREFIX}/dt={dt}/"):
+        for obj in page.get("Contents", []):
+            m = re.search(r"/run_id=([^/]+)/manifest\.json$", obj["Key"])
+            if m and RUN_ID.fullmatch(m.group(1)) and m.group(1)[:15] > best_at:  # 시작 시각(YYYYMMDDTHHMMSS)이 늦은 것
+                best, best_at = m.group(1), m.group(1)[:15]
+    return best
+
+
 def collect_s3(s3, bucket: str, env: str, run_id: str, publish_prefix: str = PUBLISH_PREFIX):
     stages, failures = [], []
     key = f"{RAW_PREFIX}/dt={run_dt(run_id)}/run_id={run_id}/manifest.json"
     manifest = _get_json(s3, bucket, key)
     if manifest:
-        st, fl = bronze_rows(env, manifest, manifest_key=key)
+        st, fl = bronze_rows(env, manifest, manifest_key=key, state=_get_json(s3, bucket, STATE_KEY))
         stages.append(st)
         failures += fl
     else:
@@ -289,6 +380,13 @@ def collect_schemas(catalog, env: str, run_id: str, tables: Iterable[tuple[str, 
     return rows
 
 
+def s3_client(profile: str | None = None):
+    import boto3
+
+    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    return session.client("s3", region_name="ap-northeast-2")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run-id", required=True, help="Bronze 수집 실행 id")
@@ -300,16 +398,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-schema", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="RDS 에 쓰지 않고 모은 줄만 출력")
     ap.add_argument("--profile", default=None, help="AWS 프로필 (PC). 파드는 노드 역할")
+    ap.add_argument("--dt", default=None, help="실행 id 가 없을 때 manifest 를 찾을 수집일(YYYY-MM-DD, 기본 오늘 KST)")
     args = ap.parse_args(argv)
+
+    s3 = s3_client(args.profile)
     if not RUN_ID.fullmatch(args.run_id or ""):
-        # 수집이 실패하면 XCom 이 없어 "None" 이 온다. 모을 것이 없으니 파이프라인을 붉게 만들지 않고 끝낸다
-        print(json.dumps({"run_id": args.run_id, "skipped": "수집 실행 id 없음"}, ensure_ascii=False))
-        return 0
-
-    import boto3
-
-    session = boto3.Session(profile_name=args.profile) if args.profile else boto3.Session()
-    s3 = session.client("s3", region_name="ap-northeast-2")
+        # 수집이 중단(aborted)·실패하면 XCom 이 없어 "None" 이 온다. 그날 manifest 가 있으면(중단) 그 실행을 기록하고,
+        # 없으면(수집이 manifest 도 못 쓰고 실패) 쓸 것이 없다. 화면은 그날 bronze 줄이 없으면 "실행 안 됨"으로 본다.
+        dt = args.dt or datetime.now(KST).strftime("%Y-%m-%d")
+        found = latest_manifest_run(s3, args.bucket, dt)
+        if not found:
+            print(json.dumps({"run_id": args.run_id, "dt": dt, "skipped": "수집 실행 id·manifest 없음"},
+                             ensure_ascii=False))
+            return 0
+        args.run_id, args.skip_gold, args.skip_schema = found, True, True
     stages, failures = collect_s3(s3, args.bucket, args.env, args.run_id, args.publish_prefix)
     schemas, notes = [], []
     if not (args.skip_gold and args.skip_schema):

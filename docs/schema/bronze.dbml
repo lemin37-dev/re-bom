@@ -42,8 +42,10 @@ Table bronze_rescue_manifest [note: '''Bronze 실행 1번의 결과 (bronze/resc
 예: [{"kind":"updated","file":"updated.jsonl.gz","record_count":1288,"checksum":"sha256:…"}]''']
   request_params json [note: '''종류별 요청 파라미터 (인증키는 params 에 없음)
 예: {"updated":{"bgupd":"20261126","enupd":"20261127"}}''']
-  partitions json [note: '''구간별 결과: kind·기간·result_code·total_count·received_count·complete·reason. 수집 실패 드릴다운의 증거
-예: [{"kind":"list_protect","start_date":"20261120","end_date":"20261127","total_count":7412,"received_count":7409,"complete":false,"reason":"count_mismatch"}]''']
+  partitions json [note: '''구간별 결과: kind·기간·result_code·total_count·received_count·complete·reason, 재시도한 API 오류가 있으면 api_errors(종류별 횟수: timeout·http_error·result_code 코드별). 수집 실패 드릴다운의 증거
+예: [{"kind":"list_protect","start_date":"2026-11-20","end_date":"2026-11-27","total_count":7412,"received_count":7409,"complete":false,"reason":"count_mismatch","api_errors":{"timeout":1}}]''']
+  api_errors json [note: '''이 실행에서 재시도해서 넘어간 API 오류 합계 (구간별은 partitions[].api_errors). 4번 다 실패하면 실행이 끝나 manifest 가 남지 않음
+예: {"timeout":2,"http_error":1,"result_code":{"03":1}}''']
   page_count json [note: '''종류별 페이지 수
 예: {"updated":13,"list_notice":3,"list_protect":75}''']
   dropped_count int [note: '''형식이 틀려 버린 항목 수

@@ -2,7 +2,7 @@
 // 2026-11-25 · 기준: 노션 "Gold 스키마 · 확정 규칙과 사진 임베딩 설계안"(11/22~) RDS 절, develop eb4e317
 // 쓰는 법: dbdiagram.io 편집 창에 통째로 붙여 넣기. 표 설명 = Table [note], 칼럼 설명·예시 = 칼럼 note('예:' 줄), 값 목록 = Enum.
 // 관리: 이 파일 = 표·칼럼 설명과 값 목록의 원본(그림은 dbdiagram.io 에 붙여 넣어 봄). 실제 DB = db/migrations/*.sql (dbdiagram export SQL 은 쓰지 않음)
-// 버전: 스키마 v0.2 = 마이그레이션 001~008. develop 머지 때 Actions(schema-version.yml)가 태그 schema-vX.Y 를 담(v0.1 = 001~007 은 이미 있음). 새 마이그레이션이면 번호를 고치고 태그가 이미 있으면 버전을 올림. RDS 적용 상태는 schema_migrations 표
+// 버전: 스키마 v0.3 = 마이그레이션 001~009. develop 머지 때 Actions(schema-version.yml)가 태그 schema-vX.Y 를 담(v0.1 = 001~007, v0.2 = 001~008 은 이미 있음). 새 마이그레이션이면 번호를 고치고 태그가 이미 있으면 버전을 올림. RDS 적용 상태는 schema_migrations 표
 // 실제 DB 타입: enum 으로 표시한 칼럼은 실제로는 text/varchar + CHECK. 칼럼 이름이 마이그레이션과 같은지 tests/test_rds_schema_doc.py 가 확인함
 // 벡터 표 2개(image_embedding·text_embedding)는 004 에서 지우고 이 모양으로 다시 만듦(11/25: RDS 데이터 비우고 S3 동기화 처음부터, HNSW 없음)
 
@@ -242,6 +242,10 @@ Enum ops_reason_code {
   "no_active_version" [note: 'RDS 동기화: 작업의 활성 버전이 없음 · 사람: 활성 버전 등록']
   "fk_skipped" [note: 'RDS 동기화: 부모 행이 없어 건너뛴 행 · 자동: 공고 경로 반영 뒤 다시']
   "sync_error" [note: 'RDS 동기화의 그 밖의 실패 · 사람: 태스크 로그 확인']
+  "api_result_error" [note: '(009) 수집 API 가 HTTP 200 인데 resultCode 가 00 이 아님. 재시도해서 받았으면 evidence.recovered = true · 자동: 재시도, 계속되면 사람(키·한도 확인)']
+  "api_timeout" [note: '(009) 수집 API 응답 시간 초과 · 자동: 재시도(4번), 다 실패하면 그날 수집이 실패해 다음 실행이 같은 범위를 다시 받음']
+  "api_http_error" [note: '(009) 수집 API HTTP 200 아님·연결 오류(게이트웨이 키 오류 401·403 포함) · 자동: 재시도, 계속되면 사람']
+  "invalid_partition" [note: '(009) manifest 구간의 날짜·건수 형식이 틀림(invalid_date·invalid_date_range·invalid_count) · 사람 확인(수집 코드)']
 }
 
 // ───────── 표 ─────────

@@ -1,4 +1,4 @@
-"""운영 기록(마이그레이션 008, common/ops_log·ops_summary, storage/silver/ops_stats, 동기화 기록 줄) 시험. DB·S3 없이 돈다."""
+"""운영 기록(마이그레이션 008·009, common/ops_log·ops_summary, storage/silver/ops_stats, 동기화 기록 줄) 시험. DB·S3 없이 돈다."""
 from __future__ import annotations
 
 import ast
@@ -26,11 +26,25 @@ def _enum(name: str) -> list[str]:
 
 # ───────── 값 목록이 마이그레이션·DBML·코드에서 같은지 ─────────
 
+def _latest_reason_check() -> tuple[str, ...]:
+    """원인 코드 CHECK 를 마지막으로 정의한 마이그레이션의 값 (008 CREATE TABLE → 009 ALTER … ADD CONSTRAINT)."""
+    found = None
+    for path in sorted((ROOT / "db" / "migrations").glob("*.sql")):
+        sql = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8"))
+        for m in re.finditer(r"CHECK \(reason_code IN \((.*?)\)\)", sql, re.S):
+            found = tuple(re.findall(r"'([a-z_]+)'", m.group(1)))
+    assert found
+    return found
+
+
 def test_reason_codes_match_migration_and_dbml():
-    sql = MIGRATION.read_text(encoding="utf-8")
-    check = re.search(r"reason_code\s+text\s+NOT NULL CHECK \(reason_code IN \((.*?)\)\)", sql, re.S).group(1)
-    assert tuple(re.findall(r"'([a-z_]+)'", check)) == ops_log.REASON_CODES
+    assert _latest_reason_check() == ops_log.REASON_CODES
     assert tuple(_enum("ops_reason_code")) == ops_log.REASON_CODES
+    # 009 는 008 의 값을 그대로 두고 뒤에만 더한다(옛 기록이 CHECK 에 걸리지 않게)
+    sql8 = MIGRATION.read_text(encoding="utf-8")
+    old = re.findall(r"'([a-z_]+)'", re.search(r"reason_code\s+text\s+NOT NULL CHECK \(reason_code IN \((.*?)\)\)",
+                                               sql8, re.S).group(1))
+    assert ops_log.REASON_CODES[:len(old)] == tuple(old)
 
 
 def test_status_and_stage_match_migration_and_dbml():
@@ -255,9 +269,70 @@ def test_collect_s3_marks_missing_stages_skipped():
     assert len(failures) == 4
 
 
-def test_main_without_run_id_is_quiet(capsys):
-    assert ops_summary.main(["--run-id", "None"]) == 0
-    assert "수집 실행 id 없음" in capsys.readouterr().out
+def test_main_without_run_id_and_manifest_is_quiet(capsys, monkeypatch):
+    monkeypatch.setattr(ops_summary, "s3_client", lambda profile=None: FakeS3({}))
+    assert ops_summary.main(["--run-id", "None", "--dt", "2026-11-27"]) == 0
+    assert "manifest 없음" in capsys.readouterr().out
+
+
+def test_main_records_aborted_run_found_by_date(capsys, monkeypatch):
+    """중단된 수집은 XCom 이 없다. 그날 manifest 를 찾아 bronze 를 failed/aborted 로 남긴다(화면: 수집 상태 aborted)."""
+    aborted = "20261127T050011-0000aa"  # 같은 날 뒤에 다시 돌린 실행(중단)
+    objects = {
+        f"bronze/rescue/raw/dt=2026-11-27/run_id={RUN}/manifest.json": BRONZE,
+        f"bronze/rescue/raw/dt=2026-11-27/run_id={aborted}/manifest.json":
+            {**BRONZE, "run_id": aborted, "status": "aborted", "partitions": [], "dropped_count": 0,
+             "warnings": ["중단: 보호중 목록이 0건"]},
+        "state/rescue_state.json": {"last_enupd": "20261126", "last_run_id": "20261126T030009-5b1c2d"},
+    }
+    monkeypatch.setattr(ops_summary, "s3_client", lambda profile=None: FakeS3(objects))
+    assert ops_summary.main(["--run-id", "None", "--dt", "2026-11-27", "--dry-run"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    bronze = out["stage_rows"][0]
+    assert (out["run_id"], bronze["status"], bronze["stats"]["run_status"]) == (aborted, "failed", "aborted")
+    assert bronze["stats"]["last_success_run_id"] == "20261126T030009-5b1c2d"
+    assert bronze["stats"]["last_success_at"] == "2026-11-26T03:00:09+09:00"
+    assert [f["reason_code"] for f in out["failure_rows"]] == ["aborted"]
+    assert out["schemas"] == 0  # 중단된 날은 Gold·스키마를 읽지 않는다
+
+
+def test_known_count_exception_is_listed_but_not_a_warning():
+    parts = [{"kind": "list_protect", "start_date": "2024-05-09", "end_date": "2024-05-09", "total_count": 31,
+              "received_count": 30, "complete": False, "reason": "count_mismatch"},
+             {"kind": "list_notice", "start_date": "2023-02-01", "end_date": "2023-02-28", "total_count": 900,
+              "received_count": 899, "complete": False, "reason": "count_mismatch"}]
+    stage, failures = ops_summary.bronze_rows("test", {**BRONZE, "partitions": parts, "dropped_count": 2})
+    assert [f["evidence"]["known_exception"] for f in failures[:2]] == [True, True]
+    assert failures[0]["message"].startswith("알려진 예외(2024-05-09)")
+    assert failures[2]["reason_code"] == "dropped_row"  # null 레코드 2건 = 알려진 예외 구간 2개 → warn 아님
+    assert (stage["status"], stage["failed_count"], stage["stats"]["known_exception_partitions"]) == ("ok", 0, 2)
+    # 차이가 2건이면 알려진 예외가 아니다 (null 레코드 1건 + 다른 누락)
+    other = {**parts[0], "total_count": 32}
+    stage, failures = ops_summary.bronze_rows("test", {**BRONZE, "partitions": [other], "dropped_count": 0})
+    assert stage["status"] == "warn" and failures[0]["evidence"]["known_exception"] is False
+    assert ops_summary.known_exception({**parts[0], "start_date": "2024-05-10", "end_date": "2024-05-10"}) is None
+
+
+def test_api_error_kinds_become_failure_rows():
+    parts = [{"kind": "updated", "start_date": "2026-01-01", "end_date": "2026-01-31", "total_count": 5,
+              "received_count": 5, "complete": True, "reason": "complete",
+              "api_errors": {"timeout": 2, "result_code": {"03": 1, "99": 1}}},
+             {"kind": "list_notice", "start_date": "2026-02-01", "end_date": "2026-02-28", "total_count": 5,
+              "received_count": 5, "complete": False, "reason": "api_result_error", "result_code": "000",
+              "api_errors": {"http_error": 1}},
+             {"kind": "list_notice", "start_date": "2026-03-01", "end_date": "2026-02-01", "total_count": 5,
+              "received_count": 5, "complete": False, "reason": "invalid_date_range"}]
+    stage, failures = ops_summary.bronze_rows("test", {**BRONZE, "partitions": parts, "dropped_count": 0,
+                                                       "api_errors": {"timeout": 2, "http_error": 1}})
+    got = [(f["reason_code"], f["attempts"], f["evidence"].get("recovered")) for f in failures]
+    assert got == [("api_timeout", 2, True), ("api_result_error", 2, True),
+                   ("api_result_error", None, None), ("api_http_error", 1, False), ("invalid_partition", None, None)]
+    assert failures[1]["message"].startswith("resultCode 03×1, 99×1")
+    # 재시도해서 받은 오류는 목록에만, 불완전 구간·형식 오류는 warn
+    assert (stage["status"], stage["failed_count"]) == ("warn", 3)
+    assert stage["stats"]["api_errors"] == {"timeout": 2, "http_error": 1}
+    clean, _ = ops_summary.bronze_rows("test", {**BRONZE, "partitions": parts[:1], "dropped_count": 0})
+    assert clean["status"] == "ok"
 
 
 # ───────── RDS 동기화 기록 줄 ─────────

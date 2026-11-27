@@ -17,6 +17,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from rebom.common.config import DataMode, Settings, get_settings
+from rebom.serving.ops_api import build_router, load_catalog
+from rebom.serving.ops_auth import LoginLimiter
 from rebom.serving.query_embed import BadQueryImage, Embedder, QueryEmbedder, default_embedder
 from rebom.serving.rank_debug import explain, page_debug
 from rebom.serving.repository import (
@@ -82,6 +84,16 @@ def create_app(settings: Settings | None = None,
     app.state.settings = settings
     app.state.repo = build_repository(settings)
     app.state.embedder = QueryEmbedder(embedder_factory)
+    # 운영 화면(/ops). db 모드에서만 RDS 에 붙는다. 비밀번호 설정이 없으면 라우터가 503 을 돌려준다
+    app.state.ops_store = None
+    if settings.data_mode == DataMode.DB:
+        from rebom.serving.db_repository import connect_from_settings
+        from rebom.serving.ops_store import OpsStore
+
+        app.state.ops_store = OpsStore(connect_from_settings(settings.db_dsn))
+    app.state.ops_limiter = LoginLimiter()
+    app.state.ops_catalog = load_catalog()
+    app.include_router(build_router())
 
     app.add_middleware(
         CORSMiddleware,

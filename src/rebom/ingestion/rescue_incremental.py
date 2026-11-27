@@ -98,6 +98,17 @@ def partition_status(result_code, start_date: str, end_date: str, total_count, r
     return True, "complete"
 
 
+def api_errors(counter: Counter) -> dict:
+    """재시도한 오류 횟수를 manifest 용으로. {"timeout": 2, "http_error": 1, "result_code": {"03": 1}}, 없으면 {}"""
+    out: dict = {}
+    for key, n in sorted(counter.items()):
+        if key.startswith("result_code:"):
+            out.setdefault("result_code", {})[key.split(":", 1)[1]] = n
+        else:
+            out[key] = n
+    return out
+
+
 class ApiFailure(RuntimeError):
     """한 호출이 재시도 후에도 실패했다. 일일 한도 초과·호출 상한은 SystemExit 로 따로 끝낸다."""
 
@@ -120,6 +131,14 @@ class Fetcher:
         self.max_calls = max_calls
         self.calls = 0
         self.warnings: list[str] = []
+        # 재시도한 API 오류 종류별 횟수 (지금 받는 구간 것). fetch 가 구간마다 비우고 그 구간의 partitions 줄에 api_errors 로 남긴다.
+        # timeout: 응답 시간 초과, http_error: HTTP 200 아님·연결 오류, result_code: HTTP 200 인데 resultCode 가 00 아님(코드별)
+        self.errors: Counter = Counter()
+        self.error_total: Counter = Counter()
+
+    def _error(self, kind: str) -> None:
+        self.errors[kind] += 1
+        self.error_total[kind] += 1
 
     def _get(self, params: dict):
         for attempt in range(4):
@@ -129,11 +148,13 @@ class Fetcher:
                 self.calls += 1
                 r = call(params, url=URL, timeout=60)
             except requests.RequestException as e:  # 메시지에 URL(키)이 들어갈 수 있어 종류만 남긴다
+                self._error("timeout" if isinstance(e, requests.Timeout) else "http_error")
                 log(f"  요청 실패({type(e).__name__}), 재시도 {attempt + 1}/4")
                 time.sleep(3 * (attempt + 1))
                 continue
             if r.ok:
                 return r
+            self._error("http_error" if r.status_code != 200 else f"result_code:{r.result_code}")
             if r.result_code == "22":
                 raise SystemExit(f"일일 호출 한도 초과(코드 22): {explain_error(r)}")
             log(f"  응답 오류: {explain_error(r)}, 재시도 {attempt + 1}/4")
@@ -150,6 +171,7 @@ class Fetcher:
             range_ids: set[str] = set()
             by_day: Counter = Counter()  # 구간 안에서 받은 서로 다른 공고의 발생일별 건수 (불완전한 구간을 쪼갤 때 쓴다)
             dropped, duplicates, total, code = 0, 0, None, None
+            self.errors = Counter()
             for page in range(1, 200):
                 r = self._get({**params, "pageNo": page})
                 summary["page_count"] += 1
@@ -173,6 +195,7 @@ class Fetcher:
             summary["request_params"].append({**params, "pageNo": "1..n"})
             if kind.startswith("lookup"):
                 continue
+            errors = api_errors(self.errors)
             # 받은 건수는 구간 안의 서로 다른 공고번호 수다. 페이지가 밀려 중복이 생기면 빠진 건을 가리지 못하게 중복은 뺀다.
             complete, reason = partition_status(code, dash(bgnde), dash(endde), total, len(range_ids))
             if not complete and reason == "count_mismatch" and kind in ("list_notice", "list_protect"):
@@ -180,8 +203,11 @@ class Fetcher:
                 leaves = self._narrow(kind, base, parse_ymd(bgnde), parse_ymd(endde), by_day, code, total, summary)
                 leaves[0]["dropped_count"], leaves[0]["duplicate_count"] = dropped, duplicates
                 parts = leaves
+                errors = api_errors(self.errors)  # 쪼개면서 부른 totalCount 호출의 오류까지
             else:
                 parts = [self._part(kind, code, bgnde, endde, total, len(range_ids), complete, reason, dropped, duplicates)]
+            if errors:
+                parts[0]["api_errors"] = errors
             summary["partitions"].extend(parts)
             for p in parts:
                 if not p["complete"]:
@@ -310,6 +336,7 @@ def main() -> None:
         "page_count": {k: s["page_count"] for k, (_, s) in kinds.items()},
         "dropped_count": sum(s["dropped_count"] for _, s in kinds.values()),
         "duplicate_count": sum(s["duplicate_count"] for _, s in kinds.values()),
+        "api_errors": api_errors(fx.error_total),  # 재시도해서 넘어간 오류 합계 (구간별은 partitions[].api_errors)
     }
     for w in fx.warnings:
         log(f"경고: {w}")
