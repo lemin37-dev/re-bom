@@ -1,0 +1,226 @@
+// Re:봄 Silver 층 (Iceberg rebom_silver + S3 발행 기록) — dbdiagram.io 용 DBML
+// 2026-11-27 · 기준 develop feeddb8 · 운영 화면 탭2(테이블 흐름) 원본
+// 관리: 표·칼럼 설명과 예시의 원본. 실제 구조의 원본은 표 생성 스크립트다. 이름이 같은지 tests/test_pipeline_schema_doc.py 가 확인함
+//   공고·상태 이력 = scripts/storage/rebom_create_aws_silver_tables.py, 현재 사진·사진 버전 이력·보호소 = scripts/storage/rebom_create_silver_tables.py,
+//   발행 기록 = src/rebom/storage/silver/publish_log.py(build_publish_record) + publish_seq·published_at
+// 환경별 실제 표 이름은 src/rebom/storage/silver/environment_config.py (test 는 이름 뒤에 _real_20261111_test · _auto_b_test 등). prod 는 아직 없음
+// 버전: 머리 줄 버전 번호 없음. Iceberg 가 칼럼이 바뀔 때마다 schema-id 를 올리고, 운영 화면이 칼럼 지문으로 이 문서와 비교한다
+// 표기: Iceberg 에는 외래키가 없다. 층 사이·표 사이 연결은 links.dbml 의 Ref (같은 값으로 잇는 논리 연결)
+
+// ───────── 표 ─────────
+
+Table silver_animal_notice [note: '''공고당 정제행 1개. 변경 감지는 updTm(source_updated_at_raw)을 빼고 정제행 JSON 전체를 비교해 INSERT/UPDATE. 같은 공고가 두 목록에서 다른 원본으로 오면 자동 병합하지 않고 실행을 멈춘다(raw_content_conflict). 파싱 못 한 값은 비우고 *_parse_status 에 이유를 남긴다(값 보류, 실행은 계속). 보호자 실명·동물등록번호 값 없음'''] {
+  desertion_no string [pk, note: '''공고 고유키 (desertionNo)
+예: 448567202600123''']
+  notice_no string [note: '''공고번호 문자열
+예: 충남-당진-2026-00542''']
+  care_reg_no string [note: '''보호소 등록번호. silver_shelter 와 연결
+예: 344500202100001''']
+  special_mark string [note: '''특이사항 원문
+예: 온순. 겁 조금.''']
+  info_text string [note: '''성격·건강·특이사항을 이은 글 (글 카드 재료)
+예: 사람을 잘 따름 / 온순. 겁 조금.''']
+  rfid_yn boolean [note: '''동물등록번호가 있는지만 (값은 옮기지 않음)
+예: false''']
+  happen_place string [note: '''발견 장소
+예: 당진시 ○○면''']
+  org_name string [note: '''관할 기관
+예: 충청남도 당진시''']
+  sex_code string [note: '''M · F · Q
+예: F''']
+  neuter_code string [note: '''Y · N · U
+예: U''']
+  end_reason_text string [note: '''종료 사유 원문
+예: 입양''']
+  source_updated_at_raw string [note: '''API updTm 원문. 변경 감지 비교에서 뺀다
+예: 2026-11-26 14:02:11.0''']
+  age_raw string [note: '''나이 원문
+예: 2024(년생)''']
+  birth_year int [note: '''출생연도
+예: 2024''']
+  age_note string [note: '''나이 파싱 메모 (60일 미만 등)
+예: null''']
+  weight_raw string [note: '''체중 원문
+예: 9.00(Kg)''']
+  weight_min_kg double [note: '''체중 범위 아래 값
+예: 9.0''']
+  weight_max_kg double [note: '''체중 범위 위 값 (크기 판정 기준)
+예: 9.0''']
+  weight_kg double [note: '''대표 체중
+예: 9.0''']
+  size string [note: '''small(10kg 미만) · medium(25kg 미만) · large. 개만, 체중 없으면 null
+예: small''']
+  weight_parse_status string [note: '''값 보류 사유: missing · ambiguous · ambiguous_unit · over_100kg_unverified. 정상이면 null
+예: null''']
+  process_state_raw string [note: '''상태 원문 (processState)
+예: 보호중''']
+  status_group string [note: '''PROTECTING · CLOSED · UNKNOWN
+예: PROTECTING''']
+  quality_warning string [note: '''품질 경고 (상태 비었는데 보호중 목록에서 옴 등)
+예: null''']
+  closure_reason_code string [note: '''종료 사유: 입양 · 반환 · 자연사 · 안락사 · 기증 · 방사 · 사유 미상
+예: 입양''']
+  happen_date date [note: '''접수일
+예: 2026-11-10''']
+  notice_start_date date [note: '''공고 시작일
+예: 2026-11-11''']
+  notice_date date [note: '''공고일 (notice_start_date 와 같음)
+예: 2026-11-11''']
+  notice_end_date date [note: '''공고 종료일
+예: 2026-11-21''']
+  color_raw string [note: '''털색 원문
+예: 갈색&검정''']
+  color_normalized string [note: '''털색 정리값
+예: 갈색,검정''']
+  color_parse_status string [note: '''값 보류 사유: missing · needs_review. 정상이면 null
+예: null''']
+  color_tag "list<string>" [note: '''털색 계열 태그
+예: ["갈색계열","검정계열"]''']
+  color_pattern string [note: '''무늬 (얼룩·삼색 등)
+예: null''']
+  species_code string [note: '''축종 코드 417000 · 422400 · 429900
+예: 417000''']
+  species_name string [note: '''축종 이름
+예: 개''']
+  breed_code string [note: '''품종 코드 (앞자리 0 보존)
+예: 000114''']
+  breed_name_raw string [note: '''품종 원문
+예: 믹스견''']
+  breed_full_name_raw string [note: '''축종+품종 전체 이름
+예: [개] 믹스견''']
+  is_mix boolean [note: '''믹스 여부
+예: true''']
+  u60_at_notice boolean [note: '''공고 때 60일 미만
+예: false''']
+  sfe_soci string [note: '''성격 원문
+예: 사람을 잘 따름''']
+  sfe_health string [note: '''건강 원문
+예: 피부병 치료 중''']
+  health_chk string [note: '''건강검진 원문
+예: 이상 없음''']
+  vaccination_chk string [note: '''접종 원문
+예: 종합백신 1차''']
+}
+
+Table silver_animal_status_history [note: '''상태를 관측할 때마다 1행. processState 문자열이 바뀌면 CHANGED, 보호중 목록에서 사라진 공고는 추정 종료(is_inferred). 운영 화면 "상태 변화" 카드와 상태 쌍별 건수의 출처'''] {
+  desertion_no string [note: '''공고
+예: 448567202600123''']
+  observed_on string [note: '''관측일 (KST)
+예: 2026-11-27''']
+  event_type string [note: '''INITIAL · CHANGED 등 관측 종류
+예: CHANGED''']
+  previous_state_raw string [note: '''이전 상태 원문
+예: 보호중''']
+  process_state_raw string [note: '''현재 상태 원문
+예: 종료(입양)''']
+  status_group string [note: '''현재 상태 묶음
+예: CLOSED''']
+  closure_reason_code string [note: '''종료 사유
+예: 입양''']
+  source_updated_at_raw string [note: '''관측 때 API updTm
+예: 2026-11-27 02:10:41.0''']
+  run_id string [note: '''관측한 Bronze 실행 (bronze_run_id)
+예: 20261127T030011-9c41a2''']
+  fetched_at string [note: '''관측 시각
+예: 2026-11-27T03:00:11+09:00''']
+  confirmed_by string [note: '''확인한 목록 (list_protect · updated 등)
+예: updated''']
+  is_inferred boolean [note: '''목록에서 사라져 추정한 종료인지
+예: false''']
+}
+
+Table silver_animal_image [note: '''공고·칸별 지금 보여줄 사진(현재 사진). Bronze 현재 사진 스냅샷과 사진 manifest 로 갱신. 같은 칸의 교체 이력은 silver_animal_image_version_history. Gold 사진 작업은 sha256 으로, RDS service_notice_photo 는 (desertion_no, image_slot) 으로 이 표를 읽는다. 실제 test 표(silver_animal_image_auto_b_test)의 추가 칸은 광훈 님 확인 뒤 적는다'''] {
+  desertion_no string [note: '''공고
+예: 448567202600123''']
+  image_slot int [note: '''칸 1~8
+예: 1''']
+  source_url string [note: '''현재 사진 주소
+예: http://openapi.animal.go.kr/…/popfile1.jpg''']
+  original_s3_key string [note: '''Bronze 원본 키 (모델 입력)
+예: bronze/rescue/images/448567202600123/popfile1_v002.jpg''']
+  serving_s3_key string [note: '''화면용 WebP 키
+예: images/448567202600123/1_v002.webp''']
+  thumb_s3_key string [note: '''썸네일 키
+예: images/448567202600123/1_v002_thumb.webp''']
+  sha256 string [note: '''현재 사진 원본 sha256. Gold 사진 결과의 subject_key
+예: 3b7a…c90d''']
+}
+
+Table silver_animal_image_version_history [note: '''칸별 사진 버전 이력 (공고 × 칸 × 버전 1행). 주소가 바뀌면 새 버전 행, 이전 행은 남긴다. "사진이 바뀌었는데 벡터는 옛 사진" 같은 공고 추적의 근거'''] {
+  desertion_no string [not null, note: '''공고
+예: 448567202600123''']
+  image_slot int [not null, note: '''칸 1~8
+예: 1''']
+  version int [not null, note: '''칸 안의 버전 번호
+예: 2''']
+  replaces int [note: '''대신한 이전 버전
+예: 1''']
+  first_seen_at string [note: '''이 주소를 처음 본 시각
+예: 2026-11-25T03:20:41+09:00''']
+  source_url string [note: '''이 버전의 주소
+예: http://openapi.animal.go.kr/…/popfile1.jpg''']
+  original_s3_key string [note: '''원본 키
+예: bronze/rescue/images/448567202600123/popfile1_v002.jpg''']
+  serving_s3_key string [note: '''화면용 키
+예: images/448567202600123/1_v002.webp''']
+  thumb_s3_key string [note: '''썸네일 키
+예: images/448567202600123/1_v002_thumb.webp''']
+  sha256 string [note: '''이 버전 원본 sha256
+예: 3b7a…c90d''']
+  status string [note: '''success · pending · failed · gave_up
+예: success''']
+  failure_reason string [note: '''실패 원인 (not_found · replaced_not_found 등)
+예: null''']
+  run_id string [note: '''이 버전을 처리한 사진 실행 id
+예: 20261127T032004-71be0d''']
+}
+
+Table silver_shelter [note: '''보호소 1곳 = 1행. 공고의 care* 칸을 모아 만든다. 등록번호가 없으면 만들지 않는다. RDS service_notice 의 보호소 칸 원천'''] {
+  care_reg_no string [pk, note: '''보호소 등록번호
+예: 344500202100001''']
+  care_name string [note: '''보호소 이름
+예: 당진시동물보호소''']
+  care_address string [note: '''주소
+예: 충청남도 당진시 ○○로 00''']
+  care_tel string [note: '''보호소 전화 (보호자 연락처 아님)
+예: 000-0000-0000''']
+  org_name string [note: '''관할 기관
+예: 충청남도 당진시''']
+}
+
+Table silver_publish [note: '''Silver 완료본 READY 기록 (S3 <발행 prefix>/<publish_id>.json, 한 번 쓰면 바꾸지 않음). 공고·사진 Iceberg 스냅샷을 고정해 Gold 와 RDS 가 같은 입력을 읽게 한다. publish_seq 가 RDS 반영 순서(sync_state 와 비교)'''] {
+  publish_id string [pk, note: '''발행 id
+예: silver_20261127T030011-9c41a2''']
+  publish_seq bigint [note: '''발행 순번. 발행 뒤 예약(reserve_publish_seq)해서 채움
+예: 43''']
+  bronze_run_id string [note: '''원천 Bronze 실행
+예: 20261127T030011-9c41a2''']
+  notice_run_id string [note: '''공고 처리 실행 id
+예: 20261127T030011-9c41a2''']
+  photo_run_id string [note: '''사진 처리 실행 id
+예: 20261127T032004-71be0d''']
+  notice_table string [note: '''고정한 공고 표
+예: rebom_silver.silver_animal_notice_real_20261111_test''']
+  photo_table string [note: '''고정한 현재 사진 표
+예: rebom_silver.silver_animal_image_auto_b_test''']
+  notice_snapshot_id bigint [note: '''고정한 공고 표 Iceberg 스냅샷
+예: 5620324469304075651''']
+  photo_snapshot_id bigint [note: '''고정한 사진 표 Iceberg 스냅샷
+예: 1187340021945763302''']
+  status string [note: '''READY 만 기록 (BLOCKED 는 기록하지 않음)
+예: READY''']
+  source_fetched_at string [note: '''원천 수집 시각. 더 오래된 입력의 역반영을 막는 비교에 씀
+예: 2026-11-27T03:00:11+09:00''']
+  published_at string [note: '''발행 시각 (서버가 채움)
+예: 2026-11-27T03:52:40+00:00''']
+}
+
+// ───────── 영역 (TableGroup) ─────────
+TableGroup silver [color: #2459D6, note: 'Silver 층. 공고·상태 이력·현재 사진·사진 이력·보호소 정제 표와, 그 스냅샷을 고정한 발행 기록. 연결 키는 desertion_no(공고), sha256(사진), publish_id·publish_seq(발행)'] {
+  silver_animal_notice
+  silver_animal_status_history
+  silver_animal_image
+  silver_animal_image_version_history
+  silver_shelter
+  silver_publish
+}

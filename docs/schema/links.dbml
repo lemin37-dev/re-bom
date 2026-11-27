@@ -1,0 +1,107 @@
+// Re:봄 층 사이 연결 (Ref 만) — 혼자서는 그려지지 않음. scripts/schema/merge_pipeline_dbml.py 합본의 마지막에 붙는다
+// 2026-11-27 · 운영 화면 탭2 흐름 ERD 의 연결선 원본
+// 뜻: Iceberg·S3 에는 외래키가 없으므로 여기 Ref 는 "이 값으로 잇는다"는 처리 연결이다. RDS 안의 실제 외래키는 docs/rds_schema.dbml 에 있다
+// 방향: 왼쪽 = 만든 쪽(뒤 단계), 오른쪽 = 읽은 쪽(앞 단계). 화살표는 데이터가 오는 방향의 반대
+// 색 = 연결 키 (운영 화면과 같은 색):
+//   desertion_no #2459D6 · sha256 #D9730D · bronze_run_id #7A3FC2 · publish_id·publish_seq #0F8B8D
+//   task@N·config_hash #C2185B · gold_run_id #6B7A10 · care_reg_no #8A5A2B
+// 이름이 실제로 있는 표·칼럼인지 tests/test_pipeline_schema_doc.py 가 확인함
+
+// ───────── Bronze 안 ─────────
+// bronze_run_id · 다음 수집의 시작 기준
+Ref: rescue_state.last_run_id > bronze_rescue_manifest.run_id [color: #7A3FC2]
+// bronze_run_id · 사진은 그 수집의 보호중 목록(list_notice·list_protect)으로 받음
+Ref: bronze_image_manifest.bronze_run_id > bronze_rescue_manifest.run_id [color: #7A3FC2]
+// desertion_no · 사진 주소(popfile1~8)를 칸별 기록으로
+Ref: bronze_photo_state.desertion_no > bronze_rescue_record.desertionNo [color: #2459D6]
+// sha256 · 칸별 기록에서 마지막 성공 버전을 현재 사진 스냅샷으로
+Ref: bronze_image_current.sha256 > bronze_photo_state.sha256 [color: #D9730D]
+
+// ───────── Bronze → Silver ─────────
+// desertion_no · 정제 (updTm 빼고 정제행 JSON 비교로 INSERT/UPDATE)
+Ref: silver_animal_notice.desertion_no > bronze_rescue_record.desertionNo [color: #2459D6]
+// care_reg_no · 공고의 care* 칸을 보호소 표로
+Ref: silver_shelter.care_reg_no > bronze_rescue_record.careRegNo [color: #8A5A2B]
+// bronze_run_id · 상태를 관측한 수집 실행
+Ref: silver_animal_status_history.run_id > bronze_rescue_manifest.run_id [color: #7A3FC2]
+// sha256 · 현재 사진 스냅샷으로 칸별 현재 사진 갱신
+Ref: silver_animal_image.sha256 > bronze_image_current.sha256 [color: #D9730D]
+// sha256 · 사진 manifest 의 버전별 저장 결과를 이력으로
+Ref: silver_animal_image_version_history.sha256 > bronze_photo_state.sha256 [color: #D9730D]
+// bronze_run_id · 발행이 고정한 원천 수집
+Ref: silver_publish.bronze_run_id > bronze_rescue_manifest.run_id [color: #7A3FC2]
+// bronze_run_id · 발행이 고정한 사진 실행
+Ref: silver_publish.photo_run_id > bronze_image_manifest.run_id [color: #7A3FC2]
+
+// ───────── Silver 안 ─────────
+// desertion_no · 공고별 상태 관측
+Ref: silver_animal_status_history.desertion_no > silver_animal_notice.desertion_no [color: #2459D6]
+// desertion_no · 공고별 사진 칸
+Ref: silver_animal_image.desertion_no > silver_animal_notice.desertion_no [color: #2459D6]
+// desertion_no · 칸별 사진 버전
+Ref: silver_animal_image_version_history.(desertion_no, image_slot) > silver_animal_image.(desertion_no, image_slot) [color: #2459D6]
+// care_reg_no · 공고의 보호소
+Ref: silver_animal_notice.care_reg_no > silver_shelter.care_reg_no [color: #8A5A2B]
+
+// ───────── Silver → Gold ─────────
+// publish_id · Gold 실행이 읽은 발행본 (고정 스냅샷)
+Ref: gold_run_input.publish_id > silver_publish.publish_id [color: #0F8B8D]
+// sha256 · 사진 태그 (photo_trait·photo_breed)
+Ref: gold_animal_tag.subject_key > silver_animal_image.sha256 [color: #D9730D]
+// desertion_no · 글 태그 (text_personality·text_health, subject_type = animal)
+Ref: gold_animal_tag.subject_key > silver_animal_notice.desertion_no [color: #2459D6]
+// sha256 · 사진 벡터 (같은 사진은 한 번만)
+Ref: gold_image_embedding.subject_key > silver_animal_image.sha256 [color: #D9730D]
+// desertion_no · 글 카드 벡터 (카드 = 공고 정제행으로 만든 가린 글)
+Ref: gold_text_embedding.subject_key > silver_animal_notice.desertion_no [color: #2459D6]
+// sha256 · 처리 기록 (사진 작업)
+Ref: gold_inference_log.subject_key > silver_animal_image.sha256 [color: #D9730D]
+
+// ───────── Gold 안 ─────────
+// task@N · 실행 설정
+Ref: gold_run_input.version > gold_version_registry.version [color: #C2185B]
+Ref: gold_animal_tag.version > gold_version_registry.version [color: #C2185B]
+Ref: gold_image_embedding.version > gold_version_registry.version [color: #C2185B]
+Ref: gold_text_embedding.version > gold_version_registry.version [color: #C2185B]
+Ref: gold_inference_log.version > gold_version_registry.version [color: #C2185B]
+// gold_run_id · 실행별 처리 기록과 모델 호출
+Ref: gold_inference_log.gold_run_id > gold_run_input.gold_run_id [color: #6B7A10]
+Ref: gold_model_request_log.gold_run_id > gold_run_input.gold_run_id [color: #6B7A10]
+Ref: gold_animal_tag.gold_run_id > gold_run_input.gold_run_id [color: #6B7A10]
+Ref: gold_image_embedding.gold_run_id > gold_run_input.gold_run_id [color: #6B7A10]
+Ref: gold_text_embedding.gold_run_id > gold_run_input.gold_run_id [color: #6B7A10]
+
+// ───────── Silver·Gold → RDS (동기화 4경로) ─────────
+// desertion_no · notice_status 경로
+Ref: service_notice.desertion_no > silver_animal_notice.desertion_no [color: #2459D6]
+// care_reg_no · 보호소 칸
+Ref: service_notice.care_reg_no > silver_shelter.care_reg_no [color: #8A5A2B]
+// publish_seq · 반영한 발행 순번
+Ref: service_notice.silver_publish_seq > silver_publish.publish_seq [color: #0F8B8D]
+// desertion_no·칸 · photo_vector 경로 (현재 사진 칸)
+Ref: service_notice_photo.(desertion_no, image_slot) > silver_animal_image.(desertion_no, image_slot) [color: #2459D6]
+Ref: service_notice_photo.silver_publish_seq > silver_publish.publish_seq [color: #0F8B8D]
+// gold_run_id · 사진 벡터를 칸에 펼침 (sha256 일치 + 활성 버전)
+Ref: image_embedding.gold_run_id > gold_image_embedding.gold_run_id [color: #6B7A10]
+Ref: image_embedding.version > gold_version_registry.version [color: #C2185B]
+// gold_run_id · tag 경로 (활성 버전 + 현재 입력만)
+Ref: service_notice_tag.gold_run_id > gold_animal_tag.gold_run_id [color: #6B7A10]
+Ref: service_notice_tag.version > gold_version_registry.version [color: #C2185B]
+// gold_run_id · text_vector 경로 (현재 카드 해시와 맞는 1행)
+Ref: text_embedding.gold_run_id > gold_text_embedding.gold_run_id [color: #6B7A10]
+Ref: text_embedding.version > gold_version_registry.version [color: #C2185B]
+// task@N·config_hash · 서비스 활성 버전 (전환은 사람)
+Ref: active_version.version > gold_version_registry.version [color: #C2185B]
+Ref: active_version.config_hash > gold_version_registry.config_hash [color: #C2185B]
+// publish_seq · 경로별 마지막 반영 발행
+Ref: sync_state.last_publish_seq > silver_publish.publish_seq [color: #0F8B8D]
+Ref: sync_state.last_silver_run_id > silver_publish.bronze_run_id [color: #7A3FC2]
+
+// ───────── 운영 기록 ─────────
+Ref: ops_run_summary.bronze_run_id > bronze_rescue_manifest.run_id [color: #7A3FC2]
+Ref: ops_run_summary.publish_id > silver_publish.publish_id [color: #0F8B8D]
+Ref: ops_run_summary.gold_run_id > gold_run_input.gold_run_id [color: #6B7A10]
+Ref: ops_failure.bronze_run_id > bronze_rescue_manifest.run_id [color: #7A3FC2]
+// desertion_no · 실패 건 → 공고 추적 (subject_type = animal)
+Ref: ops_failure.subject_key > silver_animal_notice.desertion_no [color: #2459D6]
+Ref: ops_schema_snapshot.bronze_run_id > bronze_rescue_manifest.run_id [color: #7A3FC2]
