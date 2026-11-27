@@ -517,10 +517,10 @@ Canary 점검 결과는 전용 테이블에 저장하고 공용 요청 로그의
 | 테이블 (test 는 `_test`) | 글 태그에서 쓰는 방식 |
 |---|---|
 | `gold_animal_tag` | `source = text`(태그를 만든 입력 칸. 사진 태그의 `photo` 와 같은 뜻. 처음 `jev` 였고 2026-11-24 PR 리뷰로 `text` 로 정함, 서비스 DB 로 옮길 때 값 대응 확인 필요). 성격은 태그마다 1행, 건강정보는 1행. `similarity` = 예 확률(성격)·1등 확률(건강) × 100, `source_hash` = `input_hash`, `tagger_version` = `typesafe/jev-1.14@<버전>`, `detail` = 확률 전체(`probs`)·`review`·`request_id`·`input_text`(Jev 에 보낸 가린 글). 교체 범위는 (`source`=text, animal, 공고번호, 작업, 버전, `source_hash`)입니다. 글이 바뀌거나 버전을 올리면 새 행이 더해지고 **이전 글·이전 버전 행은 남습니다**(13.3 이전 버전 보존과 같은 규칙, 2026-11-23). 같은 글을 다시 쓸 때(실패 재시도·끊긴 실행)만 그 글의 행을 교체해 중복을 막습니다. 사진 태그 행은 건드리지 않습니다. 글이 비게 되어도(`NO_TEXT`) 이전 행은 지우지 않습니다 |
-| `gold_inference_log` | 공고 × 작업 × 버전 × `input_hash` 1행 upsert. `status` = `OK`(태그 있음)·`NO_RESULT`(성격 태그 없음)·`FAILED`·`NO_TEXT` |
+| `gold_inference_log` | 공고 × 작업 × 버전 × `input_hash` 1행 upsert. `status` = `OK`(태그 있음)·`NO_RESULT`(성격 태그 없음)·`FAILED`·`NO_TEXT`. 공용 로그라 읽을 때 `task` 를 `text_personality`·`text_health` 로 거릅니다(2026-11-24) |
 | `gold_model_request_log` | Jev 요청 1번 = 1행, `task = text_jev`, `prompt_version = text-personality-v1+text-health-v1`. `subject_key` = 그 글을 쓰는 첫 공고, `raw_answer` = 응답 `answers` 전체(원 확률), `cost_usd` = `usage.cost`. 같은 글을 쓰는 다른 공고는 태그 `detail.request_id` 로 잇습니다 |
 
-- `version` 칸(13.6 버전 레지스트리): 글 태그는 아직 등록 버전(`task@N`)을 쓰지 않아 태그 표·요청 기록 표의 `version` 칸을 비워 둡니다. 13.6의 "기존 결과의 `version` 은 null 로 두고 기존 질문지 키로 계속 읽는다"와 같은 방식이며, 처리 기록의 키 `version` 에는 지금처럼 질문지 버전(`text-personality-v1`, `text-health-v1`)이 들어갑니다. 등록 버전 연결은 15.7 의 후속 작업입니다(2026-11-24).
+- `version` 칸(13.6 버전 레지스트리): 글 태그는 등록 버전 `text_personality@1`·`text_health@1` 을 씁니다(2026-11-26). 처리 기록의 키 `version`, 태그의 `version` 칸, 태그 교체 범위가 이 이름이고, 질문지 버전(`text-personality-v1`, `text-health-v1`)은 태그의 `prompt_version`·`tagger_version` 에 그대로 남습니다. 등록 설정은 `{model_id, prompt_version}` 이며 (`scripts/serve/legacy_version_config.py`, `run_text_tags.runtime_config`), Gold 에 쓰기 전에 지금 코드의 설정이 등록값과 같은지 확인합니다(다르거나 등록 안 됐으면 멈춤). `_test` 의 그 전 행은 2026-11-25 `scripts/serve/fill_legacy_text_tag_versions.py` 로 같은 이름이 채워졌습니다. 요청 기록(`text_jev`)의 `version` 칸은 비워 둡니다(두 작업을 한 번에 부르는 요청이라 등록 작업이 아님). 후보 버전은 `select`·`run` 에 `--version text_personality@2` 처럼 줍니다(작업마다 한 번, 안 준 작업은 `@1`, 사진 태깅 `--version` 과 같은 방식). 레지스트리에 등록돼 있어야 하고, `select` 가 대상 목록에 적은 버전(`versions`)과 `run` 의 `--version` 이 다르면 멈춥니다.
 - 실행 중간 파일(대상 목록): `gold/_work_test/text_tags/<run_id>/targets.json`. 목록에는 정리한 글(전화번호 가림)이 들어 있습니다.
 - 서비스 DB 에 넣을 활성 태그(현재 태그): 아래를 모두 만족하는 행만 고릅니다. 이전 글·이전 버전 행이 남아 있으므로 이 조건이 꼭 필요합니다.
   1. 공고 `status_group` 이 보호중
@@ -535,15 +535,23 @@ python -m rebom.tagging.run_text_tags select --profile <프로필> --limit 50 --
 python -m rebom.tagging.run_text_tags select --profile <프로필> --limit 50 --targets data/tag_text/targets.json
 python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/tag_text/targets.json --local-out data/tag_text/out
 python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/tag_text/targets.json      (Gold test 에 쓰기)
+python -m rebom.tagging.run_text_tags select --profile <프로필> --run-id <id> --silver-as-of 2026-11-23 --species 417000,422400,429900
+python -m rebom.tagging.run_text_tags run --profile <프로필> --run-id <id> --batch-size 500
+python -m rebom.tagging.run_text_tags select --profile <프로필> --run-id <id> --version text_personality@2   (등록한 후보 버전)
 ```
 
 - `--local-out` 이 있으면 Gold 대신 로컬 JSONL 에 씁니다. 빼면 Gold test 표에 씁니다(표는 13.3 대로 이미 있음).
-- 보호중 전체는 요청 약 1.25만 번, 약 $2 입니다(추정). 동시 8개면 약 10분. 전체 적재는 `--batch-size 2000` 이상으로 돌려 저장 횟수(작은 파일)를 줄입니다(기본 200 이면 60번 넘게 나뉨).
+- `--silver-as-of` (select): 그 날짜 끝(KST)까지 커밋된 마지막 Silver 스냅샷으로 대상을 고릅니다. 비우면 현재 Silver. 사진 태깅의 같은 옵션과 같은 규칙이고, 고른 스냅샷 id·시각은 대상 목록의 `silver_snapshots` 에 남습니다(2026-11-24).
+- `--run-id` 를 주면 대상 목록을 `gold/_work_test/text_tags/<run_id>/targets.json` 에 두므로 select·run 을 다른 곳에서 돌려도 됩니다.
+- 사진 태깅·임베딩이 같은 공용 로그에 동시에 쓰면 커밋 충돌이 날 수 있어, Gold 에 쓰기 직전에 표 3개를 다시 읽습니다(`refresh`). 충돌하면 pyiceberg 가 다시 시도합니다.
+- 보호중 전체는 요청 약 1.25만 번, 약 $2 입니다(추정). 동시 8개면 약 10분. 전체 적재는 `--batch-size` 를 키워 저장 횟수(작은 파일)를 줄입니다(기본 200 이면 60번 넘게 나뉨). 다만 저장 전에 실행이 끊기면 그 묶음은 다시 부르므로, 다른 작업이 같은 표에 쓰는 중이면 500 정도로 둡니다(11-24 MVP 적재).
 - 2026-11-23 시험 적재: Silver test 보호중 개·고양이 200건 → 요청 159번(같은 글 41건), 태그 384행, 처리 기록 1,538행(NO_TEXT 569 × 2 포함), 실패 0, 비용 $0.026.
+- 2026-11-24 MVP v0.1 적재 (Gold test, run `mvp-v01-text`): Silver test 공고 스냅샷 `9071221286505043399`(11/23 10:10 KST), 보호중 전체 축종(개·고양이·기타). 대상 공고 14,297건(서로 다른 글 9,909개)이 두 작업 모두 끝났고, 키 중복 0. 건강 정보 있음 3,198 · 없음 11,099, 성격 태그 1개 이상 7,235건(태그 10,102행). 요청 14,909번, $2.45 (목록을 다시 고르기 전에 처리한 2,000번과 커밋 충돌로 다시 부른 3,000번 포함).
 
 ### 15.7 남은 일
 
-- Gold 버전 레지스트리 연결: `text_personality@1`·`text_health@1` 을 13.6 대로 등록하고, 태그·처리 기록·요청 기록에 등록 버전을 남기기(사진 태깅과 같은 방식).
+- 질문지를 바꿀 때: 새 버전(`task@2`)을 레지스트리에 먼저 등록하고 `--version` 으로 후보를 만든 뒤, 채택하면 `run_text_tags.REGISTERED` 기본값을 바꾼다(13.6, 사진 태깅과 같은 순서).
+- 요청 기록(`text_jev`)의 `version`: 지금은 비워 둡니다. 채우려면 요청 작업 `text_jev@1` 을 레지스트리에 따로 등록하는 안을 검토합니다(설정 `{model_id, task_versions: {text_personality, text_health}}`, 글 임베딩의 `tag_versions` 와 같은 방식). 두 버전을 이어 붙이면(`text_personality@1+text_health@1`) 작업별 조회에 `LIKE` 가 필요하고, 요청 행을 작업별 2행으로 나누면 비용이 두 번 잡혀 13.3 과 어긋납니다. 레지스트리 설계 확인 뒤 진행합니다.
 - DAG(`dags/text_tags.py`)와 실행 이미지: 사진 태깅처럼 Silver apply 전환 뒤 연결. 이미지·ECR·네임스페이스·Secret 은 사람이 만듭니다.
 - 같은 글 재사용을 실행 사이로 넓히기(지금은 한 실행 안에서만).
 - 기준 확인: sfe 의 "양호"(칸 이름 없이 붙어 정보 없음으로 판정), "밝은 성격"(활발 여부).

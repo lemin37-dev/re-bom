@@ -22,12 +22,12 @@
 
 | 테이블 | Jev 저장 단위와 소비에 필요한 필드 |
 | --- | --- |
-| `gold_animal_tag` | 공고의 태그 하나. `source=text`(공고 글. 지금 적재 코드는 `jev` 로 쓰며, 바뀔 때까지 둘 다 읽음), `subject_type=animal`, `subject_key=공고번호`. `source` 는 출처(photo 사진 · text 공고 글 · rule 공고 칸)만 적고 모델 이름은 `model`·버전으로 구분합니다(11/24). `task`는 `text_personality` 또는 `text_health`입니다. `tag_code`, `source_hash`, 태그 버전, `searchable`, `displayable`을 조회합니다. 별도 `gold_text_tag`는 현재 연결에 필요하지 않습니다. |
+| `gold_animal_tag` | 공고의 태그 하나. `source=text`(공고 글. 처음 값 `jev`에서 11/24 `text`로 정함, 데이터 계약 15.5), `subject_type=animal`, `subject_key=공고번호`. `source` 는 출처(photo 사진 · text 공고 글 · rule 공고 칸)만 적고 모델 이름은 `model`·버전으로 구분합니다(11/24). `task`는 `text_personality` 또는 `text_health`입니다. `tag_code`, `source_hash`, 태그 버전, `searchable`, `displayable`을 조회합니다. 별도 `gold_text_tag`는 현재 연결에 필요하지 않습니다. |
 | `gold_inference_log` | 공고·작업·버전·입력별 처리 상태. `OK`, `NO_RESULT`(해당 결과 없음), `NO_TEXT`(호출할 글 없음), `FAILED`(호출·판정 실패)를 구분합니다. |
 | `gold_model_request_log` | Jev 모델 호출당 한 행. 응답 원문과 비용·토큰을 보관합니다. 같은 글을 여러 공고에서 재사용한 경우 태그의 `detail.request_id`로 실제 호출과 연결합니다. |
 
 - Jev는 `info_text`를 사용하고 값이 비면 `special_mark`를 사용합니다. 전처리한 글의 해시가 처리 로그의 `input_hash`와 태그의 `source_hash`입니다. Jev 작업 브랜치의 writer는 공고·작업·질문지 버전과 `source_hash`를 함께 비교해 교체하므로 이전 글 해시는 해당 교체 범위에서 제외됩니다. 공용 태그 스키마의 물리 식별자는 별도이며, 이 분리는 Jev 교체 조건에서 보장합니다.
-- 최신 글의 해시와 작업별 선택 버전이 모두 일치하는 행을 사용합니다. 시험 적재의 작업 버전은 `text-personality-v1`, `text-health-v1`입니다. 이전 글에 성공한 태그가 남아 있어도 현재 글 소비 대상은 아닙니다.
+- 최신 글의 해시와 작업별 선택 버전이 모두 일치하는 행을 사용합니다. 작업 버전은 등록 버전 `text_personality@1`, `text_health@1`이며 질문지 버전(`text-personality-v1`, `text-health-v1`)은 `prompt_version`에 남습니다(데이터 계약 15.5). 이전 글에 성공한 태그가 남아 있어도 현재 글 소비 대상은 아닙니다.
 - 성격 라벨은 확률 0.75 이상인 경우만 태그가 됩니다. 건강 라벨 `health.info` / `health.none`은 공고 글에 건강정보가 있는지를 뜻합니다. `NO_TEXT`는 건강 태그도 없는 별도 상태이며 화면에서의 기본 표시는 미정입니다.
 - 검색은 보호중과 `searchable=true`를 함께 확인하고, 상세는 공고 노출 정책과 `displayable=true`를 적용합니다. 상세에는 태그 이름을 전달합니다. `similarity`는 확률×100이고 `detail.probs`는 질문별 확률입니다. `detail.input_text`는 마스킹한 전체 입력이며, 구절 단위 근거는 제공되지 않습니다.
 - A2 후보 구현은 사진 태깅과 같은 기준으로 현재 사진 중 원본 키와 SHA-256이 있는 가장 작은 슬롯을 대표 사진으로 고릅니다. `photo_trait`의 외형 태그와 현재 글의 Jev 성격·건강 라벨을 가져옵니다. 카드에 들어가는 태그는 `searchable=true`로 제한하며 확률·검토 값은 포함하지 않습니다. 필요한 태그가 아직 없으면 공고 정보로 카드를 만들고, 태그가 준비되어 본문이 바뀌면 다음 실행에서 새 벡터가 생깁니다.
