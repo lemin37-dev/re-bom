@@ -559,12 +559,13 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 | 표·칼럼 설명, 예시, 값 목록(태그 등) | `docs/rds_schema.dbml` | 파일을 고치고 dbdiagram.io 에 붙여 넣어 그림 확인 |
 | 실제 DB 구조 | `db/migrations/NNN_*.sql` | 이미 있는 파일은 고치지 않고 다음 번호 파일 추가. 적용은 사람이 |
 | 둘이 같은지 | `tests/test_rds_schema_doc.py` | 표·칼럼 이름이 다르면 pytest 실패 |
+| 이미 있는 마이그레이션을 고쳤는지 | `.github/scripts/migration_guard.py` (PR CI) | develop 대비 수정·삭제·이름 변경이면 PR 실패. 새 번호 파일로 추가 |
 | RDS 에 어디까지 적용했는지 | RDS `schema_migrations` 표 (005) | `python -m rebom.common.migrate status` 로 보고, `apply` 로 남은 파일을 적용 |
 | 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.2 = 마이그레이션 001~008.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
 
 - 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~007**(태그 `schema-v0.1`), **v0.2 = 001~008**(운영 기록 표 추가, 머지 뒤 태그 `schema-v0.2`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
 - 적용 도구는 파일 하나를 트랜잭션 하나로 묶어 실행과 기록을 함께 커밋합니다. 그래서 마이그레이션 파일 안에는 `BEGIN`/`COMMIT` 을 쓰지 않습니다. 트랜잭션 밖에서만 되는 명령(`CREATE INDEX CONCURRENTLY` 등)은 파일 첫 줄에 `-- migrate: no-transaction` 을 적습니다.
-- 적용한 파일의 내용(sha256, LF 기준)이 레포와 달라지면 `apply` 가 멈춥니다. 고치지 말고 새 번호 파일을 추가합니다.
+- 적용한 파일의 내용(sha256, LF 기준)이 레포와 달라지면 `apply` 가 멈춥니다. 고치지 말고 새 번호 파일을 추가합니다. 그 전에 PR 단계에서도 `schema-version.yml` 이 `.github/scripts/migration_guard.py` 로 develop 과 비교해, 이미 있는 마이그레이션의 수정·삭제·이름 변경, 마지막 번호 이하의 새 번호·번호 중복·이름 형식(`NNN_소문자_설명.sql`) 위반을 실패로 막습니다.
 - 001~004 는 기록 표가 생기기 전에 손으로 적용했으므로 `baseline 4` 로 기록만 넣습니다(2026-11-25).
 
 - dbdiagram.io 의 SQL 내보내기는 쓰지 않습니다. 값 목록을 PostgreSQL ENUM 타입으로 만들고(값 삭제 불가), CHECK·부분 인덱스·`IF NOT EXISTS` 가 빠지며, `breed.<품종>` 같은 열린 값을 닫힌 목록으로 만듭니다.
