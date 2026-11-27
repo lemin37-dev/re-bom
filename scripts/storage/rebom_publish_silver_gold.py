@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
@@ -15,6 +16,12 @@ from rebom.storage.silver.publish_log import (
     find_completed_notice_snapshot_id,
     verify_photo_bronze_run,
 )
+
+
+def write_publish_output(path: Path | None, record: dict) -> None:
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"publish_id": record["publish_id"]}), encoding="utf-8")
 
 
 def main():
@@ -38,8 +45,11 @@ def main():
     parser.add_argument("--publish-id")
     parser.add_argument("--publish-prefix", default="silver/rebom/publish")
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--publish-output", type=Path, help="Write the confirmed publish ID as JSON")
 
     args = parser.parse_args()
+    if args.publish_output is not None and not args.publish:
+        parser.error("--publish-output requires --publish")
 
     session = boto3.Session(
         profile_name=None if args.pod_auth else args.profile,
@@ -145,6 +155,7 @@ def main():
                 existing, ensure_ascii=False, indent=2
             ))
             print("PUBLISH_RECORD: REUSED")
+            write_publish_output(args.publish_output, existing)
             return
 
     catalog = (
@@ -410,6 +421,7 @@ def main():
         print("PUBLISH_SEQ:", record["publish_seq"])
         print("PUBLISH_RECORD:", saved)
         print("PUBLISH_ID:", args.publish_id)
+        write_publish_output(args.publish_output, record)
     else:
         print("DRY_RUN: NO_PUBLISH_RECORD_WRITTEN")
 

@@ -76,6 +76,8 @@ EMBED_IMAGE = "559987919299.dkr.ecr.ap-northeast-2.amazonaws.com/rebom/embed:dev
 DATA_BUCKET = "rebom-data-559987919299"
 # 수집 task 가 XCom 으로 넘긴 Bronze run_id. KubernetesPodOperator 의 arguments 는 템플릿이라 실행할 때 값으로 바뀐다.
 BRONZE_RUN_ID = "{{ ti.xcom_pull(task_ids='rescue_incremental')['run_id'] }}"
+SILVER_TEST_PUBLISH_PREFIX = "bench_tmp/b-storage-test/publish"
+SILVER_PUBLISH_ID = "{{ ti.xcom_pull(task_ids='silver_gold_publish')['publish_id'] }}"
 # silver_gold_publish 가 쓰는 발행 id (rebom_publish_silver_gold.py 기본값 silver_<bronze_run_id>)
 PUBLISH_ID = "silver_{{ ti.xcom_pull(task_ids='rescue_incremental')['run_id'] }}"
 RDS_SYNC_GOLD_ENV = "test"  # 동기화가 읽는 Gold 환경 (11/25 결정, docs/data_contract.md 16절)
@@ -273,10 +275,12 @@ with DAG(
             "--photo-prefix",
             "bench_tmp/b-storage-test/journals/photo_auto_runs",
             "--publish-prefix",
-            "bench_tmp/b-storage-test/publish",
+            SILVER_TEST_PUBLISH_PREFIX,
             "--pod-auth",
             "--publish",
+            "--publish-output", "/airflow/xcom/return.json",
         ],
+        do_xcom_push=True,
         env_vars={
             "REBOM_S3_BUCKET": DATA_BUCKET,
             "AWS_DEFAULT_REGION": "ap-northeast-2",
@@ -367,12 +371,26 @@ with DAG(
     sync_tag = sync_task("sync_tag", "sync-tag", "tag", ["--publish-id", PUBLISH_ID])
     sync_text_vector = sync_task("sync_text_vector", "sync-text-vector", "text_vector", ["--publish-id", PUBLISH_ID])
 
+    embed_text = embed_task(
+        task_id="embed_text",
+        name="embed-text",
+        arguments=[
+            "embed-text", "--silver-env", "test", "--gold-env", "test",
+            "--version", "text_embedding@3",
+            "--publish-id", SILVER_PUBLISH_ID,
+            "--publish-bucket", DATA_BUCKET,
+            "--publish-prefix", SILVER_TEST_PUBLISH_PREFIX,
+            "--limit", "2",
+        ],
+    )
+
     rescue_incremental >> [generate_ingest_events, rescue_photos]
     rescue_incremental >> silver_shelter_apply
     rescue_photos >> photos_done
     generate_ingest_events >> silver_notice_apply
     photos_done >> silver_photo_apply_enabled >> silver_photo_apply
     [silver_notice_apply, silver_photo_apply] >> silver_gold_publish
+    silver_gold_publish >> embed_text
     photos_done >> check_embedding_drift >> embed_photos
     [rds_sync_enabled, silver_notice_apply] >> sync_notice_status
     [silver_gold_publish, embed_photos, sync_notice_status] >> sync_photo_vector >> [sync_tag, sync_text_vector]
