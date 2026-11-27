@@ -1,0 +1,219 @@
+// Re:봄 Bronze 층 (S3 원본 파일) — dbdiagram.io 용 DBML
+// 2026-11-27 · 기준 develop feeddb8 · 운영 화면 탭2(테이블 흐름) 원본
+// 쓰는 법: 이 파일만 붙여 넣어도 되고, 층 사이 연결까지 보려면 scripts/schema/merge_pipeline_dbml.py 로 만든 합본을 붙여 넣는다.
+// 관리: 표·칼럼 설명과 예시의 원본. 실제 구조의 원본은 수집 코드다. 이름이 같은지 tests/test_pipeline_schema_doc.py 가 확인함
+//   manifest = src/rebom/ingestion/rescue_incremental.py 의 manifest 키, 수집 레코드 = Silver 정제가 읽는 API 필드,
+//   사진 현재 스냅샷 = src/rebom/storage/silver/photo_snapshot.py 가 검사하는 칸
+// 버전: 머리 줄 버전 번호 없음. S3 파일이라 스키마 번호가 없고, 운영 화면은 칼럼 지문(이름·타입 sha256)으로 문서와 실제를 비교한다
+// 표기: S3 JSON 파일도 표 하나로 적는다. 칸 하나 = JSON 키 하나. 외래키는 없고 층 사이 연결은 links.dbml 에 둔다
+// 개인정보: 보호자 실명(careOwnerNm)은 저장 전에 지운다(DROP_FIELDS). 이 문서에도 칸으로 적지 않는다
+
+// ───────── 표 ─────────
+
+Table rescue_state [note: '''증분 수집의 기준 상태. 파일 하나(state/rescue_state.json)를 실행마다 덮어씀. 다음 실행은 last_enupd 를 하루 겹쳐 수정일 조회를 시작한다. 업로드가 모두 끝난 실행만 상태를 갱신하므로 last_run_id 가 "최종 수집일"의 기준. Silver 가 이어받는 다른 키(보호중·종료 목록)도 같은 파일에 있지만 Silver 단계 소유라 여기 적지 않음'''] {
+  last_enupd string [note: '''마지막으로 성공한 실행의 수정일 조회 끝 날짜 (YYYYMMDD, KST)
+예: 20261127''']
+  last_run_id string [note: '''마지막으로 성공한 Bronze 실행 id. 운영 화면 "오늘"(최종 수집일) 기준
+예: 20261127T030011-9c41a2''']
+}
+
+Table bronze_rescue_manifest [note: '''Bronze 실행 1번의 결과 (bronze/rescue/raw/dt=<실행일>/run_id=<id>/manifest.json). 파일을 모두 올린 뒤 마지막에 한 번 씀(덮어쓰지 않음). 구간마다 total 과 받은 건수를 남겨 수집 실패 원인의 출처가 된다'''] {
+  source string [note: '''원천 이름
+예: data.go.kr 15098931''']
+  endpoint string [note: '''호출한 API 주소 (인증키 없음)
+예: https://apis.data.go.kr/1543061/abandonmentPublicService_v2/abandonmentPublic_v2''']
+  run_id string [pk, note: '''Bronze 실행 id = 시작 시각(KST) + 해시 6자. Silver·Gold·RDS 로 이어지는 bronze_run_id
+예: 20261127T030011-9c41a2''']
+  fetched_at string [note: '''수집 시작 시각 (ISO, KST)
+예: 2026-11-27T03:00:11+09:00''']
+  code_version string [note: '''수집 코드 버전 (CODE_VERSION)
+예: 2026-11-03''']
+  mode string [note: '''baseline(상태 없는 첫 실행) · incremental
+예: incremental''']
+  status string [note: '''ok · aborted. aborted 면 상태를 갱신하지 않고 종료 코드 2
+예: ok''']
+  updated_range "string[2]" [note: '''수정일 조회 범위 [시작, 끝]
+예: ["20261126","20261127"]''']
+  calls int [note: '''이번 실행의 API 호출 수 (일 한도 10,000)
+예: 412''']
+  warnings "string[]" [note: '''경고 문장 목록. 중단 사유도 여기에
+예: ["중단: 보호중 목록이 0건. 상태를 갱신하지 않음"]''']
+  files json [note: '''종류별 저장 파일: kind(updated · list_notice · list_protect)·file·건수·checksum
+예: [{"kind":"updated","file":"updated.jsonl.gz","record_count":1288,"checksum":"sha256:…"}]''']
+  request_params json [note: '''종류별 요청 파라미터 (인증키는 params 에 없음)
+예: {"updated":{"bgupd":"20261126","enupd":"20261127"}}''']
+  partitions json [note: '''구간별 결과: kind·기간·result_code·total_count·received_count·complete·reason. 수집 실패 드릴다운의 증거
+예: [{"kind":"list_protect","start_date":"20261120","end_date":"20261127","total_count":7412,"received_count":7409,"complete":false,"reason":"count_mismatch"}]''']
+  page_count json [note: '''종류별 페이지 수
+예: {"updated":13,"list_notice":3,"list_protect":75}''']
+  dropped_count int [note: '''형식이 틀려 버린 항목 수
+예: 3''']
+  duplicate_count int [note: '''같은 desertionNo 가 겹친 항목 수 (목록 사이 중복은 정상)
+예: 41''']
+  dropped_fields "string[]" [note: '''저장 전에 지운 필드 이름
+예: ["careOwnerNm"]''']
+}
+
+Table bronze_rescue_record [note: '''API 응답 항목 1개 = 1줄, 받은 그대로 (bronze/rescue/raw/dt=/run_id=/<kind>.jsonl.gz). 빈 필드는 키 자체가 없다(dict.get 으로 다룸). 같은 공고가 updated·list_notice·list_protect 에 함께 올 수 있고, 내용이 다르면 Silver 가 raw_content_conflict 로 멈춘다. 아래 칸은 Silver 정제가 읽는 필드만 적음(전체 필드는 docs/rescue_fields.md)'''] {
+  desertionNo string [note: '''공고 고유키. 모든 층의 desertion_no
+예: 448567202600123''']
+  noticeNo string [note: '''공고번호 문자열
+예: 충남-당진-2026-00542''']
+  processState string [note: '''상태 원문. Silver 상태 변화는 이 문자열 비교
+예: 보호중''']
+  updTm string [note: '''API 수정 시각. 변경 감지 비교에서는 뺀다
+예: 2026-11-26 14:02:11.0''']
+  happenDt string [note: '''접수일 (YYYYMMDD)
+예: 20261110''']
+  happenPlace string [note: '''발견 장소
+예: 당진시 ○○면''']
+  noticeSdt string [note: '''공고 시작일
+예: 20261111''']
+  noticeEdt string [note: '''공고 종료일
+예: 20261121''']
+  upKindCd string [note: '''축종 코드
+예: 417000''']
+  upKindNm string [note: '''축종 이름
+예: 개''']
+  kindCd string [note: '''품종 코드 (앞자리 0 보존)
+예: 000114''']
+  kindNm string [note: '''품종 이름
+예: 믹스견''']
+  kindFullNm string [note: '''축종+품종 전체 이름
+예: [개] 믹스견''']
+  colorCd string [note: '''털색 자유 텍스트 (Silver 가 계열로 나눔)
+예: 갈색&검정''']
+  age string [note: '''나이 자유 텍스트 (Silver 가 출생연도로 파싱)
+예: 2024(년생)''']
+  weight string [note: '''체중 자유 텍스트 (Silver 가 kg 로 파싱)
+예: 9.00(Kg)''']
+  sexCd string [note: '''성별 M · F · Q
+예: F''']
+  neuterYn string [note: '''중성화 Y · N · U
+예: U''']
+  rfidCd string [note: '''동물등록번호. Silver 는 있는지(rfid_yn)만 남기고 값은 옮기지 않음
+예: (값 예시 생략)''']
+  specialMark string [note: '''특이사항 원문 (평균 21자)
+예: 온순. 겁 조금.''']
+  sfeSoci string [note: '''성격 원문 (일부 공고만)
+예: 사람을 잘 따름''']
+  sfeHealth string [note: '''건강 원문 (일부 공고만)
+예: 피부병 치료 중''']
+  healthChk string [note: '''건강검진 원문 (89~96% 결측)
+예: 이상 없음''']
+  vaccinationChk string [note: '''접종 원문 (89~96% 결측)
+예: 종합백신 1차''']
+  endReason string [note: '''종료 사유 원문
+예: 입양''']
+  orgNm string [note: '''관할 기관
+예: 충청남도 당진시''']
+  careRegNo string [note: '''보호소 등록번호. Silver silver_shelter 의 키
+예: 344500202100001''']
+  careNm string [note: '''보호소 이름
+예: 당진시동물보호소''']
+  careAddr string [note: '''보호소 주소
+예: 충청남도 당진시 ○○로 00''']
+  careTel string [note: '''보호소 전화 (보호자 연락처 아님)
+예: 000-0000-0000''']
+  popfile1 string [note: '''사진 주소 1번 칸. popfile1~popfile8 이 같은 모양이고 빈 칸은 키가 없다
+예: http://openapi.animal.go.kr/openapi/service/rest/fileDownloadSrv/…/popfile1.jpg''']
+}
+
+Table bronze_photo_state [note: '''사진 칸별 다운로드 기록 (state/rescue_photos_state.json 의 notices.<공고>.slots.<칸>). 맨 위가 최신 버전, 이전 버전은 previous 목록. 주소가 바뀌면 version 이 오르고 덮어쓰지 않고 새 키로 받는다. 404 는 5일 뒤 한 번만 다시 본다'''] {
+  desertion_no string [note: '''공고 (JSON 경로의 키)
+예: 448567202600123''']
+  slot int [note: '''칸 1~8 (popfile 번호 그대로)
+예: 1''']
+  version int [note: '''칸 안에서 주소가 처음 나온 순서. 같은 주소는 재실행해도 같은 번호
+예: 2''']
+  replaces int [note: '''이 버전이 대신하는 이전 버전 번호
+예: 1''']
+  first_seen_at string [note: '''이 주소를 처음 본 시각
+예: 2026-11-25T03:20:41+09:00''']
+  status string [note: '''success · pending · failed · gave_up
+예: success''']
+  attempts int [note: '''시도 횟수 (MAX_ATTEMPTS 번째 실패면 gave_up)
+예: 1''']
+  reason string [note: '''실패 원인 코드. 수집 실패 드릴다운의 원인
+예: not_found''']
+  source_url string [note: '''받은 주소
+예: http://openapi.animal.go.kr/…/popfile1.jpg''']
+  last_attempt_at string [note: '''마지막 시도 시각 (실패 칸)
+예: 2026-11-27T03:31:02+09:00''']
+  ext string [note: '''파일 내용으로 판단한 확장자
+예: jpg''']
+  bytes int [note: '''원본 크기
+예: 184233''']
+  sha256 string [note: '''원본 sha256 (64자). Silver·Gold 사진의 키
+예: 3b7a…c90d''']
+  stored_at string [note: '''저장 성공 시각
+예: 2026-11-27T03:31:05+09:00''']
+}
+
+Table bronze_image_manifest [note: '''사진 실행 1번의 인계 기록 (bronze/rescue/image_runs/dt=/run_id=<사진 실행 id>/manifest.json). 새로 저장한 사진과 실패 칸 목록. checkpoint 마다 덮어씀(status in_progress → ok · aborted)'''] {
+  source string [note: '''만든 모듈
+예: rescue_photos''']
+  run_id string [pk, note: '''사진 실행 id (photo_run_id)
+예: 20261127T032004-71be0d''']
+  bronze_run_id string [note: '''입력으로 쓴 Bronze 수집 실행
+예: 20261127T030011-9c41a2''']
+  generated_at string [note: '''처음 쓴 시각
+예: 2026-11-27T03:20:04+09:00''']
+  updated_at string [note: '''마지막 checkpoint 시각
+예: 2026-11-27T03:41:10+09:00''']
+  code_version string [note: '''사진 코드 버전
+예: 2026-11-20''']
+  status string [note: '''in_progress · ok · aborted
+예: ok''']
+  counts json [note: '''stored·failed 건수와 결과별 요약
+예: {"stored":212,"failed":37}''']
+  files json [note: '''이번에 새로 저장한 사진: desertionNo·slot·original·serving·sha256·version·replaces·first_seen_at
+예: [{"desertionNo":"448567202600123","slot":1,"version":2,"sha256":"3b7a…"}]''']
+  failed json [note: '''이번에 실패한 칸: desertionNo·slot·status·reason·attempts
+예: [{"desertionNo":"448567202600131","slot":2,"status":"failed","reason":"not_found","attempts":1}]''']
+}
+
+Table bronze_image_current [note: '''그날 보호중 공고의 칸별 "지금 현재 사진" 한 줄 (bronze/rescue/image_current/dt=/run_id=/current.jsonl.gz + snapshot.json). 사진 task 가 끝까지 ok 일 때만 쓴다. Silver 현재 사진 표가 이 파일 하나로 갱신된다'''] {
+  desertion_no string [note: '''공고
+예: 448567202600123''']
+  slot int [note: '''칸 1~8. Silver 에서는 image_slot
+예: 1''']
+  slot_state string [note: '''active(오늘 주소 있음) · emptied(기록은 있는데 오늘 주소가 빔)
+예: active''']
+  current_version int [note: '''마지막으로 저장에 성공한 버전. 없거나 emptied 면 null
+예: 2''']
+  original_s3_key string [note: '''원본 키 (모델 입력)
+예: bronze/rescue/images/448567202600123/popfile1_v002.jpg''']
+  serving_s3_key string [note: '''화면용 WebP 키
+예: images/448567202600123/1_v002.webp''']
+  thumb_s3_key string [note: '''썸네일(가로 400px) 키
+예: images/448567202600123/1_v002_thumb.webp''']
+  sha256 string [note: '''현재 사진 원본 sha256
+예: 3b7a…c90d''']
+  ext string [note: '''확장자
+예: jpg''']
+  bytes int [note: '''원본 크기
+예: 184233''']
+  source_url string [note: '''현재 사진을 받은 주소
+예: http://openapi.animal.go.kr/…/popfile1.jpg''']
+  stored_at string [note: '''현재 사진 저장 시각
+예: 2026-11-27T03:31:05+09:00''']
+  latest_version int [note: '''가장 최근에 본 주소의 버전 (current 보다 클 수 있음)
+예: 3''']
+  latest_status string [note: '''success · pending · failed · gave_up
+예: failed''']
+  latest_url string [note: '''가장 최근에 본 주소. emptied 면 null
+예: http://openapi.animal.go.kr/…/popfile1.jpg''']
+  first_seen_at string [note: '''최신 버전 주소를 처음 본 시각
+예: 2026-11-26T03:18:22+09:00''']
+}
+
+// ───────── 영역 (TableGroup) ─────────
+TableGroup bronze [color: #7A3FC2, note: 'Bronze 층. 공공데이터 API 와 사진 원본을 받은 그대로 S3 에 둔 파일. 연결 키는 bronze_run_id(실행)와 desertionNo(공고), 사진은 sha256'] {
+  rescue_state
+  bronze_rescue_manifest
+  bronze_rescue_record
+  bronze_photo_state
+  bronze_image_manifest
+  bronze_image_current
+}
