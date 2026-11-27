@@ -32,9 +32,7 @@
 - gold_model_request_log: Jev 요청 1번 = 1행(task text_jev). raw_answer = 응답 answers 전체(원 확률).
 
 호출: OpenRouter Decisions API typesafe/jev-1.14, 공급자 TypeSafe 고정(jev_client). 키 OPENROUTER_KEY_TAG_JEV.
-키는 환경변수 → 레포 .env → Secrets Manager(REBOM_JEV_SECRET_ID, 기본 rebom/tag/prod/jev_api_key) 순서로 찾는다(--key-source auto).
-운영 적재는 --key-source secrets 로 Secrets Manager 의 운영 키만 쓴다(.env 의 시험 키가 잡히지 않게). 서버 파드는 노드 역할로 읽는다.
-키 값은 출력하지 않고 어디서 읽었는지만 알린다. 키·계정 오류면 그 배치까지 저장하고 멈춘다(종료 코드 2).
+PC 시험은 로컬 테스트 키, 서버는 k3s Secret rebom-tag-jev-prod 의 서버 키를 쓴다. 키·계정 오류면 그 배치까지 저장하고 멈춘다(종료 코드 2).
 
 실행 예 (PC, 레포 루트):
   python -m rebom.tagging.run_text_tags select --profile <프로필> --limit 50 --targets data/tag_text/targets.json
@@ -57,7 +55,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from rebom.common.openrouter import AccountError, OpenRouterError, load_key
+from rebom.common.openrouter import AccountError, OpenRouterError
 from rebom.embedding.text_card import LEADING_ID, PHONE  # A2 글 카드와 같은 정리 규칙(앞 관리번호·전화번호)
 from rebom.tagging import text_tags as tt
 from rebom.tagging.jev_client import MODEL, DecisionResult, JevClient
@@ -74,10 +72,6 @@ from rebom.tagging.run_photo_tags import (
 log = logging.getLogger("rebom.tagging.text_tags")
 
 KEY_ENV = "OPENROUTER_KEY_TAG_JEV"
-SECRET_ID_ENV = "REBOM_JEV_SECRET_ID"
-DEFAULT_SECRET_ID = "rebom/tag/prod/jev_api_key"  # 운영 키 (2026-11-26). rebom/ 로 시작해야 노드 역할이 읽는다
-SECRET_FIELDS = (KEY_ENV, "jev_api_key", "api_key", "key")
-KEY_SOURCES = ("auto", "env", "secrets")
 SOURCE = "text"  # 태그를 만든 입력 칸. 사진 태그의 source=photo 와 같은 뜻 (2026-11-24 jev → text)
 SUBJECT_ANIMAL = "animal"
 PROTECTING = "PROTECTING"
@@ -143,57 +137,6 @@ def is_done(log_row: dict | None) -> bool:
     if log_row.get("status") in DONE_STATUSES:
         return True
     return log_row.get("status") == FAILED and int(log_row.get("attempts") or 0) >= MAX_ATTEMPTS
-
-
-def key_from_secret(raw: str) -> str | None:
-    """Secrets Manager 값 → 키. 값 자체가 키이거나, JSON 이면 SECRET_FIELDS 중 하나(필드가 하나뿐이면 그 값)."""
-    try:
-        data = json.loads(raw)
-    except ValueError:
-        return raw.strip() or None
-    if isinstance(data, str):
-        return data.strip() or None
-    if isinstance(data, dict):
-        found = next((str(data[f]).strip() for f in SECRET_FIELDS if data.get(f)), None)
-        if found is None and len(data) == 1:
-            found = str(next(iter(data.values())) or "").strip() or None
-        return found
-    return None
-
-
-def read_secret(secret_id: str, profile: str | None = None) -> str:
-    import os
-
-    import boto3
-
-    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
-    region = os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-2")  # 임베딩 키(gemini.py)와 같은 규칙
-    client = session.client("secretsmanager", region_name=region)
-    try:
-        raw = client.get_secret_value(SecretId=secret_id)["SecretString"]
-    except Exception as exc:  # 자격 만료·권한 없음·이름 없음을 한 메시지로 (키 값은 넣지 않음)
-        raise RuntimeError(f"Secrets Manager {secret_id} 를 읽지 못했습니다: {type(exc).__name__}") from exc
-    key = key_from_secret(raw)
-    if not key:
-        raise RuntimeError(f"Secrets Manager {secret_id} 에 키가 없습니다")
-    return key
-
-
-def load_jev_key(source: str = "auto", *, profile: str | None = None, environ=None,
-                 env_loader=load_key, secret_reader=read_secret) -> tuple[str, str]:
-    """(키, 어디서 읽었는지). auto = 환경변수·.env 에 있으면 그것, 없으면 Secrets Manager. env·secrets 는 그곳만."""
-    import os
-
-    if source not in KEY_SOURCES:
-        raise ValueError(f"--key-source 는 {KEY_SOURCES} 중 하나: {source}")
-    if source in ("auto", "env"):
-        try:
-            return env_loader(KEY_ENV), f"환경변수·.env {KEY_ENV}"
-        except RuntimeError:
-            if source == "env":
-                raise
-    secret_id = (environ if environ is not None else os.environ).get(SECRET_ID_ENV) or DEFAULT_SECRET_ID
-    return secret_reader(secret_id, profile), f"Secrets Manager {secret_id}"
 
 
 def runtime_config(task: str) -> dict:
@@ -632,9 +575,7 @@ def cmd_run(args) -> int:
     print(f"버전 {versions}, 태깅할 공고 {sum(len(g) for g in groups)}건, 요청 {len(groups)}번")
     if args.dry_run or not groups:
         return 0
-    key, where = load_jev_key(getattr(args, "key_source", "auto"), profile=args.profile)
-    print(f"Jev 키: {where}")
-    client = JevClient(KEY_ENV, key=key)
+    client = JevClient(KEY_ENV)
     run_id = args.run_id or f"manual-{_now():%Y%m%dT%H%M%SZ}"
     previous = log_index(sink.read_inference_log())
     totals = {"requests": 0, "cost": 0.0, OK: 0, NO_RESULT: 0, FAILED: 0}
@@ -680,9 +621,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--max-texts", type=int, default=0, help="run: 이번 실행 요청(서로 다른 글) 상한. 0 이면 상한 없음")
     ap.add_argument("--batch-size", type=int, default=200, help="이 글 수마다 Gold 에 쓴다")
     ap.add_argument("--concurrency", type=int, default=8, help="동시 요청 수")
-    ap.add_argument("--key-source", choices=KEY_SOURCES, default="auto",
-                    help="run: Jev 키를 읽을 곳. auto=환경변수·.env 다음 Secrets Manager, env=환경변수·.env 만, "
-                         "secrets=Secrets Manager 만(운영 적재)")
     ap.add_argument("--dry-run", action="store_true", help="대상만 세고 쓰거나 부르지 않는다")
     args = ap.parse_args(argv)
     return cmd_select(args) if args.command == "select" else cmd_run(args)

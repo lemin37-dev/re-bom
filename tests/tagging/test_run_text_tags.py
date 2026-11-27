@@ -263,39 +263,6 @@ def test_registered_versions_and_runtime_config():
     assert {r["version"] for r in rows} == {"text_personality@1", "text_health@1"}
 
 
-def test_jev_key_sources():
-    """auto 는 환경변수·.env 우선, 없으면 Secrets Manager. secrets 는 .env 키가 있어도 Secrets Manager 만."""
-    def env_ok(name):
-        return "local-key"
-
-    def env_missing(name):
-        raise RuntimeError(f"{name} 없음")
-
-    calls = []
-
-    def reader(secret_id, profile):
-        calls.append((secret_id, profile))
-        return "prod-key"
-
-    assert rtt.load_jev_key("auto", env_loader=env_ok, secret_reader=reader, environ={})[0] == "local-key"
-    key, where = rtt.load_jev_key("auto", env_loader=env_missing, secret_reader=reader, environ={}, profile="p")
-    assert key == "prod-key" and calls[-1] == ("rebom/tag/prod/jev_api_key", "p") and "Secrets Manager" in where
-    key, _ = rtt.load_jev_key("secrets", env_loader=env_ok, secret_reader=reader,
-                              environ={"REBOM_JEV_SECRET_ID": "rebom/tag/test/x"})
-    assert key == "prod-key" and calls[-1][0] == "rebom/tag/test/x"
-    with pytest.raises(RuntimeError):
-        rtt.load_jev_key("env", env_loader=env_missing, secret_reader=reader, environ={})
-    with pytest.raises(ValueError):
-        rtt.load_jev_key("x")
-
-
-def test_key_from_secret_formats():
-    assert rtt.key_from_secret("sk-or-abc\n") == "sk-or-abc"
-    assert rtt.key_from_secret('{"jev_api_key": "sk-or-1"}') == "sk-or-1"
-    assert rtt.key_from_secret('{"anything": "sk-or-2"}') == "sk-or-2"
-    assert rtt.key_from_secret('{"a": "", "b": ""}') is None
-
-
 def test_version_option_parses_and_defaults_to_registered():
     assert rtt.registered_versions([]) == rtt.REGISTERED
     assert rtt.registered_versions(["text_personality@2"]) == {P: "text_personality@2", H: "text_health@1"}
