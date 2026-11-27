@@ -1,6 +1,6 @@
 // Re:봄 층 사이 연결 (Ref 만) — 혼자서는 그려지지 않음. scripts/schema/merge_pipeline_dbml.py 합본의 마지막에 붙는다
 // 2026-11-27 · 운영 화면 탭2 흐름 ERD 의 연결선 원본
-// 뜻: Iceberg·S3 에는 외래키가 없으므로 여기 Ref 는 "이 값으로 잇는다"는 처리 연결이다. RDS 안의 실제 외래키는 docs/rds_schema.dbml 에 있다
+// 뜻: Iceberg·S3 에는 외래키가 없으므로 여기 Ref 는 "이 값으로 잇는다"는 처리 연결이다. RDS 안의 실제 외래키는 docs/schema/rds.dbml 에 있다
 // 방향: 왼쪽 = 만든 쪽(뒤 단계), 오른쪽 = 읽은 쪽(앞 단계). 화살표는 데이터가 오는 방향의 반대
 // 색 = 연결 키 (운영 화면과 같은 색):
 //   desertion_no #2459D6 · sha256 #D9730D · bronze_run_id #7A3FC2 · publish_id·publish_seq #0F8B8D

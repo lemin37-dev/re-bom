@@ -49,7 +49,7 @@ def test_duplicate_number_fails_and_non_sql_ignored():
 
 
 def test_other_folders_ignored():
-    assert mg.problems(["M\tdocs/rds_schema.dbml", "M\tsrc/rebom/common/migrate.py"], BASE, BASE) == []
+    assert mg.problems(["M\tdocs/schema/rds.dbml", "M\tsrc/rebom/common/migrate.py"], BASE, BASE) == []
 
 
 def _run(cwd: Path, *args: str) -> None:

@@ -3,7 +3,7 @@
 운영 모니터링 화면(/ops)의 숫자와 실패 원인의 출처다. 규칙:
 - 기록은 본 작업을 멈추지 않는다. safe_write 는 예외를 삼키고 이유 문자열만 돌려준다(표가 아직 없어도, DB 가 안 닿아도).
 - 같은 실행·단계를 다시 쓰면 덮어쓴다(요약은 UPSERT, 실패 목록은 그 단계 것을 지우고 다시 넣음). 재실행해도 두 벌이 되지 않는다.
-- 값 목록은 008·009 의 CHECK 와 같다(docs/rds_schema.dbml Enum ops_*). 목록 밖 값은 쓰기 전에 ValueError.
+- 값 목록은 008·009 의 CHECK 와 같다(docs/schema/rds.dbml Enum ops_*). 목록 밖 값은 쓰기 전에 ValueError.
 - evidence 에는 보호자 실명·연락처를 넣지 않는다. 혹시 들어와도 SENSITIVE_KEYS 는 지운다.
 - Gold 모델 실패는 여기 쓰지 않는다. 화면이 gold_inference_log · gold_model_request_log 를 gold_run_id 로 바로 읽는다.
 

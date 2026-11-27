@@ -1,5 +1,5 @@
 # RDS 스키마 버전 확인·태그
-# - PR(develop 대상): docs/rds_schema.dbml 머리 줄의 버전·범위가 마이그레이션과 맞는지, 이미 달린 태그와 어긋나지 않는지,
+# - PR(develop 대상): docs/schema/rds.dbml 머리 줄의 버전·범위가 마이그레이션과 맞는지, 이미 달린 태그와 어긋나지 않는지,
 #   스키마 문서·마이그레이션 테스트가 통과하는지 본다.
 # - develop 에 머지(push)되면: 머리 줄의 이름(예: schema-v0.1)으로 태그가 없을 때만 그 커밋에 단다.
 # - PR 에서 이미 있는 마이그레이션 파일의 수정·삭제·이름 변경을 막는다(.github/scripts/migration_guard.py).
@@ -13,7 +13,7 @@ on:
     branches: [develop]
     paths:
       - "db/migrations/**"
-      - "docs/rds_schema.dbml"
+      - "docs/schema/rds.dbml"
       - "src/rebom/common/migrate.py"
       - "tests/test_rds_schema_doc.py"
       - "tests/test_migrate.py"
@@ -32,7 +32,7 @@ on:
     branches: [develop]
     paths:
       - "db/migrations/**"
-      - "docs/rds_schema.dbml"
+      - "docs/schema/rds.dbml"
   workflow_dispatch:
 
 permissions:

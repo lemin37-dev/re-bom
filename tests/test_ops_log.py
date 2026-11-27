@@ -14,7 +14,7 @@ from rebom.storage.silver import ops_stats
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "db" / "migrations" / "008_ops_records.sql"
-DBML = ROOT / "docs" / "rds_schema.dbml"
+DBML = ROOT / "docs" / "schema" / "rds.dbml"
 RUN = "20261127T030011-9c41a2"
 AT = "2026-11-27T03:44:02+09:00"
 

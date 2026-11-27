@@ -1,4 +1,4 @@
-"""RDS 스키마 버전 태그(schema-vX.Y)를 docs/rds_schema.dbml 머리 줄 기준으로 확인하고 단다.
+"""RDS 스키마 버전 태그(schema-vX.Y)를 docs/schema/rds.dbml 머리 줄 기준으로 확인하고 단다.
 
 머리 줄 형식:  // 버전: 스키마 v0.1 = 마이그레이션 001~005. …
 - check : 머리 줄의 마지막 번호가 db/migrations 의 마지막 번호와 같은지, 같은 이름의 태그가 이미 있으면 범위가 같은지 본다.
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DBML = ROOT / "docs" / "rds_schema.dbml"
+DBML = ROOT / "docs" / "schema" / "rds.dbml"
 MIGRATIONS = ROOT / "db" / "migrations"
 HEADER = re.compile(r"^// 버전: 스키마 (v\d+\.\d+) = 마이그레이션 (\d{3})~(\d{3})\b", re.M)
 MESSAGE = re.compile(r"^RDS 스키마 (v\d+\.\d+) \((\d{3})~(\d{3})\)")
@@ -40,7 +40,7 @@ class SchemaVersion:
 def read_header(text: str) -> SchemaVersion:
     m = HEADER.search(text)
     if not m:
-        raise ValueError("docs/rds_schema.dbml 에 '// 버전: 스키마 vX.Y = 마이그레이션 NNN~NNN' 줄이 없습니다")
+        raise ValueError("docs/schema/rds.dbml 에 '// 버전: 스키마 vX.Y = 마이그레이션 NNN~NNN' 줄이 없습니다")
     return SchemaVersion(*m.groups())
 
 

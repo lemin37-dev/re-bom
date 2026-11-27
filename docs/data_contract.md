@@ -556,7 +556,7 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 
 | 무엇 | 원본 | 고치는 법 |
 |---|---|---|
-| 표·칼럼 설명, 예시, 값 목록(태그 등) | `docs/rds_schema.dbml` | 파일을 고치고 dbdiagram.io 에 붙여 넣어 그림 확인 |
+| 표·칼럼 설명, 예시, 값 목록(태그 등) | `docs/schema/rds.dbml` | 파일을 고치고 dbdiagram.io 에 붙여 넣어 그림 확인 |
 | 실제 DB 구조 | `db/migrations/NNN_*.sql` | 이미 있는 파일은 고치지 않고 다음 번호 파일 추가. 적용은 사람이 |
 | 둘이 같은지 | `tests/test_rds_schema_doc.py` | 표·칼럼 이름이 다르면 pytest 실패 |
 | 이미 있는 마이그레이션을 고쳤는지 | `.github/scripts/migration_guard.py` (PR CI) | develop 대비 수정·삭제·이름 변경이면 PR 실패. 새 번호 파일로 추가 |
@@ -636,7 +636,7 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 
 ### 16.3 운영 기록 (ops_*) [v0.3 초안, 2026-11-27]
 
-운영 모니터링 화면(`/ops`)의 숫자·실패 원인·스키마 지문의 출처. 표는 RDS `public` 스키마에 `ops_` 접두어로 둔다(`008_ops_records.sql`, 원인 코드 추가 `009_ops_reason_codes.sql`, `docs/rds_schema.dbml` TableGroup `ops_record`).
+운영 모니터링 화면(`/ops`)의 숫자·실패 원인·스키마 지문의 출처. 표는 RDS `public` 스키마에 `ops_` 접두어로 둔다(`008_ops_records.sql`, 원인 코드 추가 `009_ops_reason_codes.sql`, `docs/schema/rds.dbml` TableGroup `ops_record`).
 
 | 표 | 한 행 | 키 |
 |---|---|---|
@@ -658,7 +658,7 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 - **재실행**: 같은 실행·단계를 다시 쓰면 요약은 덮어쓰고(UPSERT), 실패 목록은 그 단계 것을 지우고 다시 넣는다. 두 벌이 되지 않는다.
 - **개인정보**: `stats`·`evidence` 에 보호자 실명·연락처를 넣지 않는다. 혹시 들어와도 `ops_log.SENSITIVE_KEYS`(`careOwnerNm` 등)는 쓰기 전에 지운다.
 - **Gold 모델 실패**는 건별로 옮기지 않는다. `gold_<작업>` 단계 줄에 처리 상태별 건수·호출 오류·비용·지연만 남기고(`ops_run_summary.gold_run_id` 로 Gold 로그와 연결), 건별 원인은 Gold `gold_inference_log`·`gold_model_request_log` 를 `gold_run_id` 로 본다. 지금 API 이미지에는 Iceberg 를 읽는 라이브러리가 없어 화면에서 건별로 열지는 못한다(다음 단계에서 정함).
-- **층별 스키마 문서**: Bronze·Silver·Gold 는 `docs/schema/{bronze,silver,gold}.dbml`, 층 사이 키 연결은 `docs/schema/links.dbml`, RDS(운영 기록 포함)는 `docs/rds_schema.dbml`. `python scripts/schema/merge_pipeline_dbml.py --out data/pipeline_schema.dbml` 로 합본을 만든다(커밋하지 않음). 코드와 칼럼 이름이 같은지 `tests/test_pipeline_schema_doc.py` 가 확인한다.
+- **층별 스키마 문서**: Bronze·Silver·Gold 는 `docs/schema/{bronze,silver,gold}.dbml`, 층 사이 키 연결은 `docs/schema/links.dbml`, RDS(운영 기록 포함)는 `docs/schema/rds.dbml`. `python scripts/schema/merge_pipeline_dbml.py --out data/pipeline_schema.dbml` 로 합본을 만든다(커밋하지 않음). 코드와 칼럼 이름이 같은지 `tests/test_pipeline_schema_doc.py` 가 확인한다.
 - **적용(사람이)**: `python -m rebom.common.migrate status` 로 008·009 가 남았는지 보고 `python -m rebom.common.migrate apply --by <이름>` 으로 적용한다. 적용 전에는 기록이 건너뛰어질 뿐 파이프라인은 그대로 돈다.
 
 ### 16.4 운영 화면 API (/ops) [v0.3 초안, 2026-11-27]
