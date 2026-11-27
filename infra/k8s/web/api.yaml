@@ -32,6 +32,19 @@ spec:
             # 브라우저는 같은 주소(/api)로 부르므로 CORS 는 필요 없다. 로컬 개발 기본값만 둔다
             - name: REBOM_CORS_ORIGINS
               value: http://localhost:3000
+            # 운영 화면(/ops) 로그인. Secret rebom-ops 는 사람이 만든다(infra/k8s/web/README.md). 없으면 /ops 만 503
+            - name: REBOM_OPS_PASSWORD_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: rebom-ops
+                  key: REBOM_OPS_PASSWORD_HASH
+                  optional: true
+            - name: REBOM_OPS_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rebom-ops
+                  key: REBOM_OPS_SESSION_SECRET
+                  optional: true
           readinessProbe:
             httpGet:
               path: /health
