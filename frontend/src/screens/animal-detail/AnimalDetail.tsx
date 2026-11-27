@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { PetCard } from '@/components/animal/PetCard'
 import { Icon } from '@/components/icons/Icon'
 import { SectionTitle } from '@/components/ui/SectionTitle'
-import { behaviorTags, isAvailable, noticePeriod } from '@/lib/animal'
+import { behaviorTags, isAvailable, noticePeriod, weightSizeLabel } from '@/lib/animal'
 import { breedSizeOf } from '@/lib/breed-size'
 import type { Animal } from '@/types/animal'
 import { SupportCards } from '../common/SupportCards'
@@ -64,7 +64,7 @@ export function AnimalDetail({ animal: a, similar, onBack, onGuide, onOpen, comp
     <div className="detail-section-nav">{sectionLabels.map((label, i) => <a href={`#pet-section-${i}`} key={label} onClick={e => jumpToSection(e, i)}>{label}</a>)}</div>
 
     <DetailInformation compact={compact} id="pet-section-0" number="01" title="공고 정보" sub="보호센터가 전하는 아이의 이야기예요.">
-      <dl className="notice-facts"><div><dt>공고상 품종</dt><dd>{a.kind}</dd></div><div><dt>출생 연도</dt><dd>{a.birthYear ? `${a.birthYear}년생` : '공고에 없음'}</dd></div><div><dt>발견 장소</dt><dd>{a.happenPlace || '공고에 없음'}</dd></div><div><dt>보호 상태</dt><dd>{protectionLabel(a)}</dd></div><div><dt>공고 기간</dt><dd>{noticePeriod(a)}</dd></div></dl>
+      <dl className="notice-facts"><div><dt>공고상 품종</dt><dd>{a.kind}</dd></div><div><dt>출생 연도</dt><dd>{a.birthYear ? `${a.birthYear}년생` : '공고에 없음'}</dd></div><div><dt>체중 · 크기</dt><dd>{a.kg !== null ? weightSizeLabel(a) : '공고에 없음'}</dd></div><div><dt>발견 장소</dt><dd>{a.happenPlace || '공고에 없음'}</dd></div><div><dt>보호 상태</dt><dd>{protectionLabel(a)}</dd></div><div><dt>공고 기간</dt><dd>{noticePeriod(a)}</dd></div></dl>
       <div className="original-quote"><span>공고 특징 · 원문</span><p>{a.quote ? `“${a.quote}”` : '보호소가 적은 특징 문장이 없어요.'}</p></div>
     </DetailInformation>
 
@@ -98,7 +98,7 @@ export function AnimalDetail({ animal: a, similar, onBack, onGuide, onOpen, comp
     </DetailInformation>
 
     <section className="information-section" id="pet-section-5">
-      <div className="section-with-link"><SectionTitle number="06" title="이 지역의 입양 지원" sub={`${center.sido ?? ''} ${center.sigungu ?? ''} 기준 예시 안내`} /><button className="text-link" onClick={onGuide}>입양 절차 안내 보기<Icon name="arrow" size={16} /></button></div>
+      <div className="section-with-link"><SectionTitle number="06" title="이 지역의 입양 혜택" sub={`보호소 관할 ${center.sido ?? ''} ${center.sigungu ?? ''} 기준 · 입양비 지원은 보통 입양한 보호센터의 지역에서 신청해요`} /><button className="text-link" onClick={onGuide}>입양 절차 안내 보기<Icon name="arrow" size={16} /></button></div>
       <SupportCards region={center.sido ?? ''} district={center.sigungu ?? ''} />
     </section>
 

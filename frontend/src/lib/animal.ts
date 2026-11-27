@@ -75,16 +75,17 @@ export function behaviorTags(a: Animal) {
   return rules.filter(([re]) => re.test(text)).map(([, tag]) => tag)
 }
 
-/** 몸무게와 크기를 함께: '9kg, 소형'. 크기는 Silver size 값만 씀 (화면에서 계산하지 않음) */
+/** 몸무게와 크기를 함께: '16.1kg(중형)'. 크기는 검색 API size 값만 씀 (화면에서 계산하지 않음) */
 export function weightSizeLabel(a: Animal) {
-  return a.size ? `${a.weightLabel}, ${a.size}` : a.weightLabel
+  return a.size ? `${a.weightLabel}(${a.size})` : a.weightLabel
 }
 
-/** 카드·상세 제목. 나이는 쓰지 않음 (출생 연도는 상세 공고 정보에만) */
+/** 카드·상세 제목. 나이는 쓰지 않음 (출생 연도는 아래 요약 줄에) */
 export function animalTitle(a: Animal) {
   return `${a.kind} · ${a.gender}`
 }
 
+/** 카드·상세 요약 줄: '2022년생 · 16.1kg(중형) · 흰색 · 중성화 안 함'. 출생 연도가 없으면 뺌 */
 export function animalMeta(a: Animal) {
-  return `${weightSizeLabel(a)} · ${a.color} · ${a.care}`
+  return [a.birthYear ? `${a.birthYear}년생` : null, weightSizeLabel(a), a.color, a.care].filter(Boolean).join(' · ')
 }

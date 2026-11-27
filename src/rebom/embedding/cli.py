@@ -85,6 +85,35 @@ def _current(args: argparse.Namespace, s3: Any, bucket: str, writes: bool = Fals
     return current, manifests
 
 
+def _published(args: argparse.Namespace, s3: Any):
+    """--publish-id 의 Silver READY 발행본. 없으면 None."""
+    from rebom.embedding import sources
+
+    if not getattr(args, "publish_id", None):
+        if getattr(args, "publish_bucket", None) or getattr(args, "publish_prefix", None):
+            sys.exit("--publish-bucket·--publish-prefix 는 --publish-id 와 같이 씁니다.")
+        return None
+    if not args.publish_bucket or not args.publish_prefix:
+        sys.exit("--publish-id 에는 --publish-bucket 과 --publish-prefix 가 필요합니다.")
+    if not getattr(args, "gold_env", None):
+        sys.exit("--publish-id 에는 --gold-env 가 필요합니다.")
+    if getattr(args, "source", sources.DEFAULT_SOURCE) != sources.DEFAULT_SOURCE:
+        sys.exit("--publish-id 와 --source 는 같이 쓰지 않습니다.")
+    from rebom.common.silver_input import load_ready
+
+    return load_ready(s3, args.publish_bucket, args.publish_prefix, args.publish_id)
+
+
+def _check_publish_env(published, gold_env: str) -> None:
+    """쓸 때는 발행본의 표가 같은 환경의 Silver 표여야 한다 (test 발행본으로 Gold prod 에 쓰지 않음)."""
+    from rebom.storage.silver.environment_config import get_silver_environment
+
+    silver = get_silver_environment(gold_env)  # prod 는 운영 표가 정해질 때까지 PROD_DISABLED 오류
+    if (published.notice_table, published.photo_table) != (silver.notice_table, silver.image_table):
+        raise ValueError(f"Silver 발행본의 표가 {gold_env} 환경의 표가 아님: "
+                         f"{published.notice_table}, {published.photo_table}")
+
+
 def _gold_target(args: argparse.Namespace):
     """--gold-env 가 있으면 (카탈로그, Gold 환경), 없으면 None (parquet 경로)."""
     name = getattr(args, "gold_env", None)
@@ -236,7 +265,7 @@ def embed(args: argparse.Namespace) -> int:
 
     from datetime import datetime, timezone
 
-    from rebom.embedding import gemini, gold_store, plan as planmod, prep, staging
+    from rebom.embedding import gemini, gold_store, plan as planmod, prep, sources, staging
 
     bucket, s3 = _bucket(), _s3()
     gold = _gold_target(args)
@@ -254,7 +283,17 @@ def embed(args: argparse.Namespace) -> int:
         })
         for table in (gc.IMAGE_EMBEDDING_TABLE, gc.REQUEST_LOG_TABLE):
             require_version_column(catalog.load_table(env.table(table)))
-    current, manifests = _current(args, s3, bucket, writes=not args.dry_run)
+    published = _published(args, s3)
+    run_inputs = None
+    if published is None:
+        current, manifests = _current(args, s3, bucket, writes=not args.dry_run)
+    else:
+        if not args.dry_run:  # 모델을 부르기 전에 확인
+            _check_publish_env(published, args.gold_env)
+            run_inputs = gold_store.run_input_table(*gold)
+        (current, protected), manifests = sources.load_published(gold[0], published), None
+        print(f"입력: Silver READY {published.publish_id} (공고 스냅샷 {published.notice_snapshot_id}, "
+              f"사진 스냅샷 {published.photo_snapshot_id}), 보호중 공고 {len(protected)}건, 현재 사진 {len(current)}칸")
     if gold is None:
         staged = staging.load_staged(s3, bucket, gemini.MODEL, args.dim, prep.PREP_VERSION)
     else:
@@ -274,14 +313,22 @@ def embed(args: argparse.Namespace) -> int:
         for sha in order[:5]:
             print("  would embed", plan.send[sha][0].s3_key, sha[:12], f"(칸 {len(plan.send[sha])}개)")
         return 0
+    run_id = _new_run_id()
+    mid = gold_store.model_id(gemini.MODEL, args.dim)
+    version = candidate or gold_store.log_version(mid, prep.PREP_VERSION)
+    if run_inputs is not None:  # 새로 만들 사진이 0장이어도 이 발행본을 처리했다는 기록을 남긴다
+        gold_store.write_run_input(run_inputs, run_id=run_id, publish_id=published.publish_id, version=version,
+                                   at=datetime.now(timezone.utc))
+        print(f"gold_run_input: {run_id} → {published.publish_id}")
     if not order and not plan.reuse:
         print("보낼 사진이 없습니다.")
         return 0
 
-    run_id = _new_run_id()
     prefix = staging.run_prefix(gemini.MODEL, args.dim, run_id)
     if candidate is not None:
         prefix = f"gold/_work{gold[1].suffix}/embedding_candidates/{candidate}/{run_id}/"
+    elif published is not None:  # 원본은 Gold 표. Gold 쓰기가 실패할 때를 위한 백업과 요약만 작업 폴더에 남긴다
+        prefix = f"gold/_work{gold[1].suffix}/image_embedding/{run_id}/"
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     embedder = gemini.GeminiEmbedder(dim=args.dim, session_id=f"embed-{run_id}")
     stats: Counter = Counter()
@@ -291,8 +338,6 @@ def embed(args: argparse.Namespace) -> int:
     api_errors: dict[str, str] = {}  # sha256 → 오류 코드. skipped 에 넣지 않아 다음 실행에서 다시 보낸다
     rows: list[dict] = []
     parts: list[str] = []
-    mid = gold_store.model_id(gemini.MODEL, args.dim)
-    version = candidate or gold_store.log_version(mid, prep.PREP_VERSION)
     gold_images: list[dict] = []  # Gold 결과 표 (사진당 1행)
     gold_logs: dict[str, dict] = {}  # sha256 → 처리 기록 행
     gold_requests: list[dict] = []  # 요청 기록 (요청 1번 = 1행)
@@ -490,6 +535,7 @@ def embed(args: argparse.Namespace) -> int:
             "api_usage": embedder.usage(),  # 경로(openrouter/google)·호출 수·OpenRouter 비용(USD)
             "gold": gold_info,  # --gold-env 일 때 쓴 환경과 행 수 (gold-migrate 가 멈추는 표시)
             "version": candidate,
+            "publish_id": published.publish_id if published is not None else None,
         }
         s3.put_object(Bucket=bucket, Key=f"{prefix}summary.json",
                       Body=json.dumps(summary, ensure_ascii=False, indent=2).encode("utf-8"))
@@ -736,6 +782,12 @@ def _add_gold(p: argparse.ArgumentParser) -> None:
     p.add_argument("--profile", default=None, help="Gold 카탈로그용 AWS 프로필 (PC). 파드에서는 비운다")
 
 
+def _add_publish(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--publish-id", help="Silver READY 발행 ID. 발행본이 고정한 스냅샷의 보호중 공고 사진만 대상 (--gold-env 필요)")
+    p.add_argument("--publish-bucket")
+    p.add_argument("--publish-prefix")
+
+
 def _add_source(p: argparse.ArgumentParser) -> None:
     from rebom.embedding import sources
 
@@ -749,10 +801,17 @@ def compare_sources(args: argparse.Namespace) -> int:
     from rebom.embedding import sources
 
     bucket, s3 = _bucket(), _s3()
+    published = _published(args, s3)
     bronze, _ = sources.load_current("bronze", s3, bucket)
-    silver = sources.load_silver(args.silver_env)
+    if published is not None:
+        silver, protected = sources.load_published(_gold_target(args)[0], published)
+        bronze = {k: p for k, p in bronze.items() if k[0] in protected}  # 발행본과 같은 범위(보호중)만 비교
+        title = f"bronze manifest vs Silver READY {published.publish_id} (보호중 공고 {len(protected)}건)"
+    else:
+        silver = sources.load_silver(args.silver_env)
+        title = f"bronze manifest vs silver 이미지 표 ({args.silver_env})"
     result = sources.compare(bronze, silver)
-    _print(f"bronze manifest vs silver 이미지 표 ({args.silver_env})", result)
+    _print(title, result)
     return 0
 
 
@@ -830,6 +889,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--dim", type=int, default=768, help="벡터 차원 (테이블 vector(768) 과 같아야 함)")
     e.add_argument("--version", help="등록된 후보 버전, 예: image_embedding@1. --gold-env 필요")
     _add_source(e)
+    _add_publish(e)
     _add_gold(e)
     e.set_defaults(func=embed)
 
@@ -867,6 +927,8 @@ def main(argv: list[str] | None = None) -> int:
 
     cs = sub.add_parser("compare-sources", help="Bronze manifest 와 Silver 이미지 표의 현재 사진 대조 (읽기만)")
     cs.add_argument("--silver-env", default="test")
+    _add_publish(cs)
+    _add_gold(cs)
     cs.set_defaults(func=compare_sources)
 
     gm = sub.add_parser("gold-migrate", help="옛 S3 parquet → Gold Iceberg 임베딩 표 (기본은 계획만)")

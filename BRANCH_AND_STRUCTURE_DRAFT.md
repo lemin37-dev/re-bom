@@ -57,8 +57,9 @@ feat/…            ●●    ●●       ●●●              ← 개인 작
 
 ### 1-2. 커밋 · PR 제목
 
-`develop` 에는 **Squash merge** 로 합치기 때문에, **PR 제목만** 형식을 맞추면 됩니다.
-작업 브랜치 안의 개별 커밋 메시지는 자유입니다.
+`develop` 에는 **Merge commit**(Create a merge commit)으로 합칩니다. Squash 는 쓰지 않습니다.
+다른 브랜치 위에 쌓은 브랜치(예: 스키마 브랜치 위의 싱크 브랜치)를 Squash 로 합치면 아래 브랜치의 커밋이 develop 에 다른 해시로 들어가, 위 브랜치 PR 에 같은 변경이 다시 보이고 충돌이 납니다.
+PR 제목은 아래 형식을 맞추고(머지 커밋 제목이 됩니다), 작업 브랜치 안의 개별 커밋 메시지는 자유입니다.
 
 ```
 <type>(<scope>): 무엇을 했는지      예) feat(ingest): 수정일 기준 증분 수집 추가
@@ -94,10 +95,11 @@ feat/…            ●●    ●●       ●●●              ← 개인 작
 - [ ] Settings → Rules → **Rulesets** 에서 `main`, `develop` 대상으로 규칙 하나 생성
   - *Restrict deletions* ✅ · *Block force pushes* ✅ · *Require a pull request before merging* ✅
   - Required approvals: **0** → 승인 없이도 머지 가능 (승인은 팀 약속으로만)
+  - *Allowed merge methods*: **Merge** 만 남기기 (Squash·Rebase 끄기)
   - (선택) `main` 만 승인 1명으로 따로 두고 싶다면, `main` 용 규칙을 따로 만들고 *Bypass list* 에 **Repository admin** 추가 → 급할 때 관리자가 승인 없이 머지 가능
 - [ ] Settings → General → Pull Requests
-  - *Allow squash merging* ✅ (작업 브랜치 → `develop`)
-  - *Allow merge commits* ✅ (`develop` → `main` 용, 끄지 않기)
+  - *Allow merge commits* ✅ (작업 브랜치 → `develop`, `develop` → `main` 모두)
+  - *Allow squash merging* ⬜ · *Allow rebase merging* ⬜ (끄면 머지 버튼 기본값이 Create a merge commit 이 됨)
   - *Automatically delete head branches* ✅ (위 *Restrict deletions* 덕분에 `develop` 은 지워지지 않음)
 - [ ] 팀원 4명을 Collaborator(Write)로 초대
 
@@ -138,7 +140,7 @@ re-bom/
 │   └── serving/               # 민혁  검색 API, 챗봇
 │
 ├── frontend/                  # Next.js 웹·모바일 화면 (자체 AGENTS.md 있음)
-├── db/migrations/             # 스키마 SQL (001_init.sql, 002_… 순서대로 추가)
+├── db/migrations/             # 스키마 SQL (001_init.sql, 002_… 순서대로 추가). 설명·ERD 는 docs/rds_schema.dbml
 ├── infra/                     # Dockerfile, k3s 매니페스트
 ├── scripts/                   # 일회성 스크립트 (API 점검, 리포트 등)
 ├── notebooks/                 # EDA·실험 (커밋 전 출력 지우기 권장)

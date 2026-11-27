@@ -3,6 +3,8 @@ import type { IconName } from '@/components/icons/Icon'
 export const ROUTES = {
   search: '/',
   guide: '/guide',
+  guideSupport: '/guide/support',
+  guideEvents: '/guide/events',
   shelters: '/shelters',
   about: '/about',
   animal: (id: string) => `/animals/${encodeURIComponent(id)}`,
@@ -23,6 +25,7 @@ export function isAnimalDetail(pathname: string) {
 /** 현재 경로가 속한 주 메뉴 (동물 상세는 '입양 찾기'에 속함) */
 export function activeNavHref(pathname: string) {
   if (isAnimalDetail(pathname)) return ROUTES.search
+  if (pathname.startsWith(`${ROUTES.guide}/`)) return ROUTES.guide
   return NAV_ITEMS.find(item => item.href === pathname)?.href ?? ROUTES.search
 }
 

@@ -57,7 +57,7 @@ def transform_notice(raw, source_type=None):
         "weight_max_kg": weight_max,
         "weight_kg": weight_max,
         "size": (
-            "small" if weight_max <= 10
+            "small" if weight_max < 10
             else "medium" if weight_max < 25
             else "large"
         ) if (

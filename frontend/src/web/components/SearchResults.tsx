@@ -3,6 +3,7 @@
 import { PetCard } from '@/components/animal/PetCard'
 import { Icon } from '@/components/icons/Icon'
 import { MascotState } from '@/components/mascot/MascotState'
+import { RankOrderNote } from '@/components/search/RankOrderNote'
 import { sortOptions } from '@/data/filters'
 import { useExperience } from '@/providers/ExperienceProvider'
 import { useSearch } from '@/providers/SearchProvider'
@@ -11,7 +12,7 @@ import { ResultMap } from './ResultMap'
 
 /** 웹 검색 결과: 제목·정렬 도구 + 카드 그리드 또는 지도 */
 export function SearchResults() {
-  const { visible, total, hasMore, searched, searching, loadingMore, error, retry, sort, setSort, availableFirst, toggleAvailableFirst, map, toggleMap, loadMore, resetAndSearch, photo, tags, matched } = useSearch()
+  const { visible, total, hasMore, searched, searching, loadingMore, error, retry, sort, setSort, availableFirst, toggleAvailableFirst, map, toggleMap, loadMore, resetAndSearch, photo, tags, matched, rankDebug } = useSearch()
   const { openAnimal } = useExperience()
 
   return <section className="results" aria-live="polite">
@@ -24,7 +25,8 @@ export function SearchResults() {
       </div>
     </div>
     {!searching && matched !== null && <p className="tag-match-note">고른 태그가 모두 맞는 아이 <b>{matched}마리</b>를 먼저 보여 드려요. 태그가 일부만 맞거나 태그 정보가 없는 아이는 그 뒤에 이어져요.</p>}
-    {searched && <p className="demo-search-note">지금은 문장을 단어 단위로만 찾아요. 문장의 뜻{photo ? '과 첨부한 사진' : ''}으로 찾는 인공지능 분석은 아직 연결되어 있지 않아요.</p>}
+    <RankOrderNote debug={rankDebug} />
+    {searched && <p className="demo-search-note">{photo ? '첨부한 사진과 닮은 공고 사진 순서로 보여 줘요. 사진이 있으면 문장은 순서에 쓰지 않아요.' : '입력한 문장과 뜻이 가까운 공고 글 순서로 보여 줘요.'}</p>}
     {searching
       ? <MascotState kind="loading" />
       : error
@@ -32,7 +34,7 @@ export function SearchResults() {
         : !visible.length
           ? searched ? <MascotState kind="no-results"><button className="primary-button" onClick={resetAndSearch}>조건 넓혀서 다시 찾기</button></MascotState> : <MascotState kind="empty" />
           : map
-            ? <ResultMap animals={visible} onOpen={openAnimal} />
+            ? <ResultMap onOpen={openAnimal} />
             : <div className="animal-grid">{visible.map(a => <PetCard key={a.id} animal={a} onOpen={openAnimal} />)}</div>}
     {!searching && !error && !map && hasMore && <button className="load-more" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '불러오는 중' : '기다리는 친구 더 만나기'} <span>{visible.length} / {total}</span><Icon name="plus" size={15} /></button>}
     <p className="fiction-note">공고 정보는 공공데이터포털 구조동물 API 샘플(2026-10-30 기준)이며, 실제 입양 가능 여부는 보호소에 확인해 주세요.</p>

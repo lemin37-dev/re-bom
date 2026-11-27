@@ -20,7 +20,7 @@ def client() -> TestClient:
 
 def test_health_reports_sample_mode(client):
     body = client.get("/health").json()
-    assert body == {"status": "ok", "dataMode": "sample", "animalCount": len(SAMPLE)}
+    assert body == {"status": "ok", "dataMode": "sample", "env": "prod", "animalCount": len(SAMPLE)}
 
 
 def test_list_paginates(client):
@@ -90,9 +90,11 @@ def test_owner_name_and_rfid_never_exposed(tmp_path):
     assert "410000000000000" not in text
 
 
-def test_db_mode_not_ready():
-    with pytest.raises(NotImplementedError):
-        build_repository(Settings(data_mode=DataMode.DB, _env_file=None))
+def test_db_mode_builds_lazily():
+    """db 모드 저장소는 만들 때 접속하지 않는다(첫 요청 때 붙음). 실제 조회는 tests/test_serving_db.py."""
+    from rebom.serving.db_repository import DbRepository
+
+    assert isinstance(build_repository(Settings(data_mode=DataMode.DB, db_dsn="host=nowhere", _env_file=None)), DbRepository)
 
 
 def test_mode_from_env(monkeypatch):
@@ -117,6 +119,15 @@ def test_age_and_weight_filters(client):
     assert items and all(2 <= i["ageYears"] <= 7 for i in items)
     items = client.get("/animals", params={"weight_min": 8, "weight_lt": 15, "size": 100}).json()["items"]
     assert items and all(8 <= i["weightKg"] < 15 for i in items)
+    items = client.get("/animals", params={"weight_min": 10, "weight_lt": 25, "species": "dog", "size": 100}).json()["items"]
+    assert items and all(10 <= i["weightKg"] < 25 and i["size"] == "medium" for i in items)
+
+
+def test_summary_has_birth_year_and_dog_size(client):
+    for i in client.get("/animals", params={"size": 100}).json()["items"]:
+        assert i["birthYear"] is None or str(i["birthYear"]) == i["ageText"][:4]
+        if i["speciesCode"] != "417000" or i["weightKg"] is None:
+            assert i["size"] is None
 
 
 def test_text_query_matches_any_word(client):
@@ -149,3 +160,25 @@ def test_notice_end_sort(client):
 def test_etc_species_breed_uses_full_name(client):
     items = client.get("/animals", params={"species": "etc", "size": 100}).json()["items"]
     assert items and all(i["breed"] and "기타축종" not in i["breed"] for i in items)
+
+
+def test_places_count_matches_list_total(client):
+    params = {"state": "protect", "species": "dog"}
+    places = client.get("/animals/places", params=params).json()
+    assert places["total"] == client.get("/animals", params={**params, "size": 1}).json()["total"]
+    assert places["total"] == sum(p["count"] for p in places["items"])
+    counts = [p["count"] for p in places["items"]]
+    assert counts == sorted(counts, reverse=True)
+    # 마릿수는 보호소 하나만 골라 찾은 수와 같다
+    top = places["items"][0]
+    assert client.get("/animals", params={**params, "shelter": top["regNo"], "size": 1}).json()["total"] == top["count"]
+
+
+def test_shelter_accepts_several_reg_numbers(client):
+    items = client.get("/animals/places", params={"state": "protect"}).json()["items"][:2]
+    both = client.get("/animals", params={"state": "protect", "shelter": ",".join(p["regNo"] for p in items), "size": 1}).json()
+    assert both["total"] == items[0]["count"] + items[1]["count"]
+
+
+def test_places_route_is_not_an_animal_id(client):
+    assert client.get("/animals/places").status_code == 200

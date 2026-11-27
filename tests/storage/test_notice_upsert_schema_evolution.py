@@ -148,6 +148,9 @@ def test_real_runner_reuses_immutable_prepared_snapshot_after_schema_evolution(
         remote[Key] = Body
 
     s3 = Mock()
+    s3.get_paginator.return_value.paginate.return_value = [
+        {"CommonPrefixes": [{"Prefix": f"{prefix}/run_id={run_id}/"}]}
+    ]
     s3.get_object.side_effect = get_object
     s3.put_object.side_effect = put_object
     monkeypatch.setattr(runner.boto3, "client", lambda *a, **kw: s3)

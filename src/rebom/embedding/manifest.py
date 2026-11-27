@@ -28,7 +28,7 @@ class Photo:
     sha256: str
     ext: str
     bytes: int | None
-    photo_run_id: str
+    photo_run_id: str | None = None  # Bronze 사진 수집 실행. Silver 입력에는 없다 (추적은 publish_id)
 
     @property
     def key(self) -> tuple[str, int]:

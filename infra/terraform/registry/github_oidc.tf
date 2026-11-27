@@ -71,6 +71,14 @@ data "aws_iam_policy_document" "github_push" {
     ]
     resources = [for r in aws_ecr_repository.this : r.arn]
   }
+
+  # 웹 이미지 빌드 때 화면 코드에 넣는 공개 키만 (카카오 지도 JavaScript 키, 도메인 등록으로 막음).
+  # 서버 전용 키(rebom/api/kakao_rest 등)는 넣지 않는다. 끝의 -?????? 는 Secrets Manager 가 붙이는 6자리
+  statement {
+    sid       = "ReadWebBuildSecrets"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [for s in var.web_build_secrets : "arn:aws:secretsmanager:${var.region}:${var.account_id}:secret:${s}-??????"]
+  }
 }
 
 resource "aws_iam_role_policy" "github_push" {

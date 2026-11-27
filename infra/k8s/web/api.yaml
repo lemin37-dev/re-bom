@@ -28,7 +28,7 @@ spec:
               containerPort: 8000
           env:
             - name: REBOM_DATA_MODE
-              value: sample
+              value: db
             # 브라우저는 같은 주소(/api)로 부르므로 CORS 는 필요 없다. 로컬 개발 기본값만 둔다
             - name: REBOM_CORS_ORIGINS
               value: http://localhost:3000
@@ -37,9 +37,10 @@ spec:
               path: /health
               port: http
             periodSeconds: 10
+          # liveness 는 DB 를 보지 않는다(/livez). RDS 가 잠깐 끊겨도 재시작하지 않고 readiness(/health)로만 빠진다
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20

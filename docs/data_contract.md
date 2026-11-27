@@ -132,7 +132,7 @@
     - 글(텍스트) 임베딩도 같은 구조(`gold/text_embedding/…`, 카드 해시 기준)로 합니다. 글도 사진과 같은 모델(`gemini-embedding-2`, 768)을 쓰고, 검색에서는 순위로 합칩니다. RDS 테이블 초안은 `db/migrations/002_text_embedding.sql`(`text_embedding`, 기본키 공고·`text_kind`·`model_key`, 아직 적용 안 함). 자세한 계획은 `docs/image_embedding_pipeline.md` 10절.
   - **키**: (`desertion_no`, `image_slot`, `model`). 같은 칸의 sha256이 바뀌면 그 행을 덮어씁니다(과거 버전 벡터는 남기지 않음).
   - **칼럼**: `photo_version`, `sha256`, `s3_key`(원본 키), `photo_run_id`, `embedding vector(768)`, `embedded_at`.
-  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스(`001_init.sql`, 사진 백필이 끝나 그대로 유지). **[확정, 11/24]** 새로 만드는 벡터 테이블(글 `text_embedding` 등)은 v0.1에서 인덱스 없이 전체 비교하고, HNSW는 v0.1 실측 확인 후 v0.2에서 도입을 고려합니다. 종·보호중 조건은 서비스 테이블 `animal`과 `desertion_no`로 JOIN해 거릅니다(벡터 테이블에 종 칼럼은 두지 않음). 사진 HNSW를 타는 검색은 조건으로 걸러진 만큼 결과가 모자랄 수 있으니 `hnsw.ef_search`를 LIMIT 이상으로 두고 `hnsw.iterative_scan`(pgvector 0.8)을 켭니다. 이 설정은 성능 비교 후 검색 코드에 넣습니다(지금 코드는 기본값). 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
+  - **모델**: `gemini-embedding-2`, `output_dimensionality=768`(HNSW 인덱스 한도 2,000차원), 코사인 거리 HNSW 인덱스(`001_init.sql`, 사진 백필이 끝나 그대로 유지 → **11/25 결정으로 `004_vector_tables_v01.sql` 에서 삭제**, 16절). **[확정, 11/24]** 새로 만드는 벡터 테이블(글 `text_embedding` 등)은 v0.1에서 인덱스 없이 전체 비교하고, HNSW는 v0.1 실측 확인 후 v0.2에서 도입을 고려합니다. 종·보호중 조건은 서비스 테이블 `animal`과 `desertion_no`로 JOIN해 거릅니다(벡터 테이블에 종 칼럼은 두지 않음). 사진 HNSW를 타는 검색은 조건으로 걸러진 만큼 결과가 모자랄 수 있으니 `hnsw.ef_search`를 LIMIT 이상으로 두고 `hnsw.iterative_scan`(pgvector 0.8)을 켭니다. 이 설정은 성능 비교 후 검색 코드에 넣습니다(지금 코드는 기본값). 모델·차원을 바꾸면 새 마이그레이션으로 칼럼이나 테이블을 추가합니다.
   - **[확정, 11/19]** 종료 공고 사진의 벡터는 지우지 않고 검색에서 거릅니다. 종료 뒤 보호중으로 복귀하는 공고가 있기 때문입니다(3절). 검색은 기본으로 `processState`가 `보호중`인 공고 안에서만 찾습니다. 공고 상태는 B 서비스 테이블에서 읽습니다.
 
 ## 7. 컬럼 (A→B 인계 스키마 v0)
@@ -362,6 +362,8 @@ Canary 점검 결과는 전용 테이블에 저장하고 공용 요청 로그의
 
 사진 태깅·사진 임베딩은 등록 버전을 명시하면 결과와 처리·요청 로그에 해당 버전을 기록합니다. 사진 입력의 식별값은 이번 연결에서 기존과 같이 검증한 원본 SHA-256입니다. 전처리 변경은 등록 버전으로 구분합니다. 사진 태그의 논리 키는 `(subject_type, subject_key, task, version, tag_code)`, 사진 벡터는 `(subject_type, subject_key, task, version)`입니다. 태그가 0개면 해당 버전의 기존 태그를 지우고 처리 기록을 남깁니다.
 
+글 임베딩의 등록 설정에는 **카드 템플릿의 내용 전체**와 지문(`template_sha256`, `golden_sha256`)이 들어갑니다. 지금 코드가 만드는 값과 다르거나, 같은 템플릿 이름인데 내용이 다른 등록이 있으면 모델을 부르기 전에 멈춥니다. 지문이 없는 `text_embedding@1`·`@2`는 계획만 볼 수 있습니다(`docs/card_templates.md`, 11-24).
+
 글 임베딩의 후보 실행은 `gold_text_embedding.version`과 카드 본문 `source_hash`로 동일 공고의 기존 벡터를 찾습니다. `prompt_version`은 카드 템플릿, `tag_versions`는 카드 생성에 사용한 작업별 태그 버전의 JSON입니다. 같은 버전·같은 본문이면 재호출하지 않습니다. Jev가 태깅한 입력 글의 해시와 A2 카드 전체 본문의 해시는 각각 별개입니다.
 
 기존 결과의 새 `version` 컬럼은 null로 두고, 기존 질문지 또는 모델·차원·전처리 키로 계속 읽습니다. 이전 행을 새 버전으로 이관하려면 실제 설정을 확인해야 합니다. 필드가 추가된 테이블을 먼저 적용하고 초기 버전을 등록한 후 후보 실행을 사용합니다. Silver `publish_id` 연결과 RDS `active_version` 전환은 별도 구현입니다.
@@ -378,6 +380,11 @@ Canary 점검 결과는 전용 테이블에 저장하고 공용 요청 로그의
 - 원천 입력은 Bronze 수집 시각인 `source_fetched_at`으로 비교합니다. 같은 시각의 서로 다른 Run은 충돌로 처리하고, 오래된 입력이 최신 반영 상태를 덮어쓰지 않도록 합니다. `publish_seq`는 발행 순번 추적에 사용합니다. 최신 READY 자동 선택과 역반영 방지는 정기 실행 연결 시 검증합니다.
 - 사진 수집 실패 슬롯은 기존 연결 또는 사진 없음 상태를 유지합니다. 슬롯과 스냅샷 정합성을 검증한 경우 READY를 발행할 수 있습니다.
 - RDS의 공고 상태는 공고 전용 `COMPLETED` 신호로 별도 반영합니다. 보호 종료 공고는 검색에서 제외하고, 상세 30일은 최초 보호중 → 종료를 관측한 `fetched_at`부터 계산합니다. 같은 전환을 재처리해도 만료 시각은 유지합니다.
+
+- **공유 키 [확정, 11/25 Silver·임베딩]**: Gold·RDS는 `publish_id`(= `silver_` + `bronze_run_id`)를 따릅니다. `photo_run_id`는 Bronze·Silver 안의 수집·처리·복구용이고 Gold·RDS에서는 쓰지 않습니다(Silver 이력 표의 `run_id`도 `photo_run_id`와 같은 값).
+- **사진 임베딩의 READY 입력 (11/25)**: `embed --publish-id <ID> --publish-bucket <버킷> --publish-prefix <경로> --gold-env <환경>`은 발행본이 고정한 공고·현재 사진 스냅샷에서 **보호중 공고의 사진**만 대상으로 합니다. 사진 파일은 Silver가 가리키는 Bronze 원본(`original_s3_key`)에서 읽습니다. 실행마다 `gold_run_input`에 한 행을 남기고, 새로 만들 사진이 0장이어도 남깁니다(시작 기록이며 완료 표시는 아님). 이미 만든 벡터는 sha256으로 재사용합니다. 쓸 때는 발행본의 표가 같은 환경의 Silver 표여야 하므로, Gold prod 쓰기는 Silver prod가 열린 뒤 됩니다. 매일 DAG는 아직 Bronze 입력입니다.
+- **태그 버전 이름이 바뀐 경우 (11/25)**: `embed-text`는 등록된 버전의 태그가 한 건도 없고 다른 버전만 있으면 모델을 부르기 전에 멈춥니다(계획에는 `missing_tags`로 표시). `_test`의 Jev 태그가 `text_health@1`·`text_personality@1`로 바뀌어 `text_embedding@3`은 쓰기가 멈추며, 저장된 `@3` 벡터는 그대로 씁니다(새 이름으로 만든 카드 18,730건이 저장된 글과 같음). 다음 글 적재는 새 이름으로 등록한 버전으로 합니다.
+- **v0.1(11/23)**: READY 이전이라 공고 스냅샷 `9071221286505043399`, 사진 스냅샷 `5477718773468639493`(Bronze 실행 `20261123T030014-aebb34`)을 기준선으로 따로 관리합니다.
 
 `gold_run_input`은 `gold_run_id`별로 Silver의 `publish_id`, 작업 `task`, 설정 `version`, 시작 시각 `started_at`을 기록합니다. 글 임베딩은 명시한 READY 발행본의 공고·사진 테이블과 스냅샷 ID를 검증하고 실행 동안 고정합니다. 최신 테이블 조회로 대체하지 않습니다. 실행 입력 표는 `--group execution`으로 생성합니다.
 
@@ -540,3 +547,87 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 - DAG(`dags/text_tags.py`)와 실행 이미지: 사진 태깅처럼 Silver apply 전환 뒤 연결. 이미지·ECR·네임스페이스·Secret 은 사람이 만듭니다.
 - 같은 글 재사용을 실행 사이로 넓히기(지금은 한 실행 안에서만).
 - 기준 확인: sfe 의 "양호"(칸 이름 없이 붙어 정보 없음으로 판정), "밝은 성격"(활발 여부).
+
+## 16. 서비스 DB (RDS) 표 [v0.1 초안, 2026-11-25]
+
+기준: 노션 "Gold 스키마 · 확정 규칙과 사진 임베딩 설계안"(11/22~) 의 RDS 절. 동물병원·보호소 별도 표와 태그 사전 표는 두지 않습니다.
+
+**관리 방식**
+
+| 무엇 | 원본 | 고치는 법 |
+|---|---|---|
+| 표·칼럼 설명, 예시, 값 목록(태그 등) | `docs/rds_schema.dbml` | 파일을 고치고 dbdiagram.io 에 붙여 넣어 그림 확인 |
+| 실제 DB 구조 | `db/migrations/NNN_*.sql` | 이미 있는 파일은 고치지 않고 다음 번호 파일 추가. 적용은 사람이 |
+| 둘이 같은지 | `tests/test_rds_schema_doc.py` | 표·칼럼 이름이 다르면 pytest 실패 |
+| RDS 에 어디까지 적용했는지 | RDS `schema_migrations` 표 (005) | `python -m rebom.common.migrate status` 로 보고, `apply` 로 남은 파일을 적용 |
+| 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.1 = 마이그레이션 001~007.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
+
+- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~007**(태그 `schema-v0.1`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
+- 적용 도구는 파일 하나를 트랜잭션 하나로 묶어 실행과 기록을 함께 커밋합니다. 그래서 마이그레이션 파일 안에는 `BEGIN`/`COMMIT` 을 쓰지 않습니다. 트랜잭션 밖에서만 되는 명령(`CREATE INDEX CONCURRENTLY` 등)은 파일 첫 줄에 `-- migrate: no-transaction` 을 적습니다.
+- 적용한 파일의 내용(sha256, LF 기준)이 레포와 달라지면 `apply` 가 멈춥니다. 고치지 말고 새 번호 파일을 추가합니다.
+- 001~004 는 기록 표가 생기기 전에 손으로 적용했으므로 `baseline 4` 로 기록만 넣습니다(2026-11-25).
+
+- dbdiagram.io 의 SQL 내보내기는 쓰지 않습니다. 값 목록을 PostgreSQL ENUM 타입으로 만들고(값 삭제 불가), CHECK·부분 인덱스·`IF NOT EXISTS` 가 빠지며, `breed.<품종>` 같은 열린 값을 닫힌 목록으로 만듭니다.
+- DBML 의 Enum 은 설명용입니다. 실제 DB 에서는 text/varchar + CHECK 이고, `tag_code` 는 품종이 열린 값이라 CHECK 가 없습니다. 귀염은 검색 태그가 될 수 없게 CHECK 로 막습니다.
+
+**표 (영역별)**
+
+- 공고 화면: `service_notice`(공고당 1행, 보호자 실명 없음), `service_notice_photo`(사진 칸당 1행), `service_notice_tag`(태그 1개 = 1행, 활성 버전·현재 입력만) — `003_service_tables.sql`
+- 검색 벡터: `image_embedding`, `text_embedding` — `004_vector_tables_v01.sql` 에서 지우고 v0.1 모양으로 다시 만듦(키에 `version`, 서비스 표로 외래키). `006` 에서 version 으로 정해지는 칼럼(`model`, `model_key`, `template_version`, `tag_versions`)을 뺌, `007` 에서 사진 벡터의 `photo_run_id` 도 뺌: 실행 설정은 Gold 레지스트리의 `task@N` 설정에만 두고, 행에는 `version`·입력 해시·`gold_run_id` 만 둡니다(원천 실행은 `service_notice_photo.silver_publish_seq` → 발행 기록으로 추적). Gold `prompt_version`(글 임베딩에서는 카드 템플릿)은 RDS 로 옮기지 않습니다. **[결정, 11/25]** RDS 기존 데이터는 비우고 S3 동기화를 처음부터 하며, 사진 HNSW `image_embedding_hnsw_cos` 도 지움. v0.1 은 인덱스 없이 전체 비교, 실측 뒤 v0.2 에서 HNSW 도입 검토
+- 운영: `active_version`(작업별 활성 버전, 전환은 사람), `sync_state`(동기화 경로별 마지막 반영 완료본) — `003_service_tables.sql`, `schema_migrations`(마이그레이션 적용 기록) — `005_schema_migrations.sql`
+
+### 16.1 S3 → RDS 동기화 [v0.1, 2026-11-25]
+
+코드: `src/rebom/serving/sync/`(계산은 `plan.py`, 읽기는 `inputs.py`, 쓰기는 `db.py`). 실행: `python -m rebom.serving.sync <경로> [--dry-run]`. 기준: 노션 "RDS 동기화 분리 · 11/23 결정", "사진 교체와 Gold → RDS 반영 규칙", "공고 노출 정책 · 확정".
+
+| 경로 (`sync_state.route`) | 입력 | 바꾸는 표 | 순서 기준 |
+|---|---|---|---|
+| `notice_status` | Silver 공고 완료 기록 `notice_completion/<bronze_run_id>.json` 의 공고 스냅샷 + 보호소 표 | `service_notice` | `last_silver_run_id`(시각으로 시작하는 Bronze run_id) |
+| `photo_vector` | READY 발행 기록(`publish/<publish_id>.json`)의 사진 스냅샷 + Gold `gold_image_embedding` | `service_notice_photo`, `image_embedding` | `last_publish_seq` |
+| `tag` | 같은 발행 + Gold `gold_animal_tag`(글 태그는 처리 기록의 최신 입력) | `service_notice_tag` | `last_publish_seq`, 같은 순번의 `photo_vector` 가 먼저 |
+| `text_vector` | 같은 발행 + Gold `gold_text_embedding` | `text_embedding` | `last_publish_seq` |
+
+- 경로 하나 = 트랜잭션 하나. `sync_state` 행을 잠그고 순번을 비교한 뒤 행을 바꾸고 순번을 고친다. 더 오래된 입력은 쓰지 않고 종료 코드 4로 멈춘다. 같은 입력을 다시 돌리면 같은 결과가 된다(바뀐 행만 씀).
+- 바뀐 행은 시각이 아니라 키·해시로 찾는다. 공고는 `content_hash`(공고 내용 칼럼의 sha256), 사진은 sha256·표시 키, 벡터는 sha256·글 해시.
+- **공고**: 처음 보는 공고는 보호중일 때만 넣는다. RDS 에 보호중이던 공고가 종료로 보이면 그 완료본의 `source_fetched_at` 을 `closed_transition_at`, 30일 뒤를 `visible_until` 로 둔다. 같은 종료를 다시 반영해도 시각을 바꾸지 않고, 보호중으로 돌아오면 둘 다 비운다. RDS 를 처음부터 채우므로(11/25) 서비스 시작 전에 이미 종료된 공고는 들어오지 않는다. 전환 시각의 정밀도는 하루 한 번 수집 시각이다. `size` 는 Silver 값 그대로(10kg 이하 small, v0.2 에서 기준을 다시 맞춤).
+- **사진**: Silver 현재 사진 중 sha256·표시 키가 있는 칸만. Silver 에 그 공고가 있는데 칸이 없거나 비었으면(emptied) RDS 칸을 지운다(벡터는 외래키로 같이 지워짐). Silver 에 공고 자체가 없으면 RDS 칸을 그대로 둔다(종료 공고의 마지막 사진 유지). RDS 에 공고가 없으면 넣지 않는다(외래키).
+- **사진 벡터**: 활성 `image_embedding` 버전의 Gold 벡터 중 sha256 이 지금 칸 사진과 같은 것만. 사진이 바뀌었는데 새 벡터가 아직 없으면 옛 벡터 행을 지워 검색 후보에서 뺀다. `s3_key` 는 Bronze 원본 키.
+- **태그**: 사진 태그는 공고 대표 사진(RDS 사진 칸 중 가장 작은 칸)의 sha256 과 같은 `subject_key`, 글 태그는 그 공고·작업의 처리 기록 중 가장 늦은 행이 `OK`·`NO_RESULT` 일 때 그 `input_hash` 와 같은 `source_hash`(15.5). 활성에서 빠진 작업의 행은 지운다. `tag_label` 은 `tagging/tag_codes.py`·`text_tags.py` 이름표, 품종은 `breed.` 뒤 이름. 귀염은 검색 태그로 넣지 않는다.
+- **글 벡터**: 활성 `text_embedding` 버전에서 공고마다 `gold_updated_at` 이 가장 늦은 행.
+- **활성 버전**: RDS `active_version` 을 시작할 때 읽고, `config_hash` 가 Gold 레지스트리(`--gold-env`)의 값과 다르면 멈춘다. 없는 작업은 건너뛴다(사진 칸·공고는 반영). Gold 행의 `version` 칸이 빈 옛 행은 레지스트리 설정의 옛 키(모델·`prompt_version`)로 읽는다(13.6, 끄려면 `--no-legacy`). RDS 행의 `version` 에는 활성 버전 이름을 넣는다.
+- **Gold 환경**: 기본 test(11/25 결정, 사진 벡터도 test 로 옮기는 중). `--gold-env prod` 로 바꿀 수 있다. Silver 는 test 경로(DAG 와 같은 값)다.
+- **DAG**: `rescue_ingest` 의 `sync_notice_status`(Silver 공고 적재 뒤) → `sync_photo_vector`(발행·임베딩·공고 반영 뒤, all_done) → `sync_tag`·`sync_text_vector`. Variable `rebom_rds_sync_enabled = true` 일 때만 돈다. 예전 `load_photo_embeddings` 는 뺐다(`embedding/store.py`·`cli load` 는 v0.1 표와 맞지 않아 쓰지 않음, 코드는 담당자 리뷰 뒤 정리).
+- 시험: `tests/test_serving_sync_plan.py`(규칙), `tests/test_serving_sync_db.py`(실제 PostgreSQL, `REBOM_TEST_PG_DSN` 이 있을 때만).
+
+**남은 일**
+
+- `active_version` 첫 값 넣기(사람이, 각 작업의 레지스트리 등록 뒤). 글 태그(`text_personality`·`text_health`)는 아직 등록 버전이 없어 등록해야 동기화된다.
+- 종료 30일이 지난 공고의 RDS 화면용 행 정리 배치(주기 미정). Gold 결과는 보존.
+- Silver prod 경로가 정해지면 동기화 기본 경로·DAG 값을 바꾼다. `embed_photos`(Gold prod)와 동기화(Gold test)의 환경을 맞춘다.
+- 기존 `embedding/store.py`·`cli load`·`smoke` 의 RDS 코드 정리(담당자와 리뷰).
+
+### 16.2 검색 API 벡터 검색과 활성 버전 [v0.1, 2026-11-25]
+
+검색 API(`serving/db_repository.py`, `serving/query_embed.py`)는 사용자 입력을 임베딩해 RDS 벡터와 코사인 거리로 비교한다.
+
+- **검색창 문장**: `GET /animals?text=…` 는 글 벡터(`text_embedding`)와만 비교한다. 프론트 검색창은 이 값을 보낸다(`frontend/src/lib/api.ts`). sample 모드는 벡터가 없어 단어 포함(`q`)으로 거른다.
+- **사진**: `POST /animals/photo-search` 는 사진 벡터(`image_embedding`)와 비교한다. 공고마다 지금 칸 sha256 과 같은 칸 중 가장 가까운 거리.
+- **질의 임베딩 = 활성 버전**: 질의는 `active_version.query_config` 의 `model_id`·`dim` 으로만 임베딩하고, 벡터 표에서는 `version` 이 활성 버전인 행만 비교한다. `query_config` 는 동기화(`photo_vector`·`text_vector`)가 같은 트랜잭션에서 그 버전의 Gold 레지스트리 설정으로 채운다. 활성 행의 `config_hash` 가 레지스트리와 같을 때만 쓰고, 손으로 넣지 않는다.
+  - 값이 비었거나, 모델이 검색 API 가 부를 수 있는 모델(`gemini.MODEL`)이 아니면 임베딩하지 않고 503 을 돌려준다. 짐작한 값으로 임베딩하지 않는다.
+  - 질의 접두어는 `gemini.query_text`(글), 전처리는 `prep.to_jpeg`(사진)로 Gold 와 같다.
+- **종료 공고**: 거리는 보호중 공고에만 붙인다. 종료 공고(상세 노출 30일)는 벡터 순위에 섞이지 않고 결과 뒤에 원래 정렬로 남는다(`similarity` 는 null).
+- **Gemini 키**: API 파드는 `GEMINI_API_KEY` 또는 Secrets Manager `rebom/embed/prod/gemini_api_key`(`REBOM_GEMINI_SECRET_ID`)를 읽는다. 못 읽으면 503 과 함께 로그에 사람에게 권한을 요청하라고 남긴다.
+- **probe**: liveness 는 `/livez`(DB 안 봄), readiness 는 `/health`(DB 봄).
+
+**활성 버전을 바꾸는 순서 (사람이)**
+
+1. 새 버전을 Gold 레지스트리에 등록하고 Gold 벡터를 다 만든다.
+2. `active_version` 의 `version`·`config_hash` 를 바꾼다(사람이). `query_config` 는 건드리지 않는다.
+3. 바로 `python -m rebom.serving.sync text_vector`(사진은 `photo_vector`)를 돌린다. 새 버전 벡터를 넣고 `query_config` 를 채운다. 동기화는 활성 버전만 읽으므로 전환 전에 미리 넣을 수 없다. 2번과 3번 사이에는 새 버전 행이 없어 벡터 순위가 비고, 결과는 원래 정렬로 나온다. 사용이 적은 시간에 한다.
+4. 동기화 출력의 `query_config` 가 채워졌는지, `GET /animals?text=…` 에서 `similarity` 가 채워지는지 확인한다.
+
+**실측 후 보완**
+
+- API 전용 읽기 계정(SELECT 만)으로 분리. 지금은 동기화와 같은 `rebom/dev/rebom-db` 로 붙는다.
+- 연결 `statement_timeout` (예: 5초). 지금은 제한이 없다.
+- 연결 풀(`psycopg_pool`). 지금은 연결 하나를 모든 요청이 차례로 쓴다. 전체 비교 질의 시간(p50·p95)과 동시 요청 수를 잰 뒤 크기를 정한다.

@@ -1,0 +1,12 @@
+/* dev 모드 순위 근거 (API REBOM_ENV=dev 일 때만 보임). components/animal/RankDebugBox, components/search/RankOrderNote */
+.rank-debug { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; padding: 6px 8px; border: 1px dashed #b8b2a4; border-radius: 6px; background: #f6f4ee; color: #4d4a42; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: left; word-break: break-all; }
+.rank-debug-head { display: flex; flex-wrap: wrap; gap: 8px; }
+.rank-debug-head b { color: #8a3b12; }
+.rank-debug-line i { margin-right: 6px; font-style: normal; color: #8b8676; }
+.rank-order-note { margin: 0 0 12px; padding: 8px 10px; border: 1px dashed #b8b2a4; border-radius: 6px; background: #f6f4ee; color: #4d4a42; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.rank-order-note b { color: #8a3b12; }
+.rank-order-note ol { margin: 4px 0; padding-left: 18px; list-style: decimal; }
+.rank-order-note > span { display: block; }
+@media (prefers-color-scheme: dark) {
+  .rank-debug, .rank-order-note { background: #2b2a26; border-color: #5d594f; color: #ddd8cc; }
+}

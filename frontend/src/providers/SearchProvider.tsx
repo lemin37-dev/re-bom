@@ -6,6 +6,7 @@ import { isAvailable } from '@/lib/animal'
 import { ApiError, fetchAnimals, type AnimalSearchParams } from '@/lib/api'
 import { availableFirstOrder, filtersToParams, sortToParam } from '@/lib/search'
 import type { Animal } from '@/types/animal'
+import type { PageDebug } from '@/types/rank'
 import type { Filters, SortOption } from '@/types/filters'
 import { TAG_SPECIES, type TagSpecies } from '@/types/tags'
 
@@ -15,9 +16,9 @@ export type CenterFilter = { regNo: string; name: string }
 type SearchState = {
   query: string
   setQuery: (value: string) => void
-  /** 첨부 사진 blob URL (사진 검색은 아직 서버에 연결되지 않아 결과에는 반영되지 않음) */
+  /** 첨부 사진 미리보기 blob URL. 검색하면 사진 벡터로 줄 세움(문장보다 우선) */
   photo: string | null
-  setPhoto: (value: string | null) => void
+  setPhoto: (file: File | null) => void
   filters: Filters
   setFilters: (value: Filters) => void
   /** 고른 사진 태그 코드. 누르면 바로 다시 검색합니다 (문장은 입력 중인 것이 아니라 마지막으로 제출한 것만 씀). */
@@ -45,12 +46,17 @@ type SearchState = {
   error: string | null
   retry: () => void
   centerFilter: CenterFilter | null
+  /** 지금 목록을 부른 조건과 사진 (지도가 같은 조건으로 부름) */
+  listParams: AnimalSearchParams
+  listPhoto: File | null
   /** 지금까지 불러온 동물 */
   visible: Animal[]
   /** 조건에 맞는 전체 수 */
   total: number
   /** 태그로 검색했을 때 고른 범주가 모두 맞는 아이 수 (목록 맨 앞). 태그 없이 검색하면 null */
   matched: number | null
+  /** API 를 REBOM_ENV=dev 로 띄웠을 때만: 정렬 순서 설명. prod 에서는 null */
+  rankDebug: PageDebug | null
   hasMore: boolean
   loadMore: () => void
   /** 검색 실행. text·nextFilters·nextTags를 넘기면 검색어·조건·태그도 함께 바꿉니다. */
@@ -75,7 +81,8 @@ const SearchContext = createContext<SearchState | null>(null)
 export function SearchProvider({ children }: { children: ReactNode }) {
   const [query, setQuery] = useState('')
   const [searched, setSearched] = useState(false)
-  const [photo, setPhoto] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const photo = useMemo(() => (photoFile ? URL.createObjectURL(photoFile) : null), [photoFile])
   const [filters, setFilters] = useState<Filters>(initialFilters)
   const [tags, setTags] = useState<string[]>([])
   const [filterOpen, setFilterOpen] = useState(false)
@@ -84,16 +91,16 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const [map, setMap] = useState(false)
   const [centerFilter, setCenterFilter] = useState<CenterFilter | null>(null)
   // 검색 버튼을 누른 시점의 검색어·조건 (입력 중인 값과 구분)
-  const [submitted, setSubmitted] = useState<{ query: string; filters: Filters; tags: string[]; seq: number }>({ query: '', filters: initialFilters, tags: [], seq: 0 })
+  const [submitted, setSubmitted] = useState<{ query: string; filters: Filters; tags: string[]; photo: File | null; seq: number }>({ query: '', filters: initialFilters, tags: [], photo: null, seq: 0 })
 
   // 불러온 결과는 어떤 조건(key)으로 받았는지와 함께 둡니다. key가 지금 조건과 다르면 '불러오는 중'입니다.
-  type Result = { key: string; items: Animal[]; total: number; matched: number | null; page: number; error: string | null }
-  const [result, setResult] = useState<Result>({ key: '', items: [], total: 0, matched: null, page: 0, error: null })
+  type Result = { key: string; items: Animal[]; total: number; matched: number | null; debug: PageDebug | null; page: number; error: string | null }
+  const [result, setResult] = useState<Result>({ key: '', items: [], total: 0, matched: null, debug: null, page: 0, error: null })
   const [retrySeq, setRetrySeq] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const moreAbort = useRef<AbortController | null>(null)
 
-  useEffect(() => () => { if (photo?.startsWith('blob:')) URL.revokeObjectURL(photo) }, [photo])
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo) }, [photo])
 
   // 보호 중인 아이만 보여 줍니다. 검색 전에는 최신 공고, 검색 후에는 검색어·조건을 적용합니다.
   const params = useMemo<AnimalSearchParams>(() => ({
@@ -102,28 +109,29 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     size: PAGE_SIZE,
     ...(centerFilter ? { shelter: centerFilter.regNo } : searched ? { ...filtersToParams(submitted.filters), q: submitted.query, tags: submitted.tags } : {}),
   }), [sort, centerFilter, searched, submitted])
-  const key = `${JSON.stringify(params)}#${submitted.seq}#${retrySeq}`
+  const searchPhoto = !centerFilter && searched ? submitted.photo : null
+  const key = `${JSON.stringify(params)}#${submitted.seq}#${retrySeq}#${searchPhoto ? 'photo' : ''}`
   const searching = result.key !== key
 
   useEffect(() => {
     const controller = new AbortController()
     moreAbort.current?.abort()
-    fetchAnimals({ ...params, page: 1 }, controller.signal)
-      .then(res => setResult({ key, items: res.items, total: res.total, matched: res.matched, page: 1, error: null }))
-      .catch(e => { if (!controller.signal.aborted) setResult({ key, items: [], total: 0, matched: null, page: 0, error: e instanceof ApiError ? e.message : '목록을 불러오지 못했어요.' }) })
+    fetchAnimals({ ...params, page: 1 }, controller.signal, searchPhoto)
+      .then(res => setResult({ key, items: res.items, total: res.total, matched: res.matched, debug: res.debug, page: 1, error: null }))
+      .catch(e => { if (!controller.signal.aborted) setResult({ key, items: [], total: 0, matched: null, debug: null, page: 0, error: e instanceof ApiError ? e.message : '목록을 불러오지 못했어요.' }) })
     return () => controller.abort()
-  }, [params, key])
+  }, [params, key, searchPhoto])
 
   const loadMore = useCallback(() => {
     if (loadingMore || searching) return
     const controller = new AbortController()
     moreAbort.current = controller
     setLoadingMore(true)
-    fetchAnimals({ ...params, page: result.page + 1 }, controller.signal)
+    fetchAnimals({ ...params, page: result.page + 1 }, controller.signal, searchPhoto)
       .then(res => setResult(prev => prev.key !== key ? prev : { ...prev, items: [...prev.items, ...res.items.filter(a => !prev.items.some(p => p.id === a.id))], total: res.total, page: prev.page + 1 }))
       .catch(e => { if (!controller.signal.aborted) setResult(prev => ({ ...prev, error: e instanceof ApiError ? e.message : '목록을 더 불러오지 못했어요.' })) })
       .finally(() => setLoadingMore(false))
-  }, [loadingMore, searching, params, result.page, key])
+  }, [loadingMore, searching, params, result.page, key, searchPhoto])
 
   const items = result.items
   const total = result.total
@@ -136,7 +144,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     if (text !== undefined) setQuery(text)
     if (nextFilters) setFilters(nextFilters)
     if (nextTags) setTags(nextTags)
-    setSubmitted(prev => ({ query: q, filters: nextFilters ?? filters, tags: nextTags ?? tags, seq: prev.seq + 1 }))
+    setSubmitted(prev => ({ query: q, filters: nextFilters ?? filters, tags: nextTags ?? tags, photo: photoFile, seq: prev.seq + 1 }))
     setSearched(true)
   }
 
@@ -159,7 +167,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   }
 
   const value: SearchState = {
-    query, setQuery, photo, setPhoto, filters, setFilters, sort, setSort,
+    query, setQuery, photo, setPhoto: setPhotoFile, filters, setFilters, sort, setSort,
     tags,
     tagSpecies, chooseTagSpecies,
     toggleTag: code => searchTags(tags.includes(code) ? tags.filter(t => t !== code) : [...tags, code]),
@@ -168,7 +176,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     map, toggleMap: () => setMap(v => !v),
     searched, setSearched, searching, loadingMore, error,
     retry: () => setRetrySeq(n => n + 1),
-    centerFilter, visible, total, matched: searching ? null : result.matched, hasMore: items.length < total, loadMore,
+    centerFilter, listParams: params, listPhoto: searchPhoto, visible, total, matched: searching ? null : result.matched, rankDebug: searching ? null : result.debug, hasMore: items.length < total, loadMore,
     search,
     resetAndSearch: () => search('', allFilters, []),
     focusCenter: center => { setCenterFilter(center); setFilters(allFilters); setTags([]); setQuery(''); setSubmitted(prev => ({ ...prev, query: '' })); setSearched(true); setMap(false) },

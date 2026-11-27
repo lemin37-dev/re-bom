@@ -1,0 +1,16 @@
+{
+  "template_version": "A1",
+  "description": "벤치마크 글 (11-18). 카드 일치 확인용",
+  "fields": [
+    {"value": "breed"},
+    {"value": "birth_year", "text": "{}년생"},
+    {"value": "sex", "map": {"M": "수컷", "F": "암컷"}},
+    {"value": "neuter", "map": {"Y": "중성화함", "N": "중성화 안 함"}},
+    {"value": "weight_size"},
+    {"value": "color_families", "text": "털색 {}"},
+    {"value": "color_raw", "text": "(공고 털색 {})"}
+  ],
+  "separator": ", ",
+  "tail": {"value": "note", "text": ". 특징: {}"},
+  "params": {"size_small_max_inclusive": true, "note_source": "special_mark", "allow_soci": false}
+}

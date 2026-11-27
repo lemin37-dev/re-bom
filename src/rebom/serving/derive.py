@@ -8,8 +8,10 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from rebom.storage.cleaning.weight import parse_weight
+
+DOG_CODE = "417000"
 _YEAR = re.compile(r"(\d{4})")
-_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
 def birth_year(age_text: str | None) -> int | None:
@@ -37,17 +39,20 @@ def age_label(age_text: str | None, today: date) -> str | None:
     return "1살 미만" if years == 0 else f"{years}살"
 
 
-def weight_kg(weight_text: str | None) -> float | None:
-    """'13(Kg)' → 13, '0.8~0.9(Kg)' → 0.85 (범위는 평균), '330g(Kg)' → 0.33."""
-    text = (weight_text or "").replace(",", ".")
-    nums = [float(n) for n in _NUMBER.findall(text)]
-    if not nums:
+def weight_kg(weight_text: str | None, species_name: str | None = None) -> float | None:
+    """Silver weight_kg 와 같은 값: '13(Kg)' → 13, '0.8~0.9(Kg)' → 0.9 (범위는 큰 값), '330g(Kg)' → 0.33.
+
+    단위가 애매하거나 개·고양이 100kg 초과는 None (storage.cleaning.weight.parse_weight).
+    """
+    kg = parse_weight(weight_text, species_name)[1]
+    return None if kg is None else round(kg, 2)
+
+
+def size(kg: float | None, species_code: str | None) -> str | None:
+    """크기 (개만): 10kg 미만 small · 25kg 미만 medium · 이상 large. 화면 크기 필터(weight_lt=10 등)와 같은 경계."""
+    if kg is None or species_code != DOG_CODE:
         return None
-    value = sum(nums[:2]) / len(nums[:2])
-    head = text.split("(")[0].lower()
-    if head.endswith("g") and not head.endswith("kg"):
-        value /= 1000
-    return round(value, 2)
+    return "small" if kg < 10 else "medium" if kg < 25 else "large"
 
 
 def sido(addr: str | None) -> str | None:

@@ -1,0 +1,17 @@
+{
+  "template_version": "A2",
+  "description": "A1 + 태그(사진 특징·성격·건강정보), 특징 글은 info_text. v0.1 첫 적재",
+  "fields": [
+    {"value": "breed"},
+    {"value": "birth_year", "text": "{}년생"},
+    {"value": "sex", "map": {"M": "수컷", "F": "암컷"}},
+    {"value": "neuter", "map": {"Y": "중성화함", "N": "중성화 안 함"}},
+    {"value": "weight_size"},
+    {"value": "color_families", "text": "털색 {}"},
+    {"value": "color_raw", "text": "(공고 털색 {})"},
+    {"value": "tags"}
+  ],
+  "separator": ", ",
+  "tail": {"value": "note", "text": ". 특징: {}"},
+  "params": {"size_small_max_inclusive": false, "note_source": "info_text", "allow_soci": true}
+}

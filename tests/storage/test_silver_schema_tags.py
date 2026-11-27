@@ -1,4 +1,4 @@
-﻿from rebom.storage.silver.transform_notice import transform_notice
+from rebom.storage.silver.transform_notice import transform_notice
 
 
 def test_mix_breed():
@@ -39,7 +39,7 @@ import pytest
 @pytest.mark.parametrize(
     "weight,expected_weight,expected_size",
     [
-        ("10(Kg)", 10.0, "small"),
+        ("10(Kg)", 10.0, "medium"),
         ("10.1(Kg)", 10.1, "medium"),
         ("24.9(Kg)", 24.9, "medium"),
         ("25(Kg)", 25.0, "large"),

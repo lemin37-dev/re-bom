@@ -50,3 +50,9 @@ variable "keep_tagged_images" {
   type        = number
   default     = 30
 }
+
+variable "web_build_secrets" {
+  description = "웹 이미지 빌드(GitHub Actions)가 읽는 Secrets Manager 이름. 브라우저에 내려가는 공개 키만 둔다"
+  type        = list(string)
+  default     = ["rebom/api/kakao_java"]
+}

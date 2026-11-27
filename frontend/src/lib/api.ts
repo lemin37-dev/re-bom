@@ -1,4 +1,5 @@
 import type { Animal, AnimalShelter, ShelterSummary, SizeLabel, Species } from '@/types/animal'
+import type { PageDebug, RankDebug } from '@/types/rank'
 import type { PhotoTag, TagCatalog, TagMatch, TagSpecies } from '@/types/tags'
 
 /**
@@ -44,6 +45,8 @@ export type ApiAnimal = {
   photoTags?: PhotoTag[]
   /** 태그를 골라 검색했을 때만 옴 */
   tagMatch?: TagMatch | null
+  /** API REBOM_ENV=dev 에서만: 순위 근거. prod 응답에는 키가 없음 */
+  rank?: RankDebug
   // 상세
   endReason?: string | null
   healthCheck?: string | null
@@ -52,7 +55,7 @@ export type ApiAnimal = {
   healthNote?: string | null
 }
 /** matched: 태그를 골랐을 때 고른 범주가 모두 맞는 아이 수 (목록 맨 앞) */
-export type ApiPage = { total: number; matched?: number | null; page: number; size: number; items: ApiAnimal[] }
+export type ApiPage = { total: number; matched?: number | null; page: number; size: number; items: ApiAnimal[]; debug?: PageDebug }
 
 export type AnimalSearchParams = {
   species?: Species
@@ -90,6 +93,26 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/** 사진 파일을 본문 그대로 보낸다 (POST /animals/photo-search). 422 는 서버가 사진 문제를 문장으로 알려 준다. */
+async function postPhoto<T>(path: string, photo: File, signal?: AbortSignal): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST', body: photo, signal,
+      headers: { Accept: 'application/json', 'Content-Type': photo.type || 'application/octet-stream' },
+    })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e
+    throw new ApiError(0, '검색 서버에 연결할 수 없어요.')
+  }
+  if (res.status === 422) {
+    const detail = await res.json().then(b => (typeof b?.detail === 'string' ? b.detail : null)).catch(() => null)
+    throw new ApiError(422, detail ?? '이 사진으로는 찾을 수 없어요.')
+  }
+  if (!res.ok) throw new ApiError(res.status, `검색 서버 오류 (${res.status})`)
+  return res.json() as Promise<T>
+}
+
 function toQuery(p: AnimalSearchParams) {
   const q = new URLSearchParams()
   const set = (key: string, value: string | number | undefined) => { if (value !== undefined && value !== '') q.set(key, String(value)) }
@@ -98,7 +121,7 @@ function toQuery(p: AnimalSearchParams) {
   set('sex', p.sex)
   set('region', p.region?.join(','))
   set('shelter', p.shelter)
-  set('q', p.q?.trim())
+  set('text', p.q?.trim()) // 검색창 문장은 글 벡터와 비교한다(API text). sample 모드 API 는 단어 포함으로 거른다
   set('weight_min', p.weightMin)
   set('weight_lt', p.weightLt)
   set('tags', p.tags?.join(','))
@@ -108,9 +131,18 @@ function toQuery(p: AnimalSearchParams) {
   return q.toString()
 }
 
-export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSignal) {
-  const page = await getJson<ApiPage>(`/animals?${toQuery(params)}`, signal)
-  return { total: page.total, matched: page.matched ?? null, items: page.items.map(toAnimal) }
+/** photo 가 있으면 사진 벡터로 줄 세운다(문장은 쓰지 않음, API 는 벡터 하나로만 줄 세움). 없으면 문장은 글 벡터로. */
+export async function fetchAnimals(params: AnimalSearchParams, signal?: AbortSignal, photo?: File | null) {
+  const page = photo
+    ? await postPhoto<ApiPage>(`/animals/photo-search?${toQuery({ ...params, q: undefined })}`, photo, signal)
+    : await getJson<ApiPage>(`/animals?${toQuery(params)}`, signal)
+  return { total: page.total, matched: page.matched ?? null, items: page.items.map(toAnimal), debug: page.debug ?? null }
+}
+
+/** 지도용: 목록과 같은 조건의 보호소별 마릿수 (GET /animals/places). 문장·사진은 거르지 않아 마릿수에 영향 없음 */
+export type PlaceCount = { regNo: string; count: number }
+export async function fetchPlaces(params: AnimalSearchParams, signal?: AbortSignal) {
+  return getJson<{ total: number; items: PlaceCount[] }>(`/animals/places?${toQuery({ ...params, page: undefined, size: undefined, sort: undefined })}`, signal)
 }
 
 export async function fetchAnimal(id: string, signal?: AbortSignal) {
@@ -178,6 +210,7 @@ export function toAnimal(a: ApiAnimal): Animal {
     photos: a.photos,
     photoTags: a.photoTags ?? [],
     tagMatch: a.tagMatch ?? null,
+    ...(a.rank ? { rank: a.rank } : {}),
     healthCheck: a.healthCheck,
     vaccinationCheck: a.vaccinationCheck,
     sociality: a.sociality,

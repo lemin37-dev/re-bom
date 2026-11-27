@@ -56,6 +56,7 @@ RDS image_embedding (서비스용 사본, 서비스 중인 모델의 현재 사�
 
 - `--source bronze`(기본): 사진 manifest를 모두 읽어 아래 1번 규칙으로 칸별 현재 사진을 고릅니다.
 - `--source silver`: Silver 이미지 표(칸마다 최신 정상 버전)의 `original_s3_key`·`sha256`을 그대로 씁니다. 사진 파일은 두 경우 모두 Bronze S3 원본에서 읽습니다.
+- **READY 입력 (11/25)**: `--publish-id`를 주면 Silver READY 발행본의 보호중 사진을 읽고 `gold_run_input`에 `publish_id`를 남깁니다(데이터 계약 13.7). 전환 전 대조는 `compare-sources --publish-id ... --gold-env test`입니다. 11/25 READY 대조: 보호중 38,969칸이 같고, Bronze에만 2칸(API 목록에서 사라져 재처리 중인 공고 1건)입니다. 매일 DAG는 아직 Bronze 입력입니다.
 - Silver가 운영으로 열린 뒤 넘어갑니다. 조건·순서: `docs/image_embedding_status_20261120.md` 4절. `--silver-env test`로는 S3·RDS에 쓰지 않습니다.
 - 전환 전 대조: `python -m rebom.embedding.cli compare-sources --silver-env <환경>` → `switch_ready: true`
 
@@ -284,7 +285,7 @@ OpenRouter 계정 하나에 여러 사용이 함께 찍힙니다. 기록의 prov
 | 7 | (A2) 태그 | `털 길이 장모`처럼 `이름표 값`, 확인불가·빈 값은 뺌 |
 | 8 | A1: specialMark / A2: 정리된 특징 문장 (specialMark + sfeSoci + sfeHealth 등) | `. 특징: <글>` (관리 번호 지우기·전화번호 가리기는 똑같이) |
 
-**템플릿 버전**
+**템플릿 버전** (형식은 `src/rebom/embedding/card_templates/*.json`, 추가·관리 방법은 `docs/card_templates.md`)
 - `A1` = 1~6 + 8 (벤치마크와 같음, 사회성 sfeSoci 없음). **smoke ① 카드 일치 확인에만** 씁니다.
 - `A2` = A1 + 7(태그). **첫 적재는 A2로 한 번에** 합니다. 태그는 각 담당자가 로컬에서 성능을 확인하고 Silver 칼럼으로 붙인 뒤 씁니다.
   - 태그 칼럼 이름·값 목록·이름표 말은 담당자와 정합니다 [결정 필요].
