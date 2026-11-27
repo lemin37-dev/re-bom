@@ -5,7 +5,7 @@ RDS 는 tests/test_rds_schema_doc.py 가 마이그레이션과 비교한다. 이
           사진 현재 스냅샷 칸(photo_snapshot), 사진 manifest 키(rescue_photos), 수집 상태 키
   Silver  표 생성 스크립트(scripts/storage/rebom_create_aws_silver_tables.py · rebom_create_silver_tables.py), 발행 기록(publish_log)
   Gold    src/rebom/common/gold_catalog.py 의 schemas()
-  ops     아직 마이그레이션이 없어(008 예정) 비교하지 않고 설명 규칙만 본다
+  (운영 기록 ops_* 는 RDS 표라 docs/rds_schema.dbml 과 마이그레이션 008 에 있고 test_rds_schema_doc.py 가 본다)
 코드는 import 하지 않고 ast 로 읽는다(pyiceberg·boto3 없이 돈다). 한쪽만 고치면 실패한다.
 """
 from __future__ import annotations
@@ -18,16 +18,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "docs" / "schema"
-LAYER_FILES = {name: SCHEMA / f"{name}.dbml" for name in ("bronze", "silver", "gold", "ops")}
+LAYER_FILES = {name: SCHEMA / f"{name}.dbml" for name in ("bronze", "silver", "gold")}
 RDS = ROOT / "docs" / "rds_schema.dbml"
 LINKS = SCHEMA / "links.dbml"
 
 # 구조 원본이 아직 없어 이름 비교를 하지 않는 표 (원본이 생기면 지우고 비교에 넣는다)
 UNCHECKED = {
     "bronze_photo_state": "사진 기록 JSON 은 여러 dict 로 나눠 만들어 한 곳의 키 목록이 없음",
-    "ops_run_summary": "마이그레이션 008 예정",
-    "ops_failure": "마이그레이션 008 예정",
-    "ops_schema_snapshot": "마이그레이션 008 예정",
 }
 
 
@@ -200,7 +197,7 @@ def _compare(doc: dict[str, list[str]], src: dict[str, list[str]], *, ignore: se
 
 def test_parsers_find_tables():
     counts = {name: len(layer(name)) for name in LAYER_FILES}
-    assert counts == {"bronze": 6, "silver": 6, "gold": 8, "ops": 3}
+    assert counts == {"bronze": 6, "silver": 6, "gold": 8}
     assert len(gold_sources()) == 8
     assert "desertion_no" in silver_sources()["silver_animal_notice"]
 

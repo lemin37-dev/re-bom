@@ -50,6 +50,8 @@
   - Gold 는 RDS_SYNC_GOLD_ENV(지금 test, 11/25 결정)를 읽는다. embed_photos 는 prod 에 쓰므로, 사진 벡터를 test 로 옮기기 전에는
     image_embedding 을 active_version 에 넣지 않는다.
   - 경로마다 RDS sync_state 의 순번보다 오래된 입력은 쓰지 않고 실패한다(종료 코드 4). 접속은 노드 역할로 rebom/dev/rebom-db.
+- 운영 기록(write_ops_summary, docs/data_contract.md 16.3): 맨 마지막(all_done)에 이 실행의 단계별 건수·실패 원인을 RDS ops_* 에 쓴다.
+  RDS 동기화 task 는 끝날 때 자기 단계(rds_<경로>)를 직접 쓴다. 마이그레이션 008 적용 전에는 쓰기만 건너뛰고 성공으로 끝난다.
 - 사진의 첫 전체 수집(백필)은 11/11~11/12 에 수동 파드로 끝냈다(docs/data_contract.md 6절). 이 task 는 그 뒤에 생긴
   새 칸과 실패(failed) 칸 재시도만 받는다. 이미 받은 칸은 사진 주소가 바뀌어도 다시 받지 않는다(같은 문서, 별도 작업).
 - --limit 2000 은 하루 처리량이 아니라 상한이다. 하루 새 칸은 약 120~550칸(11/3~11/12 측정)이라 평소에는 그만큼만 하고 끝나고,
@@ -394,3 +396,28 @@ with DAG(
     photos_done >> check_embedding_drift >> embed_photos
     [rds_sync_enabled, silver_notice_apply] >> sync_notice_status
     [silver_gold_publish, embed_photos, sync_notice_status] >> sync_photo_vector >> [sync_tag, sync_text_vector]
+
+    # 운영 기록 요약 (docs/data_contract.md 16.3). 다른 task 가 모두 끝난 뒤(성공·실패·건너뜀 상관없이) 한 번.
+    # Bronze·사진 manifest, Silver 건수 기록, 발행, Gold 로그를 모아 RDS ops_* 에 쓴다. 기록이 실패해도 종료 코드 0.
+    write_ops_summary = KubernetesPodOperator(
+        task_id="write_ops_summary",
+        name="write-ops-summary",
+        namespace="rebom-ingest",
+        service_account_name="rebom-ingest",
+        image=EMBED_IMAGE,  # psycopg·pyiceberg·boto3 가 있는 이미지
+        image_pull_policy="Always",
+        cmds=["python", "-m", "rebom.common.ops_summary"],
+        arguments=["--run-id", BRONZE_RUN_ID, "--env", "test", "--gold-env", RDS_SYNC_GOLD_ENV,
+                   "--bucket", DATA_BUCKET, "--publish-prefix", SILVER_TEST_PUBLISH_PREFIX],
+        env_vars={"REBOM_S3_BUCKET": DATA_BUCKET, "AWS_DEFAULT_REGION": "ap-northeast-2"},
+        node_selector={"rebom/pool": "main"},
+        container_resources=k8s.V1ResourceRequirements(
+            requests={"cpu": "100m", "memory": "256Mi"},
+            limits={"memory": "1Gi"},
+        ),
+        trigger_rule="all_done",
+        get_logs=True,
+        on_finish_action="delete_pod",
+        in_cluster=True,
+    )
+    [task for task in dag.tasks if task is not write_ops_summary] >> write_ops_summary

@@ -560,9 +560,9 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 | 실제 DB 구조 | `db/migrations/NNN_*.sql` | 이미 있는 파일은 고치지 않고 다음 번호 파일 추가. 적용은 사람이 |
 | 둘이 같은지 | `tests/test_rds_schema_doc.py` | 표·칼럼 이름이 다르면 pytest 실패 |
 | RDS 에 어디까지 적용했는지 | RDS `schema_migrations` 표 (005) | `python -m rebom.common.migrate status` 로 보고, `apply` 로 남은 파일을 적용 |
-| 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.1 = 마이그레이션 001~007.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
+| 스키마 버전 이름 | DBML 머리 줄 → git 태그 `schema-vX.Y` | 머리 줄(`// 버전: 스키마 v0.2 = 마이그레이션 001~008.`)을 고치면, develop 머지 때 `schema-version.yml` 이 태그를 자동으로 닮. PR 에서 범위·기존 태그와 어긋나면 실패 |
 
-- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~007**(태그 `schema-v0.1`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
+- 변경 이력은 커밋·PR 단위, 실제 DB 상태는 마이그레이션 번호, v0.1 같은 이름은 마이그레이션 묶음에 붙입니다. **스키마 v0.1 = 001~007**(태그 `schema-v0.1`), **v0.2 = 001~008**(운영 기록 표 추가, 머지 뒤 태그 `schema-v0.2`). 마이그레이션이 늘면 머리 줄의 번호를 고치고, 이미 태그가 있는 이름이면 버전을 올립니다. 여러 사람이 동시에 PR 을 올려도 태그는 develop 머지 순서대로 Actions 가 한 번에 하나씩 답니다.
 - 적용 도구는 파일 하나를 트랜잭션 하나로 묶어 실행과 기록을 함께 커밋합니다. 그래서 마이그레이션 파일 안에는 `BEGIN`/`COMMIT` 을 쓰지 않습니다. 트랜잭션 밖에서만 되는 명령(`CREATE INDEX CONCURRENTLY` 등)은 파일 첫 줄에 `-- migrate: no-transaction` 을 적습니다.
 - 적용한 파일의 내용(sha256, LF 기준)이 레포와 달라지면 `apply` 가 멈춥니다. 고치지 말고 새 번호 파일을 추가합니다.
 - 001~004 는 기록 표가 생기기 전에 손으로 적용했으므로 `baseline 4` 로 기록만 넣습니다(2026-11-25).
@@ -575,6 +575,7 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 - 공고 화면: `service_notice`(공고당 1행, 보호자 실명 없음), `service_notice_photo`(사진 칸당 1행), `service_notice_tag`(태그 1개 = 1행, 활성 버전·현재 입력만) — `003_service_tables.sql`
 - 검색 벡터: `image_embedding`, `text_embedding` — `004_vector_tables_v01.sql` 에서 지우고 v0.1 모양으로 다시 만듦(키에 `version`, 서비스 표로 외래키). `006` 에서 version 으로 정해지는 칼럼(`model`, `model_key`, `template_version`, `tag_versions`)을 뺌, `007` 에서 사진 벡터의 `photo_run_id` 도 뺌: 실행 설정은 Gold 레지스트리의 `task@N` 설정에만 두고, 행에는 `version`·입력 해시·`gold_run_id` 만 둡니다(원천 실행은 `service_notice_photo.silver_publish_seq` → 발행 기록으로 추적). Gold `prompt_version`(글 임베딩에서는 카드 템플릿)은 RDS 로 옮기지 않습니다. **[결정, 11/25]** RDS 기존 데이터는 비우고 S3 동기화를 처음부터 하며, 사진 HNSW `image_embedding_hnsw_cos` 도 지움. v0.1 은 인덱스 없이 전체 비교, 실측 뒤 v0.2 에서 HNSW 도입 검토
 - 운영: `active_version`(작업별 활성 버전, 전환은 사람), `sync_state`(동기화 경로별 마지막 반영 완료본) — `003_service_tables.sql`, `schema_migrations`(마이그레이션 적용 기록) — `005_schema_migrations.sql`
+- 운영 기록: `ops_run_summary`(실행·단계별 요약), `ops_failure`(실패 대상 1건 = 1행), `ops_schema_snapshot`(Silver·Gold 표 구조 지문) — `008_ops_records.sql`, 16.3
 
 ### 16.1 S3 → RDS 동기화 [v0.1, 2026-11-25]
 
@@ -631,3 +632,25 @@ python -m rebom.tagging.run_text_tags run --profile <프로필> --targets data/t
 - API 전용 읽기 계정(SELECT 만)으로 분리. 지금은 동기화와 같은 `rebom/dev/rebom-db` 로 붙는다.
 - 연결 `statement_timeout` (예: 5초). 지금은 제한이 없다.
 - 연결 풀(`psycopg_pool`). 지금은 연결 하나를 모든 요청이 차례로 쓴다. 전체 비교 질의 시간(p50·p95)과 동시 요청 수를 잰 뒤 크기를 정한다.
+
+### 16.3 운영 기록 (ops_*) [v0.2 초안, 2026-11-27]
+
+운영 모니터링 화면(`/ops`)의 숫자·실패 원인·스키마 지문의 출처. 표는 RDS `public` 스키마에 `ops_` 접두어로 둔다(`008_ops_records.sql`, `docs/rds_schema.dbml` TableGroup `ops_record`).
+
+| 표 | 한 행 | 키 |
+|---|---|---|
+| `ops_run_summary` | 실행(Bronze `bronze_run_id`) × 단계(`stage`) 요약: 상태, 시각, 입력·출력·실패 건수, 단계별 `stats`(jsonb) | UNIQUE (`env`, `bronze_run_id`, `stage`) |
+| `ops_failure` | 실패 대상 1건: 대상 종류(`animal`·`photo_slot`·`partition`·`route`·`run`), 대상 키, 원인 코드, 차단 여부 | (`env`, `bronze_run_id`, `stage`) 묶음째 교체 |
+| `ops_schema_snapshot` | Silver·Gold 표 구조가 바뀔 때마다 1행: Iceberg `schema_id`, 칼럼 목록, 지문 | 바뀌지 않으면 쓰지 않음 |
+
+- **단계 이름**: `bronze`, `photo`, `silver_notice`, `silver_photo`, `silver_publish`, `gold_<작업>`, `rds_<경로>`. 상태는 `ok`·`warn`·`failed`·`skipped`. 원인 코드는 CHECK 의 17개 값(DBML Enum `ops_reason_code` 에 값마다 설명·누가 처리하는지)이고, 코드의 목록(`rebom.common.ops_log.REASON_CODES`)과 같은지 `tests/test_ops_log.py` 가 확인한다.
+- **누가 쓰나**
+  - Silver(저장 이미지, DB 드라이버 없음): 준비가 끝난 직후(충돌로 멈추기 전에) 건수만 담은 JSON 을 `s3://<버킷>/ops/<env>/silver_notice/<bronze_run_id>.json` 에 쓴다(`storage/silver/ops_stats.py`). 공고 값은 넣지 않는다(공고번호·충돌 목록 이름·건수).
+  - DAG 끝 `write_ops_summary`(임베딩 이미지, `trigger_rule=all_done`): `python -m rebom.common.ops_summary --run-id …` 가 Bronze manifest·사진 실행 기록·Silver 건수 파일·발행 기록·Gold 실행 기록을 읽어 단계별 요약·실패를 한 트랜잭션으로 쓰고, Silver·Gold 표 구조 지문을 남긴다. `--dry-run` 은 쓰지 않고 출력만 한다.
+  - RDS 동기화(`python -m rebom.serving.sync <경로>`): 끝날 때 `rds_<경로>` 단계를 직접 쓴다. 오래된 입력(종료 코드 4)은 `warn`/`stale_input`, `config_hash` 불일치는 `failed`/`config_hash_mismatch`, 그 밖은 `sync_error`. `--dry-run` 은 기록하지 않는다. 환경은 `REBOM_OPS_ENV`(기본 `test`).
+- **기록은 본 작업을 멈추지 않는다**: 표가 아직 없거나 DB 가 닿지 않아도 예외를 삼키고 표준 오류에 `OPS_LOG_SKIPPED:`(S3 건수 파일은 `OPS_STATS_SKIPPED:`) 한 줄만 남긴다. `REBOM_OPS_LOG=off` 면 쓰지 않는다(로컬 시험용).
+- **재실행**: 같은 실행·단계를 다시 쓰면 요약은 덮어쓰고(UPSERT), 실패 목록은 그 단계 것을 지우고 다시 넣는다. 두 벌이 되지 않는다.
+- **개인정보**: `stats`·`evidence` 에 보호자 실명·연락처를 넣지 않는다. 혹시 들어와도 `ops_log.SENSITIVE_KEYS`(`careOwnerNm` 등)는 쓰기 전에 지운다.
+- **Gold 모델 실패**는 여기 옮기지 않는다. 화면이 `gold_inference_log`·`gold_model_request_log` 를 `gold_run_id` 로 바로 읽는다(`ops_run_summary.gold_run_id` 로 연결).
+- **층별 스키마 문서**: Bronze·Silver·Gold 는 `docs/schema/{bronze,silver,gold}.dbml`, 층 사이 키 연결은 `docs/schema/links.dbml`, RDS(운영 기록 포함)는 `docs/rds_schema.dbml`. `python scripts/schema/merge_pipeline_dbml.py --out data/pipeline_schema.dbml` 로 합본을 만든다(커밋하지 않음). 코드와 칼럼 이름이 같은지 `tests/test_pipeline_schema_doc.py` 가 확인한다.
+- **적용(사람이)**: `python -m rebom.common.migrate status` 로 008 이 남았는지 보고 `python -m rebom.common.migrate apply --by <이름>` 으로 적용한다. 적용 전에는 기록이 건너뛰어질 뿐 파이프라인은 그대로 돈다.
