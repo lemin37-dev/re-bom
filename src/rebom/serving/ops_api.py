@@ -7,6 +7,7 @@
   GET  /ops/runs         최근 N일 실행별 단계 상태 (추이)
   GET  /ops/failures     한 실행의 실패 건별 목록 (단계·원인·차단만 거르기)
   GET  /ops/animals/{no} 공고 하나 추적: 실패 기록 + 서비스 표 상태
+  GET  /ops/erd          문서(DBML) 흐름 ERD: 층·영역·표·칼럼 설명과 예시·값 목록·연결
   GET  /ops/schema       문서(DBML) 칼럼 vs 실제(Silver·Gold 관측, RDS information_schema) + 마이그레이션 적용 상태
 
 db 모드 + REBOM_OPS_PASSWORD_HASH·REBOM_OPS_SESSION_SECRET 이 있을 때만 열린다(없으면 503). 응답에 보호자 정보는 없다
@@ -218,6 +219,29 @@ def schema_view(catalog: Mapping[str, Any], snapshots: Iterable[Mapping[str, Any
             "pendingMigrations": [m["filename"] for m in migrations if not m["applied"]]}
 
 
+LAYER_ORDER = ("bronze", "silver", "gold", "rds")
+
+
+def erd_view(catalog: Mapping[str, Any]) -> dict[str, Any]:
+    """탭2 흐름 ERD 용 문서 스키마: 층·영역·표·칼럼 설명/예시·값 목록·연결. 실제 값과의 비교는 schema_view 가 한다."""
+    enums = catalog.get("enums") or {}
+    tables = []
+    for name, t in sorted(catalog["tables"].items(),
+                          key=lambda kv: (LAYER_ORDER.index(kv[1]["layer"]) if kv[1]["layer"] in LAYER_ORDER else 9,
+                                          kv[1].get("group") or "", kv[0])):
+        docs = t.get("columnDocs") or [{} for _ in t["columns"]]
+        tables.append({"table": name, "layer": t["layer"], "group": t.get("group"), "source": t["source"],
+                       "note": t.get("note"),
+                       "columns": [{"name": n, "type": typ, "note": d.get("note"), "example": d.get("example"),
+                                    "pk": bool(d.get("pk")), "notNull": bool(d.get("notNull")),
+                                    "values": enums.get(typ)} for (n, typ), d in zip(t["columns"], docs)]})
+    groups = [{"group": g, **{k: v for k, v in info.items() if k != "tables"}}
+              for g, info in sorted((catalog.get("groups") or {}).items(),
+                                    key=lambda kv: (LAYER_ORDER.index(kv[1]["layer"]) if kv[1]["layer"] in LAYER_ORDER
+                                                    else 9, kv[0]))]
+    return {"layers": list(LAYER_ORDER), "groups": groups, "tables": tables, "refs": catalog.get("refs") or []}
+
+
 # ───────── 라우터 ─────────
 
 class Login(BaseModel):
@@ -326,6 +350,11 @@ def build_router(today=_today) -> APIRouter:
         return {"env": e, "desertionNo": desertion_no,
                 "service": {k: _iso(v) for k, v in service.items()} if service else None,
                 "failures": [failure_view(r) for r in run(store.animal_failures, e, desertion_no)]}
+
+    @router.get("/erd")
+    def get_erd(request: Request, _=Depends(require)) -> dict[str, Any]:
+        """문서(DBML) 흐름 ERD. 이미지에 든 카탈로그만 읽어 DB 가 없어도 된다."""
+        return erd_view(request.app.state.ops_catalog)
 
     @router.get("/schema")
     def get_schema(request: Request, env: Literal["test", "prod"] | None = None,

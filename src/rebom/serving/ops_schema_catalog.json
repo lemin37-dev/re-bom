@@ -1,4 +1,702 @@
 {
+ "enums": {
+  "breed_name_examples": [
+   {
+    "note": "예시",
+    "value": "푸들"
+   },
+   {
+    "note": "예시",
+    "value": "진도견"
+   },
+   {
+    "note": "예시",
+    "value": "말티즈"
+   },
+   {
+    "note": "예시",
+    "value": "포메라니안"
+   },
+   {
+    "note": "예시",
+    "value": "시바"
+   },
+   {
+    "note": "예시",
+    "value": "치와와"
+   },
+   {
+    "note": "예시",
+    "value": "스피츠"
+   },
+   {
+    "note": "예시",
+    "value": "시츄"
+   },
+   {
+    "note": "예시",
+    "value": "라이카"
+   },
+   {
+    "note": "예시",
+    "value": "닥스훈트"
+   },
+   {
+    "note": "예시",
+    "value": "사모예드"
+   },
+   {
+    "note": "예시",
+    "value": "삽살개"
+   },
+   {
+    "note": "예시",
+    "value": "슈나우져"
+   },
+   {
+    "note": "예시",
+    "value": "포인터"
+   },
+   {
+    "note": "예시",
+    "value": "셰퍼드"
+   },
+   {
+    "note": "예시",
+    "value": "풍산견"
+   },
+   {
+    "note": "예시",
+    "value": "동경견"
+   },
+   {
+    "note": "예시",
+    "value": "비글"
+   },
+   {
+    "note": "예시",
+    "value": "마리노이즈"
+   },
+   {
+    "note": "예시",
+    "value": "차우차우"
+   },
+   {
+    "note": "예시",
+    "value": "말라뮤트"
+   },
+   {
+    "note": "예시",
+    "value": "샤페이"
+   },
+   {
+    "note": "예시",
+    "value": "휘펫"
+   },
+   {
+    "note": "예시",
+    "value": "핏불테리어"
+   },
+   {
+    "note": "예시",
+    "value": "페키니즈"
+   },
+   {
+    "note": "예시",
+    "value": "도베르만"
+   },
+   {
+    "note": "예시",
+    "value": "퍼그"
+   },
+   {
+    "note": "예시",
+    "value": "비즐라"
+   },
+   {
+    "note": "예시",
+    "value": "불독"
+   },
+   {
+    "note": "예시",
+    "value": "도사"
+   },
+   {
+    "note": "예시",
+    "value": "실키테리어"
+   },
+   {
+    "note": "예시",
+    "value": "달마시안"
+   },
+   {
+    "note": "예시",
+    "value": "아메리칸불리"
+   }
+  ],
+  "closure_reason": [
+   {
+    "note": "입양",
+    "value": "입양"
+   },
+   {
+    "note": "반환",
+    "value": "반환"
+   },
+   {
+    "note": "자연사",
+    "value": "자연사"
+   },
+   {
+    "note": "안락사",
+    "value": "안락사"
+   },
+   {
+    "note": "기증",
+    "value": "기증"
+   },
+   {
+    "note": "방사",
+    "value": "방사"
+   }
+  ],
+  "color_group": [
+   {
+    "note": "흰색계열",
+    "value": "흰색계열"
+   },
+   {
+    "note": "검정계열",
+    "value": "검정계열"
+   },
+   {
+    "note": "갈색계열",
+    "value": "갈색계열"
+   },
+   {
+    "note": "노랑계열",
+    "value": "노랑계열"
+   },
+   {
+    "note": "회색계열",
+    "value": "회색계열"
+   },
+   {
+    "note": "기타",
+    "value": "기타"
+   }
+  ],
+  "color_pattern": [
+   {
+    "note": "얼룩",
+    "value": "얼룩"
+   },
+   {
+    "note": "줄무늬",
+    "value": "줄무늬"
+   },
+   {
+    "note": "삼색",
+    "value": "삼색"
+   },
+   {
+    "note": "턱시도",
+    "value": "턱시도"
+   },
+   {
+    "note": "호구",
+    "value": "호구"
+   },
+   {
+    "note": "호반",
+    "value": "호반"
+   },
+   {
+    "note": "호피",
+    "value": "호피"
+   },
+   {
+    "note": "반점",
+    "value": "반점"
+   },
+   {
+    "note": "브린들",
+    "value": "브린들"
+   }
+  ],
+  "gold_inference_status": [
+   {
+    "note": "결과를 만듦. 끝남(다시 부르지 않음)",
+    "value": "OK"
+   },
+   {
+    "note": "모델이 답했지만 채택할 결과가 없음. 끝남",
+    "value": "NO_RESULT"
+   },
+   {
+    "note": "사진이 없는 공고. 끝남",
+    "value": "NO_PHOTO"
+   },
+   {
+    "note": "사진을 열 수 없음. 끝남. detail 에 s3_key·error",
+    "value": "BAD_IMAGE"
+   },
+   {
+    "note": "흰·빈 사진 (사진 임베딩). detail 에 gray_std·blank_std",
+    "value": "BLANK"
+   },
+   {
+    "note": "모델 호출·답 형식 실패. MAX_ATTEMPTS 번까지 다시 부름",
+    "value": "FAILED"
+   },
+   {
+    "note": "S3 원본을 못 읽음. 매 실행 다시 봄(모델 안 불러 비용 없음), attempts = 연속 실패 횟수",
+    "value": "READ_ERROR"
+   },
+   {
+    "note": "받은 파일의 sha256 이 Silver 값과 다름. 매 실행 다시 봄",
+    "value": "SHA_MISMATCH"
+   }
+  ],
+  "migration_how": [
+   {
+    "note": "도구가 파일을 실행하고 기록",
+    "value": "apply"
+   },
+   {
+    "note": "표가 생기기 전에 손으로 적용한 파일의 기록만 넣음",
+    "value": "baseline"
+   }
+  ],
+  "neuter_code": [
+   {
+    "note": "예",
+    "value": "Y"
+   },
+   {
+    "note": "아니오",
+    "value": "N"
+   },
+   {
+    "note": "미상",
+    "value": "U"
+   }
+  ],
+  "ops_reason_code": [
+   {
+    "note": "Bronze 실행 중단(보호중 목록 0건 등). 상태 갱신 안 함 · 다음 실행이 같은 범위를 다시 받음",
+    "value": "aborted"
+   },
+   {
+    "note": "구간 total 과 받은 건수가 다름 · 자동: 다음 실행이 다시 받음",
+    "value": "count_mismatch"
+   },
+   {
+    "note": "형식이 틀려 버린 항목 · 사람 확인 (원문 구간 보기)",
+    "value": "dropped_row"
+   },
+   {
+    "note": "사진 주소 404 · 자동: 5일 뒤 한 번 재확인, 그래도 404 면 gave_up",
+    "value": "not_found"
+   },
+   {
+    "note": "새로 바뀐 사진 주소가 404. 옛 버전 유지 · 자동: 5일 뒤 재확인",
+    "value": "replaced_not_found"
+   },
+   {
+    "note": "사진을 정해진 횟수만큼 실패 · 사람 확인 (다시 시도하지 않음)",
+    "value": "gave_up"
+   },
+   {
+    "note": "사진 다운로드 실패(서버 오류·시간 초과 등) · 자동: 다음 실행에서 다시 시도",
+    "value": "download_failed"
+   },
+   {
+    "note": "같은 공고가 두 목록에서 다른 원본으로 옴. Silver 실행 차단 · 사람 확인 (자동 병합 안 함)",
+    "value": "raw_content_conflict"
+   },
+   {
+    "note": "같은 공고의 정제 결과가 서로 다름. Silver 실행 차단 · 사람 확인",
+    "value": "silver_transform_conflict"
+   },
+   {
+    "note": "상태 이력 재구성 충돌. Silver 실행 차단 · 사람 확인",
+    "value": "status_history_conflict"
+   },
+   {
+    "note": "미완료 구간이 있어 Silver 가 시작하지 않음 · 자동: 다음 수집 뒤 재실행",
+    "value": "partition_incomplete"
+   },
+   {
+    "note": "READY 조건 미충족(NOTICE_NOT_COMPLETED 등 publish_log 사유) · 앞 단계 확인",
+    "value": "publish_blocked"
+   },
+   {
+    "note": "RDS 동기화: 이미 반영한 발행보다 오래된 입력 (종료 코드 4) · 자동: 건너뜀",
+    "value": "stale_input"
+   },
+   {
+    "note": "RDS 동기화: 레지스트리 config_hash 와 active_version 이 다름 · 사람: 활성 버전 전환 절차(data_contract 16.2)",
+    "value": "config_hash_mismatch"
+   },
+   {
+    "note": "RDS 동기화: 작업의 활성 버전이 없음 · 사람: 활성 버전 등록",
+    "value": "no_active_version"
+   },
+   {
+    "note": "RDS 동기화: 부모 행이 없어 건너뛴 행 · 자동: 공고 경로 반영 뒤 다시",
+    "value": "fk_skipped"
+   },
+   {
+    "note": "RDS 동기화의 그 밖의 실패 · 사람: 태스크 로그 확인",
+    "value": "sync_error"
+   },
+   {
+    "note": "(009) 수집 API 가 HTTP 200 인데 resultCode 가 00 이 아님. 재시도해서 받았으면 evidence.recovered = true · 자동: 재시도, 계속되면 사람(키·한도 확인)",
+    "value": "api_result_error"
+   },
+   {
+    "note": "(009) 수집 API 응답 시간 초과 · 자동: 재시도(4번), 다 실패하면 그날 수집이 실패해 다음 실행이 같은 범위를 다시 받음",
+    "value": "api_timeout"
+   },
+   {
+    "note": "(009) 수집 API HTTP 200 아님·연결 오류(게이트웨이 키 오류 401·403 포함) · 자동: 재시도, 계속되면 사람",
+    "value": "api_http_error"
+   },
+   {
+    "note": "(009) manifest 구간의 날짜·건수 형식이 틀림(invalid_date·invalid_date_range·invalid_count) · 사람 확인(수집 코드)",
+    "value": "invalid_partition"
+   }
+  ],
+  "ops_run_status": [
+   {
+    "note": "끝남, 실패 없음",
+    "value": "ok"
+   },
+   {
+    "note": "끝났지만 실패·보류 건이 있음",
+    "value": "warn"
+   },
+   {
+    "note": "단계가 멈춤 (뒤 단계는 skipped)",
+    "value": "failed"
+   },
+   {
+    "note": "앞 단계 실패나 설정 꺼짐으로 돌지 않음",
+    "value": "skipped"
+   }
+  ],
+  "ops_stage": [
+   {
+    "note": "Bronze 수집 (manifest)",
+    "value": "bronze"
+   },
+   {
+    "note": "사진 다운로드·현재 사진 스냅샷",
+    "value": "photo"
+   },
+   {
+    "note": "Silver 공고·상태 이력",
+    "value": "silver_notice"
+   },
+   {
+    "note": "Silver 현재 사진·사진 이력",
+    "value": "silver_photo"
+   },
+   {
+    "note": "Silver READY 발행",
+    "value": "silver_publish"
+   },
+   {
+    "note": "Gold 작업별 (예: gold_photo_trait, gold_image_embedding). 실패 건은 Gold 로그를 읽음",
+    "value": "gold_<task>"
+   },
+   {
+    "note": "RDS 동기화 경로별 (sync_route 값: rds_notice_status, rds_photo_vector, rds_tag, rds_text_vector)",
+    "value": "rds_<route>"
+   }
+  ],
+  "sex_code": [
+   {
+    "note": "수컷",
+    "value": "M"
+   },
+   {
+    "note": "암컷",
+    "value": "F"
+   },
+   {
+    "note": "미상",
+    "value": "Q"
+   }
+  ],
+  "size": [
+   {
+    "note": "10kg 이하",
+    "value": "small"
+   },
+   {
+    "note": "25kg 미만",
+    "value": "medium"
+   },
+   {
+    "note": "25kg 이상",
+    "value": "large"
+   }
+  ],
+  "species_code": [
+   {
+    "note": "개",
+    "value": "417000"
+   },
+   {
+    "note": "고양이",
+    "value": "422400"
+   },
+   {
+    "note": "기타축종",
+    "value": "429900"
+   }
+  ],
+  "status_group": [
+   {
+    "note": "보호중. 검색 대상",
+    "value": "PROTECTING"
+   },
+   {
+    "note": "종료(입양·반환·자연사·안락사·기증·방사·사유 미상)",
+    "value": "CLOSED"
+   },
+   {
+    "note": "상태 없음·예상 밖 값",
+    "value": "UNKNOWN"
+   }
+  ],
+  "subject_type": [
+   {
+    "note": "사진 sha256 단위 결과",
+    "value": "photo"
+   },
+   {
+    "note": "공고번호 단위 결과",
+    "value": "animal"
+   }
+  ],
+  "sync_route": [
+   {
+    "note": "공고 상태. Silver 공고 적재 성공 뒤, 사진 안 기다림",
+    "value": "notice_status"
+   },
+   {
+    "note": "사진·벡터. 공고·사진 공통 완료본 뒤",
+    "value": "photo_vector"
+   },
+   {
+    "note": "태그",
+    "value": "tag"
+   },
+   {
+    "note": "글 벡터",
+    "value": "text_vector"
+   }
+  ],
+  "tag_code": [
+   {
+    "note": "복슬복슬 · photo_trait · 검색O 화면O",
+    "value": "fur.fluffy"
+   },
+   {
+    "note": "짧은 털 · photo_trait · 검색O 화면O",
+    "value": "fur.short"
+   },
+   {
+    "note": "늘어진 귀 · photo_trait",
+    "value": "ear.drop"
+   },
+   {
+    "note": "반쯤 선 귀 · photo_trait",
+    "value": "ear.semi"
+   },
+   {
+    "note": "선 귀 · photo_trait",
+    "value": "ear.prick"
+   },
+   {
+    "note": "둥근 눈매 · photo_trait",
+    "value": "eye.round"
+   },
+   {
+    "note": "날카로운 눈매 · photo_trait",
+    "value": "eye.sharp"
+   },
+   {
+    "note": "순함 · text_personality (확률 0.75 이상)",
+    "value": "personality.gentle"
+   },
+   {
+    "note": "친화적 · text_personality",
+    "value": "personality.friendly"
+   },
+   {
+    "note": "겁많음 · text_personality",
+    "value": "personality.timid"
+   },
+   {
+    "note": "경계 · text_personality",
+    "value": "personality.wary"
+   },
+   {
+    "note": "활발 · text_personality",
+    "value": "personality.active"
+   },
+   {
+    "note": "사나움 · text_personality",
+    "value": "personality.aggressive"
+   },
+   {
+    "note": "예민 · text_personality",
+    "value": "personality.sensitive"
+   },
+   {
+    "note": "호기심 · text_personality",
+    "value": "personality.curious"
+   },
+   {
+    "note": "건강정보 있음 · text_health",
+    "value": "health.info"
+   },
+   {
+    "note": "건강정보 없음(건강하다는 뜻 아님) · text_health",
+    "value": "health.none"
+   },
+   {
+    "note": "닮은 품종 · photo_breed · 화면X, 유사도 90 이상만 검색. 품종 이름은 열린 값(예시: breed_name_examples)",
+    "value": "breed.<품종>"
+   }
+  ],
+  "tag_source": [
+   {
+    "note": "사진",
+    "value": "photo"
+   },
+   {
+    "note": "공고 글",
+    "value": "text"
+   },
+   {
+    "note": "공고 칸 규칙",
+    "value": "rule"
+   }
+  ],
+  "tag_task": [
+   {
+    "note": "사진 외형(털·귀·눈매)",
+    "value": "photo_trait"
+   },
+   {
+    "note": "사진 닮은 품종",
+    "value": "photo_breed"
+   },
+   {
+    "note": "공고 글 성격 (Jev)",
+    "value": "text_personality"
+   },
+   {
+    "note": "공고 글 건강정보 (Jev)",
+    "value": "text_health"
+   },
+   {
+    "note": "사진 벡터",
+    "value": "image_embedding"
+   },
+   {
+    "note": "글 카드 벡터",
+    "value": "text_embedding"
+   }
+  ]
+ },
+ "groups": {
+  "bronze": {
+   "color": "#7A3FC2",
+   "layer": "bronze",
+   "note": "Bronze 층. 공공데이터 API 와 사진 원본을 받은 그대로 S3 에 둔 파일. 연결 키는 bronze_run_id(실행)와 desertionNo(공고), 사진은 sha256",
+   "tables": [
+    "rescue_state",
+    "bronze_rescue_manifest",
+    "bronze_rescue_record",
+    "bronze_photo_state",
+    "bronze_image_manifest",
+    "bronze_image_current"
+   ]
+  },
+  "gold": {
+   "color": "#C2185B",
+   "layer": "gold",
+   "note": "Gold 층. 실행 입력·버전 레지스트리, 공용 처리·요청 로그, 태그·사진 벡터·글 벡터 결과, canary. 연결 키는 sha256(사진), desertion_no(공고), gold_run_id(실행), task@N(버전), publish_id(입력 발행본)",
+   "tables": [
+    "gold_run_input",
+    "gold_version_registry",
+    "gold_inference_log",
+    "gold_model_request_log",
+    "gold_animal_tag",
+    "gold_image_embedding",
+    "gold_text_embedding",
+    "gold_embedding_canary"
+   ]
+  },
+  "notice_screen": {
+   "color": "#2E7D32",
+   "layer": "rds",
+   "note": "공고 화면 영역. Silver 공고·현재 사진과 Gold 태그를 공고 단위로 펼친 표. 상세·목록·필터 검색이 읽음",
+   "tables": [
+    "service_notice",
+    "service_notice_photo",
+    "service_notice_tag"
+   ]
+  },
+  "ops": {
+   "color": "#757575",
+   "layer": "rds",
+   "note": "운영 영역. 서비스 활성 버전, 동기화 순번, 마이그레이션 적용 기록. 화면에 직접 쓰지 않음",
+   "tables": [
+    "active_version",
+    "sync_state",
+    "schema_migrations"
+   ]
+  },
+  "ops_record": {
+   "color": "#757575",
+   "layer": "rds",
+   "note": "운영 기록 (008, 이름 앞 ops_). 실행 요약·실패·Iceberg 구조 관측. 서비스 화면에는 쓰지 않고 /ops 운영 화면만 읽음",
+   "tables": [
+    "ops_run_summary",
+    "ops_failure",
+    "ops_schema_snapshot"
+   ]
+  },
+  "search_vector": {
+   "color": "#1565C0",
+   "layer": "rds",
+   "note": "검색 벡터 영역 (pgvector). Gold 임베딩 결과 중 활성 버전·현재 사진/카드와 맞는 행만. 사진·자연어 유사도 검색이 읽음",
+   "tables": [
+    "image_embedding",
+    "text_embedding"
+   ]
+  },
+  "silver": {
+   "color": "#2459D6",
+   "layer": "silver",
+   "note": "Silver 층. 공고·상태 이력·현재 사진·사진 이력·보호소 정제 표와, 그 스냅샷을 고정한 발행 기록. 연결 키는 desertion_no(공고), sha256(사진), publish_id·publish_seq(발행)",
+   "tables": [
+    "silver_animal_notice",
+    "silver_animal_status_history",
+    "silver_animal_image",
+    "silver_animal_image_version_history",
+    "silver_shelter",
+    "silver_publish"
+   ]
+  }
+ },
  "migrations": [
   {
    "filename": "001_init.sql",
@@ -38,8 +736,1068 @@
   }
  ],
  "rds_version": "v0.3",
+ "refs": [
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "last_run_id"
+    ],
+    "table": "rescue_state"
+   },
+   "how": "다음 수집의 시작 기준",
+   "key": "bronze_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_rescue_manifest"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "bronze_run_id"
+    ],
+    "table": "bronze_image_manifest"
+   },
+   "how": "사진은 그 수집의 보호중 목록(list_notice·list_protect)으로 받음",
+   "key": "bronze_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_rescue_manifest"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "bronze_photo_state"
+   },
+   "how": "사진 주소(popfile1~8)를 칸별 기록으로",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertionNo"
+    ],
+    "table": "bronze_rescue_record"
+   }
+  },
+  {
+   "color": "#D9730D",
+   "from": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "bronze_image_current"
+   },
+   "how": "칸별 기록에서 마지막 성공 버전을 현재 사진 스냅샷으로",
+   "key": "sha256",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "bronze_photo_state"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_notice"
+   },
+   "how": "정제 (updTm 빼고 정제행 JSON 비교로 INSERT/UPDATE)",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertionNo"
+    ],
+    "table": "bronze_rescue_record"
+   }
+  },
+  {
+   "color": "#8A5A2B",
+   "from": {
+    "columns": [
+     "care_reg_no"
+    ],
+    "table": "silver_shelter"
+   },
+   "how": "공고의 care* 칸을 보호소 표로",
+   "key": "care_reg_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "careRegNo"
+    ],
+    "table": "bronze_rescue_record"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "silver_animal_status_history"
+   },
+   "how": "상태를 관측한 수집 실행",
+   "key": "bronze_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_rescue_manifest"
+   }
+  },
+  {
+   "color": "#D9730D",
+   "from": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "silver_animal_image"
+   },
+   "how": "현재 사진 스냅샷으로 칸별 현재 사진 갱신",
+   "key": "sha256",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "bronze_image_current"
+   }
+  },
+  {
+   "color": "#D9730D",
+   "from": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "silver_animal_image_version_history"
+   },
+   "how": "사진 manifest 의 버전별 저장 결과를 이력으로",
+   "key": "sha256",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "bronze_photo_state"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "bronze_run_id"
+    ],
+    "table": "silver_publish"
+   },
+   "how": "발행이 고정한 원천 수집",
+   "key": "bronze_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_rescue_manifest"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "photo_run_id"
+    ],
+    "table": "silver_publish"
+   },
+   "how": "발행이 고정한 사진 실행",
+   "key": "bronze_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_image_manifest"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_status_history"
+   },
+   "how": "공고별 상태 관측",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_notice"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_image"
+   },
+   "how": "공고별 사진 칸",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_notice"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "desertion_no",
+     "image_slot"
+    ],
+    "table": "silver_animal_image_version_history"
+   },
+   "how": "칸별 사진 버전",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no",
+     "image_slot"
+    ],
+    "table": "silver_animal_image"
+   }
+  },
+  {
+   "color": "#8A5A2B",
+   "from": {
+    "columns": [
+     "care_reg_no"
+    ],
+    "table": "silver_animal_notice"
+   },
+   "how": "공고의 보호소",
+   "key": "care_reg_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "care_reg_no"
+    ],
+    "table": "silver_shelter"
+   }
+  },
+  {
+   "color": "#0F8B8D",
+   "from": {
+    "columns": [
+     "publish_id"
+    ],
+    "table": "gold_run_input"
+   },
+   "how": "Gold 실행이 읽은 발행본 (고정 스냅샷)",
+   "key": "publish_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "publish_id"
+    ],
+    "table": "silver_publish"
+   }
+  },
+  {
+   "color": "#D9730D",
+   "from": {
+    "columns": [
+     "subject_key"
+    ],
+    "table": "gold_animal_tag"
+   },
+   "how": "사진 태그 (photo_trait·photo_breed)",
+   "key": "sha256",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "silver_animal_image"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "subject_key"
+    ],
+    "table": "gold_animal_tag"
+   },
+   "how": "글 태그 (text_personality·text_health, subject_type = animal)",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_notice"
+   }
+  },
+  {
+   "color": "#D9730D",
+   "from": {
+    "columns": [
+     "subject_key"
+    ],
+    "table": "gold_image_embedding"
+   },
+   "how": "사진 벡터 (같은 사진은 한 번만)",
+   "key": "sha256",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "silver_animal_image"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "subject_key"
+    ],
+    "table": "gold_text_embedding"
+   },
+   "how": "글 카드 벡터 (카드 = 공고 정제행으로 만든 가린 글)",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_notice"
+   }
+  },
+  {
+   "color": "#D9730D",
+   "from": {
+    "columns": [
+     "subject_key"
+    ],
+    "table": "gold_inference_log"
+   },
+   "how": "처리 기록 (사진 작업)",
+   "key": "sha256",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "sha256"
+    ],
+    "table": "silver_animal_image"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_run_input"
+   },
+   "how": "실행 설정",
+   "key": "task@N",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_animal_tag"
+   },
+   "how": "실행 설정",
+   "key": "task@N",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_image_embedding"
+   },
+   "how": "실행 설정",
+   "key": "task@N",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_text_embedding"
+   },
+   "how": "실행 설정",
+   "key": "task@N",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_inference_log"
+   },
+   "how": "실행 설정",
+   "key": "task@N",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_inference_log"
+   },
+   "how": "실행별 처리 기록과 모델 호출",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_run_input"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_model_request_log"
+   },
+   "how": "실행별 처리 기록과 모델 호출",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_run_input"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_animal_tag"
+   },
+   "how": "실행별 처리 기록과 모델 호출",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_run_input"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_image_embedding"
+   },
+   "how": "실행별 처리 기록과 모델 호출",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_run_input"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_text_embedding"
+   },
+   "how": "실행별 처리 기록과 모델 호출",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_run_input"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "service_notice"
+   },
+   "how": "notice_status 경로",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_notice"
+   }
+  },
+  {
+   "color": "#8A5A2B",
+   "from": {
+    "columns": [
+     "care_reg_no"
+    ],
+    "table": "service_notice"
+   },
+   "how": "보호소 칸",
+   "key": "care_reg_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "care_reg_no"
+    ],
+    "table": "silver_shelter"
+   }
+  },
+  {
+   "color": "#0F8B8D",
+   "from": {
+    "columns": [
+     "silver_publish_seq"
+    ],
+    "table": "service_notice"
+   },
+   "how": "반영한 발행 순번",
+   "key": "publish_seq",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "publish_seq"
+    ],
+    "table": "silver_publish"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "desertion_no",
+     "image_slot"
+    ],
+    "table": "service_notice_photo"
+   },
+   "how": "photo_vector 경로 (현재 사진 칸)",
+   "key": "desertion_no·칸",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no",
+     "image_slot"
+    ],
+    "table": "silver_animal_image"
+   }
+  },
+  {
+   "color": "#0F8B8D",
+   "from": {
+    "columns": [
+     "silver_publish_seq"
+    ],
+    "table": "service_notice_photo"
+   },
+   "how": "photo_vector 경로 (현재 사진 칸)",
+   "key": "desertion_no·칸",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "publish_seq"
+    ],
+    "table": "silver_publish"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "image_embedding"
+   },
+   "how": "사진 벡터를 칸에 펼침 (sha256 일치 + 활성 버전)",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_image_embedding"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "image_embedding"
+   },
+   "how": "사진 벡터를 칸에 펼침 (sha256 일치 + 활성 버전)",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "service_notice_tag"
+   },
+   "how": "tag 경로 (활성 버전 + 현재 입력만)",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_animal_tag"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "service_notice_tag"
+   },
+   "how": "tag 경로 (활성 버전 + 현재 입력만)",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "text_embedding"
+   },
+   "how": "text_vector 경로 (현재 카드 해시와 맞는 1행)",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_text_embedding"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "text_embedding"
+   },
+   "how": "text_vector 경로 (현재 카드 해시와 맞는 1행)",
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "version"
+    ],
+    "table": "active_version"
+   },
+   "how": "서비스 활성 버전 (전환은 사람)",
+   "key": "task@N·config_hash",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "version"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#C2185B",
+   "from": {
+    "columns": [
+     "config_hash"
+    ],
+    "table": "active_version"
+   },
+   "how": "서비스 활성 버전 (전환은 사람)",
+   "key": "task@N·config_hash",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "config_hash"
+    ],
+    "table": "gold_version_registry"
+   }
+  },
+  {
+   "color": "#0F8B8D",
+   "from": {
+    "columns": [
+     "last_publish_seq"
+    ],
+    "table": "sync_state"
+   },
+   "how": "경로별 마지막 반영 발행",
+   "key": "publish_seq",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "publish_seq"
+    ],
+    "table": "silver_publish"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "last_silver_run_id"
+    ],
+    "table": "sync_state"
+   },
+   "how": "경로별 마지막 반영 발행",
+   "key": "publish_seq",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "bronze_run_id"
+    ],
+    "table": "silver_publish"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "bronze_run_id"
+    ],
+    "table": "ops_run_summary"
+   },
+   "how": null,
+   "key": "bronze_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_rescue_manifest"
+   }
+  },
+  {
+   "color": "#0F8B8D",
+   "from": {
+    "columns": [
+     "publish_id"
+    ],
+    "table": "ops_run_summary"
+   },
+   "how": null,
+   "key": "publish_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "publish_id"
+    ],
+    "table": "silver_publish"
+   }
+  },
+  {
+   "color": "#6B7A10",
+   "from": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "ops_run_summary"
+   },
+   "how": null,
+   "key": "gold_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "gold_run_id"
+    ],
+    "table": "gold_run_input"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "bronze_run_id"
+    ],
+    "table": "ops_failure"
+   },
+   "how": null,
+   "key": "bronze_run_id",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_rescue_manifest"
+   }
+  },
+  {
+   "color": "#2459D6",
+   "from": {
+    "columns": [
+     "subject_key"
+    ],
+    "table": "ops_failure"
+   },
+   "how": "실패 건 → 공고 추적 (subject_type = animal)",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "silver_animal_notice"
+   }
+  },
+  {
+   "color": "#7A3FC2",
+   "from": {
+    "columns": [
+     "bronze_run_id"
+    ],
+    "table": "ops_schema_snapshot"
+   },
+   "how": "실패 건 → 공고 추적 (subject_type = animal)",
+   "key": "desertion_no",
+   "kind": "link",
+   "to": {
+    "columns": [
+     "run_id"
+    ],
+    "table": "bronze_rescue_manifest"
+   }
+  },
+  {
+   "color": null,
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "service_notice_photo"
+   },
+   "how": null,
+   "key": "desertion_no",
+   "kind": "fk",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "service_notice"
+   }
+  },
+  {
+   "color": null,
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "service_notice_tag"
+   },
+   "how": null,
+   "key": "desertion_no",
+   "kind": "fk",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "service_notice"
+   }
+  },
+  {
+   "color": null,
+   "from": {
+    "columns": [
+     "desertion_no",
+     "image_slot"
+    ],
+    "table": "image_embedding"
+   },
+   "how": null,
+   "key": "desertion_no·image_slot",
+   "kind": "fk",
+   "to": {
+    "columns": [
+     "desertion_no",
+     "image_slot"
+    ],
+    "table": "service_notice_photo"
+   }
+  },
+  {
+   "color": null,
+   "from": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "text_embedding"
+   },
+   "how": null,
+   "key": "desertion_no",
+   "kind": "fk",
+   "to": {
+    "columns": [
+     "desertion_no"
+    ],
+    "table": "service_notice"
+   }
+  }
+ ],
  "tables": {
   "active_version": {
+   "columnDocs": [
+    {
+     "example": "image_embedding",
+     "notNull": false,
+     "note": "작업 이름",
+     "pk": true
+    },
+    {
+     "example": "image_embedding@1",
+     "notNull": true,
+     "note": "활성 버전 (Gold gold_version_registry 등록값)",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "Gold 레지스트리 config_hash. 전환 때 대조",
+     "pk": false
+    },
+    {
+     "example": "{\"model\": \"gemini-embedding-2\", \"dim\": 768}",
+     "notNull": false,
+     "note": "검색에 필요한 설정(질의 모델·차원 등). 원본은 Gold 레지스트리",
+     "pk": false
+    },
+    {
+     "example": "image_embedding@0",
+     "notNull": false,
+     "note": "직전 활성 버전 (롤백용)",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "전환 시각",
+     "pk": false
+    },
+    {
+     "example": "lemin",
+     "notNull": true,
+     "note": "전환한 사람",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "task",
@@ -71,10 +1829,110 @@
     ]
    ],
    "fingerprint": "0cabad9697a48f6e2eb03a3431ef187b546cb8f2d9d0b465f388cf61ee2e4be7",
+   "group": "ops",
    "layer": "rds",
+   "note": "작업별 서비스 활성 버전(작업당 1행). 일일 배치는 시작 때 한 번 읽어 고정, 검색 API 는 한 요청 안에서 활성값·질의 설정·벡터를 함께 씀. 전환·롤백은 사람이 (11/23 기준안, 칼럼은 제안)",
    "source": "docs/schema/rds.dbml"
   },
   "bronze_image_current": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": false,
+     "note": "공고",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "칸 1~8. Silver 에서는 image_slot",
+     "pk": false
+    },
+    {
+     "example": "active",
+     "notNull": false,
+     "note": "active(오늘 주소 있음) · emptied(기록은 있는데 오늘 주소가 빔)",
+     "pk": false
+    },
+    {
+     "example": "2",
+     "notNull": false,
+     "note": "마지막으로 저장에 성공한 버전. 없거나 emptied 면 null",
+     "pk": false
+    },
+    {
+     "example": "bronze/rescue/images/448567202600123/popfile1_v002.jpg",
+     "notNull": false,
+     "note": "원본 키 (모델 입력)",
+     "pk": false
+    },
+    {
+     "example": "images/448567202600123/1_v002.webp",
+     "notNull": false,
+     "note": "화면용 WebP 키",
+     "pk": false
+    },
+    {
+     "example": "images/448567202600123/1_v002_thumb.webp",
+     "notNull": false,
+     "note": "썸네일(가로 400px) 키",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": false,
+     "note": "현재 사진 원본 sha256",
+     "pk": false
+    },
+    {
+     "example": "jpg",
+     "notNull": false,
+     "note": "확장자",
+     "pk": false
+    },
+    {
+     "example": "184233",
+     "notNull": false,
+     "note": "원본 크기",
+     "pk": false
+    },
+    {
+     "example": "http://openapi.animal.go.kr/…/popfile1.jpg",
+     "notNull": false,
+     "note": "현재 사진을 받은 주소",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:31:05+09:00",
+     "notNull": false,
+     "note": "현재 사진 저장 시각",
+     "pk": false
+    },
+    {
+     "example": "3",
+     "notNull": false,
+     "note": "가장 최근에 본 주소의 버전 (current 보다 클 수 있음)",
+     "pk": false
+    },
+    {
+     "example": "failed",
+     "notNull": false,
+     "note": "success · pending · failed · gave_up",
+     "pk": false
+    },
+    {
+     "example": "http://openapi.animal.go.kr/…/popfile1.jpg",
+     "notNull": false,
+     "note": "가장 최근에 본 주소. emptied 면 null",
+     "pk": false
+    },
+    {
+     "example": "2026-11-26T03:18:22+09:00",
+     "notNull": false,
+     "note": "최신 버전 주소를 처음 본 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -142,10 +2000,74 @@
     ]
    ],
    "fingerprint": "c0177ebd9a2a00bd2e9d905e0277249a274d16f5693d46184275e6d930f549ce",
+   "group": "bronze",
    "layer": "bronze",
+   "note": "그날 보호중 공고의 칸별 \"지금 현재 사진\" 한 줄 (bronze/rescue/image_current/dt=/run_id=/current.jsonl.gz + snapshot.json). 사진 task 가 끝까지 ok 일 때만 쓴다. Silver 현재 사진 표가 이 파일 하나로 갱신된다",
    "source": "docs/schema/bronze.dbml"
   },
   "bronze_image_manifest": {
+   "columnDocs": [
+    {
+     "example": "rescue_photos",
+     "notNull": false,
+     "note": "만든 모듈",
+     "pk": false
+    },
+    {
+     "example": "20261127T032004-71be0d",
+     "notNull": false,
+     "note": "사진 실행 id (photo_run_id)",
+     "pk": true
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "입력으로 쓴 Bronze 수집 실행",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:20:04+09:00",
+     "notNull": false,
+     "note": "처음 쓴 시각",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:41:10+09:00",
+     "notNull": false,
+     "note": "마지막 checkpoint 시각",
+     "pk": false
+    },
+    {
+     "example": "2026-11-20",
+     "notNull": false,
+     "note": "사진 코드 버전",
+     "pk": false
+    },
+    {
+     "example": "ok",
+     "notNull": false,
+     "note": "in_progress · ok · aborted",
+     "pk": false
+    },
+    {
+     "example": "{\"stored\":212,\"failed\":37}",
+     "notNull": false,
+     "note": "stored·failed 건수와 결과별 요약",
+     "pk": false
+    },
+    {
+     "example": "[{\"desertionNo\":\"448567202600123\",\"slot\":1,\"version\":2,\"sha256\":\"3b7a…\"}]",
+     "notNull": false,
+     "note": "이번에 새로 저장한 사진: desertionNo·slot·original·serving·sha256·version·replaces·first_seen_at",
+     "pk": false
+    },
+    {
+     "example": "[{\"desertionNo\":\"448567202600131\",\"slot\":2,\"status\":\"failed\",\"reason\":\"not_found\",\"attempts\":1}]",
+     "notNull": false,
+     "note": "이번에 실패한 칸: desertionNo·slot·status·reason·attempts",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "source",
@@ -189,10 +2111,98 @@
     ]
    ],
    "fingerprint": "368de99bc08b0297507d67f1e91a374fd28d70d2d51ae336ae9a5e35dd4aef9b",
+   "group": "bronze",
    "layer": "bronze",
+   "note": "사진 실행 1번의 인계 기록 (bronze/rescue/image_runs/dt=/run_id=<사진 실행 id>/manifest.json). 새로 저장한 사진과 실패 칸 목록. checkpoint 마다 덮어씀(status in_progress → ok · aborted)",
    "source": "docs/schema/bronze.dbml"
   },
   "bronze_photo_state": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": false,
+     "note": "공고 (JSON 경로의 키)",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "칸 1~8 (popfile 번호 그대로)",
+     "pk": false
+    },
+    {
+     "example": "2",
+     "notNull": false,
+     "note": "칸 안에서 주소가 처음 나온 순서. 같은 주소는 재실행해도 같은 번호",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "이 버전이 대신하는 이전 버전 번호",
+     "pk": false
+    },
+    {
+     "example": "2026-11-25T03:20:41+09:00",
+     "notNull": false,
+     "note": "이 주소를 처음 본 시각",
+     "pk": false
+    },
+    {
+     "example": "success",
+     "notNull": false,
+     "note": "success · pending · failed · gave_up",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "시도 횟수 (MAX_ATTEMPTS 번째 실패면 gave_up)",
+     "pk": false
+    },
+    {
+     "example": "not_found",
+     "notNull": false,
+     "note": "실패 원인 코드. 수집 실패 드릴다운의 원인",
+     "pk": false
+    },
+    {
+     "example": "http://openapi.animal.go.kr/…/popfile1.jpg",
+     "notNull": false,
+     "note": "받은 주소",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:31:02+09:00",
+     "notNull": false,
+     "note": "마지막 시도 시각 (실패 칸)",
+     "pk": false
+    },
+    {
+     "example": "jpg",
+     "notNull": false,
+     "note": "파일 내용으로 판단한 확장자",
+     "pk": false
+    },
+    {
+     "example": "184233",
+     "notNull": false,
+     "note": "원본 크기",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": false,
+     "note": "원본 sha256 (64자). Silver·Gold 사진의 키",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:31:05+09:00",
+     "notNull": false,
+     "note": "저장 성공 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -252,10 +2262,122 @@
     ]
    ],
    "fingerprint": "93240858b08a8143af8ffcf9e31f275de4d99558041d5175a63654f4be3e3565",
+   "group": "bronze",
    "layer": "bronze",
+   "note": "사진 칸별 다운로드 기록 (state/rescue_photos_state.json 의 notices.<공고>.slots.<칸>). 맨 위가 최신 버전, 이전 버전은 previous 목록. 주소가 바뀌면 version 이 오르고 덮어쓰지 않고 새 키로 받는다. 404 는 5일 뒤 한 번만 다시 본다",
    "source": "docs/schema/bronze.dbml"
   },
   "bronze_rescue_manifest": {
+   "columnDocs": [
+    {
+     "example": "data.go.kr 15098931",
+     "notNull": false,
+     "note": "원천 이름",
+     "pk": false
+    },
+    {
+     "example": "https://apis.data.go.kr/1543061/abandonmentPublicService_v2/abandonmentPublic_v2",
+     "notNull": false,
+     "note": "호출한 API 주소 (인증키 없음)",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "Bronze 실행 id = 시작 시각(KST) + 해시 6자. Silver·Gold·RDS 로 이어지는 bronze_run_id",
+     "pk": true
+    },
+    {
+     "example": "2026-11-27T03:00:11+09:00",
+     "notNull": false,
+     "note": "수집 시작 시각 (ISO, KST)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-03",
+     "notNull": false,
+     "note": "수집 코드 버전 (CODE_VERSION)",
+     "pk": false
+    },
+    {
+     "example": "incremental",
+     "notNull": false,
+     "note": "baseline(상태 없는 첫 실행) · incremental",
+     "pk": false
+    },
+    {
+     "example": "ok",
+     "notNull": false,
+     "note": "ok · aborted. aborted 면 상태를 갱신하지 않고 종료 코드 2",
+     "pk": false
+    },
+    {
+     "example": "[\"20261126\",\"20261127\"]",
+     "notNull": false,
+     "note": "수정일 조회 범위 [시작, 끝]",
+     "pk": false
+    },
+    {
+     "example": "412",
+     "notNull": false,
+     "note": "이번 실행의 API 호출 수 (일 한도 10,000)",
+     "pk": false
+    },
+    {
+     "example": "[\"중단: 보호중 목록이 0건. 상태를 갱신하지 않음\"]",
+     "notNull": false,
+     "note": "경고 문장 목록. 중단 사유도 여기에",
+     "pk": false
+    },
+    {
+     "example": "[{\"kind\":\"updated\",\"file\":\"updated.jsonl.gz\",\"record_count\":1288,\"checksum\":\"sha256:…\"}]",
+     "notNull": false,
+     "note": "종류별 저장 파일: kind(updated · list_notice · list_protect)·file·건수·checksum",
+     "pk": false
+    },
+    {
+     "example": "{\"updated\":{\"bgupd\":\"20261126\",\"enupd\":\"20261127\"}}",
+     "notNull": false,
+     "note": "종류별 요청 파라미터 (인증키는 params 에 없음)",
+     "pk": false
+    },
+    {
+     "example": "[{\"kind\":\"list_protect\",\"start_date\":\"2026-11-20\",\"end_date\":\"2026-11-27\",\"total_count\":7412,\"received_count\":7409,\"complete\":false,\"reason\":\"count_mismatch\",\"api_errors\":{\"timeout\":1}}]",
+     "notNull": false,
+     "note": "구간별 결과: kind·기간·result_code·total_count·received_count·complete·reason, 재시도한 API 오류가 있으면 api_errors(종류별 횟수: timeout·http_error·result_code 코드별). 수집 실패 드릴다운의 증거",
+     "pk": false
+    },
+    {
+     "example": "{\"timeout\":2,\"http_error\":1,\"result_code\":{\"03\":1}}",
+     "notNull": false,
+     "note": "이 실행에서 재시도해서 넘어간 API 오류 합계 (구간별은 partitions[].api_errors). 4번 다 실패하면 실행이 끝나 manifest 가 남지 않음",
+     "pk": false
+    },
+    {
+     "example": "{\"updated\":13,\"list_notice\":3,\"list_protect\":75}",
+     "notNull": false,
+     "note": "종류별 페이지 수",
+     "pk": false
+    },
+    {
+     "example": "3",
+     "notNull": false,
+     "note": "형식이 틀려 버린 항목 수",
+     "pk": false
+    },
+    {
+     "example": "41",
+     "notNull": false,
+     "note": "같은 desertionNo 가 겹친 항목 수 (목록 사이 중복은 정상)",
+     "pk": false
+    },
+    {
+     "example": "[\"careOwnerNm\"]",
+     "notNull": false,
+     "note": "저장 전에 지운 필드 이름",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "source",
@@ -331,10 +2453,200 @@
     ]
    ],
    "fingerprint": "5237d6fdfdcaa0ece92d5e50d473060d16d7b215e04c62b755ace859d7cd4a27",
+   "group": "bronze",
    "layer": "bronze",
+   "note": "Bronze 실행 1번의 결과 (bronze/rescue/raw/dt=<실행일>/run_id=<id>/manifest.json). 파일을 모두 올린 뒤 마지막에 한 번 씀(덮어쓰지 않음). 구간마다 total 과 받은 건수를 남겨 수집 실패 원인의 출처가 된다",
    "source": "docs/schema/bronze.dbml"
   },
   "bronze_rescue_record": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": false,
+     "note": "공고 고유키. 모든 층의 desertion_no",
+     "pk": false
+    },
+    {
+     "example": "충남-당진-2026-00542",
+     "notNull": false,
+     "note": "공고번호 문자열",
+     "pk": false
+    },
+    {
+     "example": "보호중",
+     "notNull": false,
+     "note": "상태 원문. Silver 상태 변화는 이 문자열 비교",
+     "pk": false
+    },
+    {
+     "example": "2026-11-26 14:02:11.0",
+     "notNull": false,
+     "note": "API 수정 시각. 변경 감지 비교에서는 뺀다",
+     "pk": false
+    },
+    {
+     "example": "20261110",
+     "notNull": false,
+     "note": "접수일 (YYYYMMDD)",
+     "pk": false
+    },
+    {
+     "example": "당진시 ○○면",
+     "notNull": false,
+     "note": "발견 장소",
+     "pk": false
+    },
+    {
+     "example": "20261111",
+     "notNull": false,
+     "note": "공고 시작일",
+     "pk": false
+    },
+    {
+     "example": "20261121",
+     "notNull": false,
+     "note": "공고 종료일",
+     "pk": false
+    },
+    {
+     "example": "417000",
+     "notNull": false,
+     "note": "축종 코드",
+     "pk": false
+    },
+    {
+     "example": "개",
+     "notNull": false,
+     "note": "축종 이름",
+     "pk": false
+    },
+    {
+     "example": "000114",
+     "notNull": false,
+     "note": "품종 코드 (앞자리 0 보존)",
+     "pk": false
+    },
+    {
+     "example": "믹스견",
+     "notNull": false,
+     "note": "품종 이름",
+     "pk": false
+    },
+    {
+     "example": "[개] 믹스견",
+     "notNull": false,
+     "note": "축종+품종 전체 이름",
+     "pk": false
+    },
+    {
+     "example": "갈색&검정",
+     "notNull": false,
+     "note": "털색 자유 텍스트 (Silver 가 계열로 나눔)",
+     "pk": false
+    },
+    {
+     "example": "2024(년생)",
+     "notNull": false,
+     "note": "나이 자유 텍스트 (Silver 가 출생연도로 파싱)",
+     "pk": false
+    },
+    {
+     "example": "9.00(Kg)",
+     "notNull": false,
+     "note": "체중 자유 텍스트 (Silver 가 kg 로 파싱)",
+     "pk": false
+    },
+    {
+     "example": "F",
+     "notNull": false,
+     "note": "성별 M · F · Q",
+     "pk": false
+    },
+    {
+     "example": "U",
+     "notNull": false,
+     "note": "중성화 Y · N · U",
+     "pk": false
+    },
+    {
+     "example": "(값 예시 생략)",
+     "notNull": false,
+     "note": "동물등록번호. Silver 는 있는지(rfid_yn)만 남기고 값은 옮기지 않음",
+     "pk": false
+    },
+    {
+     "example": "온순. 겁 조금.",
+     "notNull": false,
+     "note": "특이사항 원문 (평균 21자)",
+     "pk": false
+    },
+    {
+     "example": "사람을 잘 따름",
+     "notNull": false,
+     "note": "성격 원문 (일부 공고만)",
+     "pk": false
+    },
+    {
+     "example": "피부병 치료 중",
+     "notNull": false,
+     "note": "건강 원문 (일부 공고만)",
+     "pk": false
+    },
+    {
+     "example": "이상 없음",
+     "notNull": false,
+     "note": "건강검진 원문 (89~96% 결측)",
+     "pk": false
+    },
+    {
+     "example": "종합백신 1차",
+     "notNull": false,
+     "note": "접종 원문 (89~96% 결측)",
+     "pk": false
+    },
+    {
+     "example": "입양",
+     "notNull": false,
+     "note": "종료 사유 원문",
+     "pk": false
+    },
+    {
+     "example": "충청남도 당진시",
+     "notNull": false,
+     "note": "관할 기관",
+     "pk": false
+    },
+    {
+     "example": "344500202100001",
+     "notNull": false,
+     "note": "보호소 등록번호. Silver silver_shelter 의 키",
+     "pk": false
+    },
+    {
+     "example": "당진시동물보호소",
+     "notNull": false,
+     "note": "보호소 이름",
+     "pk": false
+    },
+    {
+     "example": "충청남도 당진시 ○○로 00",
+     "notNull": false,
+     "note": "보호소 주소",
+     "pk": false
+    },
+    {
+     "example": "000-0000-0000",
+     "notNull": false,
+     "note": "보호소 전화 (보호자 연락처 아님)",
+     "pk": false
+    },
+    {
+     "example": "http://openapi.animal.go.kr/openapi/service/rest/fileDownloadSrv/…/popfile1.jpg",
+     "notNull": false,
+     "note": "사진 주소 1번 칸. popfile1~popfile8 이 같은 모양이고 빈 칸은 키가 없다",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertionNo",
@@ -462,10 +2774,116 @@
     ]
    ],
    "fingerprint": "0f36e001f956373abe47ff33b3ed4e6b90f99b3dc10a8c8ceb1e336568fd6d0f",
+   "group": "bronze",
    "layer": "bronze",
+   "note": "API 응답 항목 1개 = 1줄, 받은 그대로 (bronze/rescue/raw/dt=/run_id=/<kind>.jsonl.gz). 빈 필드는 키 자체가 없다(dict.get 으로 다룸). 같은 공고가 updated·list_notice·list_protect 에 함께 올 수 있고, 내용이 다르면 Silver 가 raw_content_conflict 로 멈춘다. 아래 칸은 Silver 정제가 읽는 필드만 적음(전체 필드는 docs/rescue_fields.md)",
    "source": "docs/schema/bronze.dbml"
   },
   "gold_animal_tag": {
+   "columnDocs": [
+    {
+     "example": "photo",
+     "notNull": true,
+     "note": "photo · animal",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": true,
+     "note": "사진 sha256 또는 공고번호",
+     "pk": false
+    },
+    {
+     "example": "ear.drop",
+     "notNull": true,
+     "note": "태그 코드 (docs/schema/rds.dbml Enum tag_code)",
+     "pk": false
+    },
+    {
+     "example": "photo",
+     "notNull": true,
+     "note": "출처 photo · text · rule (모델 이름 아님)",
+     "pk": false
+    },
+    {
+     "example": "google/gemini-3.1-flash-lite@trait-vision-v10",
+     "notNull": true,
+     "note": "모델@질문지 버전",
+     "pk": false
+    },
+    {
+     "example": "photo_trait",
+     "notNull": true,
+     "note": "작업",
+     "pk": false
+    },
+    {
+     "example": "google/gemini-3.1-flash-lite",
+     "notNull": false,
+     "note": "쓴 모델",
+     "pk": false
+    },
+    {
+     "example": "trait-vision-v10",
+     "notNull": true,
+     "note": "질문지 버전",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": false,
+     "note": "입력 해시",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": false,
+     "note": "검색 태그로 쓰는지",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": false,
+     "note": "상세 화면에 보여 주는지",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "품종 순위 (photo_breed 만)",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "품종 유사도 0~100 (photo_breed 만)",
+     "pk": false
+    },
+    {
+     "example": "{\"runs\":[\"drop\",\"drop\"]}",
+     "notNull": false,
+     "note": "판정 근거 JSON",
+     "pk": false
+    },
+    {
+     "example": "photo-20261127T040211",
+     "notNull": false,
+     "note": "Gold 실행",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:10:02+09",
+     "notNull": false,
+     "note": "만든 시각",
+     "pk": false
+    },
+    {
+     "example": "photo_trait@1",
+     "notNull": false,
+     "note": "task@N",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "subject_type",
@@ -537,10 +2955,92 @@
     ]
    ],
    "fingerprint": "df714032d6016acfa516a484225bb826fdb42c00c47401e6f46fd457efc9d0e9",
+   "group": "gold",
    "layer": "gold",
+   "note": "태그 1개 = 1행. 사진 태그는 사진 sha256, 글 태그는 공고번호가 키. 같은 대상·질문지 버전으로 다시 태깅할 때만 그 범위를 교체하고, 이전 버전 태그는 남긴다. RDS service_notice_tag 의 원천",
    "source": "docs/schema/gold.dbml"
   },
   "gold_embedding_canary": {
+   "columnDocs": [
+    {
+     "example": "canary-20261127T040005",
+     "notNull": false,
+     "note": "canary-<시각>",
+     "pk": true
+    },
+    {
+     "example": "image_embedding",
+     "notNull": true,
+     "note": "확인한 작업",
+     "pk": false
+    },
+    {
+     "example": "gemini-embedding-2:768",
+     "notNull": true,
+     "note": "모델:차원",
+     "pk": false
+    },
+    {
+     "example": "exif-rgb-max1024-jpeg90",
+     "notNull": false,
+     "note": "전처리 버전",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:00:05+09",
+     "notNull": true,
+     "note": "확인 시각",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": true,
+     "note": "통과 여부",
+     "pk": false
+    },
+    {
+     "example": "0.995",
+     "notNull": false,
+     "note": "통과 기준 코사인",
+     "pk": false
+    },
+    {
+     "example": "0.9991",
+     "notNull": false,
+     "note": "사진 중 가장 낮은 코사인",
+     "pk": false
+    },
+    {
+     "example": "20",
+     "notNull": false,
+     "note": "비교한 사진 수",
+     "pk": false
+    },
+    {
+     "example": "false",
+     "notNull": false,
+     "note": "이번에 기준을 새로 만들었는지",
+     "pk": false
+    },
+    {
+     "example": "2026-11-20T10:02:00+09:00",
+     "notNull": false,
+     "note": "기준을 만든 시각",
+     "pk": false
+    },
+    {
+     "example": "{\"cosines\":[0.9998,0.9991]}",
+     "notNull": false,
+     "note": "사진별 코사인·사용량 JSON",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:00:09+09",
+     "notNull": false,
+     "note": "기록 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "gold_run_id",
@@ -596,10 +3096,74 @@
     ]
    ],
    "fingerprint": "87b66df21d40bbaea9a6d5bf04709a3662f176bc8fd9e11d24d622351de69369",
+   "group": "gold",
    "layer": "gold",
+   "note": "모델 변화 확인(canary) 1번 = 1행. 고정 사진 묶음의 벡터를 기준과 비교해 최소 코사인이 기준 이상이면 통과. 탭1 모델 추적의 canary 칸",
    "source": "docs/schema/gold.dbml"
   },
   "gold_image_embedding": {
+   "columnDocs": [
+    {
+     "example": "photo",
+     "notNull": true,
+     "note": "photo",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": true,
+     "note": "사진 원본 sha256",
+     "pk": false
+    },
+    {
+     "example": "image_embedding",
+     "notNull": true,
+     "note": "image_embedding",
+     "pk": false
+    },
+    {
+     "example": "gemini-embedding-2:768",
+     "notNull": true,
+     "note": "모델:차원 (파티션)",
+     "pk": false
+    },
+    {
+     "example": "exif-rgb-max1024-jpeg90",
+     "notNull": true,
+     "note": "전처리 버전",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": true,
+     "note": "입력 해시 (사진은 subject_key 와 같음)",
+     "pk": false
+    },
+    {
+     "example": "[0.012, -0.034, …] (768개)",
+     "notNull": true,
+     "note": "벡터",
+     "pk": false
+    },
+    {
+     "example": "image-20261127T041102",
+     "notNull": false,
+     "note": "Gold 실행",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:15:40+09",
+     "notNull": false,
+     "note": "만든 시각",
+     "pk": false
+    },
+    {
+     "example": "image_embedding@1",
+     "notNull": false,
+     "note": "task@N",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "subject_type",
@@ -643,10 +3207,86 @@
     ]
    ],
    "fingerprint": "2d8ff6404e687dc63a0a8f6c70cc9a1e832e25affbf9821ef6980667adee24eb",
+   "group": "gold",
    "layer": "gold",
+   "note": "사진 원본(sha256) 1장 × 모델 × 전처리 버전 = 벡터 1개. 같은 사진을 쓰는 공고·칸은 이 한 행을 같이 쓴다. RDS image_embedding 의 원천",
    "source": "docs/schema/gold.dbml"
   },
   "gold_inference_log": {
+   "columnDocs": [
+    {
+     "example": "photo",
+     "notNull": true,
+     "note": "photo · animal",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": true,
+     "note": "사진 sha256 또는 공고번호",
+     "pk": false
+    },
+    {
+     "example": "image_embedding",
+     "notNull": true,
+     "note": "작업",
+     "pk": false
+    },
+    {
+     "example": "image_embedding@1",
+     "notNull": true,
+     "note": "task@N",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": true,
+     "note": "실제 모델 입력의 해시 (사진은 sha256, 글은 카드 해시)",
+     "pk": false
+    },
+    {
+     "example": "BAD_IMAGE",
+     "notNull": false,
+     "note": "처리 결과",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "시도 횟수",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "만든 태그 수 (임베딩은 비움)",
+     "pk": false
+    },
+    {
+     "example": "cannot identify image file",
+     "notNull": false,
+     "note": "마지막 오류 한 줄",
+     "pk": false
+    },
+    {
+     "example": "image-20261127T041102",
+     "notNull": false,
+     "note": "마지막으로 처리한 Gold 실행",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:16:03+09",
+     "notNull": false,
+     "note": "상태 갱신 시각",
+     "pk": false
+    },
+    {
+     "example": "{\"s3_key\":\"bronze/rescue/images/448567202600131/popfile1_v002.jpg\",\"error\":\"cannot identify image file\"}",
+     "notNull": false,
+     "note": "판정 근거 JSON. BLANK: {\"gray_std\",\"blank_std\"}, 실패: {\"s3_key\",\"error\"}",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "subject_type",
@@ -698,10 +3338,188 @@
     ]
    ],
    "fingerprint": "8a8f5a36fe235a2a88de9b267fa277eebc2b04eaa39239be3efc025c6ef31f3d",
+   "group": "gold",
    "layer": "gold",
+   "note": "대상·작업·버전·입력당 처리 상태 1행 (태깅·임베딩 공용). (subject_type, subject_key, task, version, input_hash) 로 upsert. 모델 처리 실패 드릴다운의 출처라 운영 기록(ops_failure)으로 복사하지 않고 gold_run_id 로 바로 읽는다",
    "source": "docs/schema/gold.dbml"
   },
   "gold_model_request_log": {
+   "columnDocs": [
+    {
+     "example": "gen-1764201542-Xk2…",
+     "notNull": false,
+     "note": "공급자 요청 id",
+     "pk": false
+    },
+    {
+     "example": "photo",
+     "notNull": false,
+     "note": "photo · animal",
+     "pk": false
+    },
+    {
+     "example": "9e41…b2d0",
+     "notNull": false,
+     "note": "대상 (묶음 요청이면 첫 대상)",
+     "pk": false
+    },
+    {
+     "example": "photo_trait",
+     "notNull": false,
+     "note": "작업",
+     "pk": false
+    },
+    {
+     "example": "trait-vision-v10",
+     "notNull": false,
+     "note": "질문지·템플릿·전처리 버전",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "같은 대상의 몇 번째 호출 (2회 일치 판정 등)",
+     "pk": false
+    },
+    {
+     "example": "google/gemini-3.1-flash-lite",
+     "notNull": false,
+     "note": "요청한 모델",
+     "pk": false
+    },
+    {
+     "example": "google/gemini-3.1-flash-lite",
+     "notNull": false,
+     "note": "실제 응답한 모델. 요청과 다르면 화면에 표시",
+     "pk": false
+    },
+    {
+     "example": "Google AI Studio",
+     "notNull": false,
+     "note": "응답한 공급자",
+     "pk": false
+    },
+    {
+     "example": "google/gemini-3.1-flash-lite-20261015",
+     "notNull": false,
+     "note": "공급자 쪽 고정 모델 이름",
+     "pk": false
+    },
+    {
+     "example": "MEDIUM",
+     "notNull": false,
+     "note": "사진 해상도 설정",
+     "pk": false
+    },
+    {
+     "example": "1290",
+     "notNull": false,
+     "note": "입력 토큰",
+     "pk": false
+    },
+    {
+     "example": "42",
+     "notNull": false,
+     "note": "출력 토큰",
+     "pk": false
+    },
+    {
+     "example": "0",
+     "notNull": false,
+     "note": "추론 토큰",
+     "pk": false
+    },
+    {
+     "example": "0.0031",
+     "notNull": false,
+     "note": "요청 비용 (OpenRouter usage.cost 그대로)",
+     "pk": false
+    },
+    {
+     "example": "1880",
+     "notNull": false,
+     "note": "지연",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "이 요청의 재시도 포함 시도 수",
+     "pk": false
+    },
+    {
+     "example": "OK",
+     "notNull": false,
+     "note": "OK · ERROR · BAD_ANSWER(답 형식 틀림)",
+     "pk": false
+    },
+    {
+     "example": "502",
+     "notNull": false,
+     "note": "오류 코드 (HTTP 등)",
+     "pk": false
+    },
+    {
+     "example": "{\"ear\":\"drop\",\"eye\":\"round\"}",
+     "notNull": false,
+     "note": "모델 답 원문 (길이 제한). 실패 증거",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:09:12+09",
+     "notNull": true,
+     "note": "요청 시각",
+     "pk": false
+    },
+    {
+     "example": "photo-20261127T040211",
+     "notNull": false,
+     "note": "Gold 실행",
+     "pk": false
+    },
+    {
+     "example": "2026-11-26",
+     "notNull": true,
+     "note": "requested_at 의 UTC 날짜 (파티션)",
+     "pk": false
+    },
+    {
+     "example": "0.0",
+     "notNull": false,
+     "note": "온도",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "추론 강도 설정",
+     "pk": false
+    },
+    {
+     "example": "stop",
+     "notNull": false,
+     "note": "끝난 이유 (정규화)",
+     "pk": false
+    },
+    {
+     "example": "STOP",
+     "notNull": false,
+     "note": "공급자 원래 끝난 이유",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "한 요청에 보낸 대상 수 (태깅은 비움 = 1)",
+     "pk": false
+    },
+    {
+     "example": "photo_trait@1",
+     "notNull": false,
+     "note": "task@N",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "request_id",
@@ -821,10 +3639,44 @@
     ]
    ],
    "fingerprint": "cd2a794d70cb461751458bdbb83967eb3a3fca276ade658365427444edb4633b",
+   "group": "gold",
    "layer": "gold",
+   "note": "모델 API 요청 1번 = 1행 (append 만, dt 파티션). 요청 모델과 실제 응답 모델·공급자·토큰·비용·지연·오류·답 원문. 묶어 보내면 subject_key = 첫 대상이고 비용·토큰은 요청 전체 값. 탭1 모델 추적의 비용·지연 출처",
    "source": "docs/schema/gold.dbml"
   },
   "gold_run_input": {
+   "columnDocs": [
+    {
+     "example": "photo-20261127T040211",
+     "notNull": false,
+     "note": "Gold 실행 id",
+     "pk": true
+    },
+    {
+     "example": "silver_20261127T030011-9c41a2",
+     "notNull": true,
+     "note": "읽은 Silver 발행본",
+     "pk": false
+    },
+    {
+     "example": "photo_trait",
+     "notNull": true,
+     "note": "작업: photo_trait · photo_breed · image_embedding · text_personality · text_health · text_embedding",
+     "pk": false
+    },
+    {
+     "example": "photo_trait@1",
+     "notNull": true,
+     "note": "실행 설정 버전 task@N",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:02:11+09",
+     "notNull": true,
+     "note": "시작 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "gold_run_id",
@@ -848,10 +3700,92 @@
     ]
    ],
    "fingerprint": "7927db3fc28725901ced8b0d92c7aa80197099b45a01459aa45e76171d00274f",
+   "group": "gold",
    "layer": "gold",
+   "note": "Gold 실행 1번이 어느 Silver 발행본과 어느 버전으로 돌았는지. 새 결과가 0건이어도 시작 기록을 남긴다. 운영 화면 모델 추적에서 실행 → 발행본을 잇는 표",
    "source": "docs/schema/gold.dbml"
   },
   "gold_text_embedding": {
+   "columnDocs": [
+    {
+     "example": "animal",
+     "notNull": true,
+     "note": "animal",
+     "pk": false
+    },
+    {
+     "example": "448567202600123",
+     "notNull": true,
+     "note": "공고번호",
+     "pk": false
+    },
+    {
+     "example": "text_embedding",
+     "notNull": true,
+     "note": "text_embedding",
+     "pk": false
+    },
+    {
+     "example": "gemini-embedding-2:768",
+     "notNull": true,
+     "note": "모델:차원 (파티션)",
+     "pk": false
+    },
+    {
+     "example": "A2",
+     "notNull": true,
+     "note": "글 카드 템플릿 버전",
+     "pk": false
+    },
+    {
+     "example": "7d10…a2c4",
+     "notNull": true,
+     "note": "가린 카드 본문 sha256",
+     "pk": false
+    },
+    {
+     "example": "개 · 믹스견 · 2024년생 · 온순, 겁 조금",
+     "notNull": false,
+     "note": "모델에 넣은 가린 카드 본문",
+     "pk": false
+    },
+    {
+     "example": "2026-11-26 14:02:11.0",
+     "notNull": false,
+     "note": "카드를 만든 Silver 행의 source_updated_at_raw",
+     "pk": false
+    },
+    {
+     "example": "[0.021, 0.007, …] (768개)",
+     "notNull": true,
+     "note": "벡터",
+     "pk": false
+    },
+    {
+     "example": "text-20261127T042010",
+     "notNull": false,
+     "note": "Gold 실행",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:21:33+09",
+     "notNull": false,
+     "note": "만든 시각",
+     "pk": false
+    },
+    {
+     "example": "text_embedding@3",
+     "notNull": false,
+     "note": "task@N",
+     "pk": false
+    },
+    {
+     "example": "{\"text_personality\":\"text_personality@1\"}",
+     "notNull": false,
+     "note": "카드에 넣은 태그의 버전 JSON",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "subject_type",
@@ -907,10 +3841,44 @@
     ]
    ],
    "fingerprint": "d8abed15220455feb247319cb8ffc6551c1fa4d28ee4643c92f34a1a5a076c67",
+   "group": "gold",
    "layer": "gold",
+   "note": "공고 글 카드 1개 × 모델 × 템플릿 버전 × 카드 해시 = 벡터 1개. 카드 본문은 전화번호·관리번호를 가린 뒤 만들고, 보호자 실명·연락처는 들어가지 않는다. RDS text_embedding 의 원천",
    "source": "docs/schema/gold.dbml"
   },
   "gold_version_registry": {
+   "columnDocs": [
+    {
+     "example": "text_embedding",
+     "notNull": true,
+     "note": "작업",
+     "pk": false
+    },
+    {
+     "example": "text_embedding@3",
+     "notNull": true,
+     "note": "task@N",
+     "pk": false
+    },
+    {
+     "example": "{\"model_id\":\"gemini-embedding-2\",\"dim\":768,\"template\":\"A2\"}",
+     "notNull": true,
+     "note": "모델·질문지·전후처리·차원 JSON (비밀값 없음)",
+     "pk": false
+    },
+    {
+     "example": "1a7e…5b33",
+     "notNull": true,
+     "note": "설정 sha256 (64자)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-24 10:12:00+09",
+     "notNull": true,
+     "note": "처음 등록한 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "task",
@@ -934,10 +3902,68 @@
     ]
    ],
    "fingerprint": "eb8f4848ab50886db7d91adbca0116317bccd2cf77466b14884752b28d503a18",
+   "group": "gold",
    "layer": "gold",
+   "note": "작업별 실행 설정. 같은 설정이면 같은 행, 바뀌면 새 번호. config_hash = 정렬한 config_json 의 sha256 이고, RDS active_version.config_hash 와 비교해 서비스 활성 여부를 판단한다",
    "source": "docs/schema/gold.dbml"
   },
   "image_embedding": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": true,
+     "note": "공고번호",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": true,
+     "note": "사진 칸 1~8",
+     "pk": false
+    },
+    {
+     "example": "image_embedding@1",
+     "notNull": true,
+     "note": "image_embedding@N. 키에 포함해 같은 모델 v1·v2 공존",
+     "pk": false
+    },
+    {
+     "example": "2",
+     "notNull": true,
+     "note": "사진 교체 순번",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": true,
+     "note": "임베딩한 원본 sha256. service_notice_photo.sha256 과 다르면 검색 후보에서 제외",
+     "pk": false
+    },
+    {
+     "example": "bronze/rescue/images/448567202600123/popfile1_v002.jpg",
+     "notNull": true,
+     "note": "임베딩한 원본 키",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": false,
+     "note": "Gold 실행 ID",
+     "pk": false
+    },
+    {
+     "example": "[0.012, -0.034, …] (768개)",
+     "notNull": true,
+     "note": "768차원 벡터, 코사인 거리. v0.1 인덱스 없음",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "RDS 적재 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -977,10 +4003,98 @@
     ]
    ],
    "fingerprint": "fad819dfe3793031bcce5965bd8503ef4b019b8cd5ae113a0febb324c0758441",
+   "group": "search_vector",
    "layer": "rds",
+   "note": "공고 현재 사진 칸의 검색 벡터(칸 × 버전). Gold gold_image_embedding(sha256 단위)을 칸에 펼침. 검색 후보 = 보호중 + sha256 일치 + 활성 버전. 키에 version 포함(004). 모델 등 실행 설정은 version 의 레지스트리 설정에만 두고 행에 적지 않음(006). 원천 실행 번호(photo_run_id)도 두지 않음(007): 사진은 sha256·s3_key, 반영 시점은 service_notice_photo.silver_publish_seq, 모델 실행은 gold_run_id 로 추적. v0.1 인덱스 없음(전체 비교), HNSW 는 실측 뒤 v0.2 에서 검토",
    "source": "docs/schema/rds.dbml"
   },
   "ops_failure": {
+   "columnDocs": [
+    {
+     "example": "88",
+     "notNull": false,
+     "note": "행 번호",
+     "pk": true
+    },
+    {
+     "example": "test",
+     "notNull": true,
+     "note": "환경",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": true,
+     "note": "실패를 만난 실행",
+     "pk": false
+    },
+    {
+     "example": "silver_20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "RDS 동기화 실패면 그 발행",
+     "pk": false
+    },
+    {
+     "example": "silver_notice",
+     "notNull": true,
+     "note": "실패한 단계",
+     "pk": false
+    },
+    {
+     "example": "animal",
+     "notNull": true,
+     "note": "대상 종류: animal(공고) · photo_slot(공고·칸) · partition(수집 구간) · route(동기화 경로) · run(실행 전체)",
+     "pk": false
+    },
+    {
+     "example": "448567202600142",
+     "notNull": true,
+     "note": "대상 키. 공고면 desertion_no (공고 추적으로 이동)",
+     "pk": false
+    },
+    {
+     "example": "raw_content_conflict",
+     "notNull": true,
+     "note": "원인 코드",
+     "pk": false
+    },
+    {
+     "example": "sources differ: processState",
+     "notNull": false,
+     "note": "오류 한 줄",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "시도 횟수",
+     "pk": false
+    },
+    {
+     "example": "{\"sources\":[\"list_protect\",\"updated\"],\"diff\":{\"processState\":[\"보호중\",\"종료(입양)\"]}}",
+     "notNull": false,
+     "note": "원문 증거 (보호자 정보 제외): 충돌한 원본 종류와 다른 칼럼, 구간 결과 등",
+     "pk": false
+    },
+    {
+     "example": "bronze/rescue/raw/dt=2026-11-27/run_id=20261127T030011-9c41a2/updated.jsonl.gz",
+     "notNull": false,
+     "note": "원문 위치 (S3 키 · request_id)",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": true,
+     "note": "실행을 멈춘 건인지. 탭1 정제 실패 카드는 이 값이 true 인 건만 센다",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 03:44:02+09",
+     "notNull": true,
+     "note": "관측 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "id",
@@ -1040,10 +4154,104 @@
     ]
    ],
    "fingerprint": "f9fbaf45d12cabd70a9596a84b788e1642b68113a40060409fbae2848ee3ef82",
+   "group": "ops_record",
    "layer": "rds",
+   "note": "(008) 실패한 대상 1개 = 1행. Bronze·사진·Silver·RDS 동기화가 실패를 만날 때 쓴다. 실패 드릴다운 원인별 → 건별 → 증거의 출처. 작업이 실패를 반환만 하고 멈추는 곳(Silver 충돌, RDS 종료 코드 4)은 멈추기 전에 쓴다",
    "source": "docs/schema/rds.dbml"
   },
   "ops_run_summary": {
+   "columnDocs": [
+    {
+     "example": "1042",
+     "notNull": false,
+     "note": "행 번호",
+     "pk": true
+    },
+    {
+     "example": "test",
+     "notNull": true,
+     "note": "환경 test · prod",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": true,
+     "note": "이 실행의 Bronze 수집 id. 하루 실행을 묶는 키",
+     "pk": false
+    },
+    {
+     "example": "silver_20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "Silver 발행 id (발행 이후 단계만)",
+     "pk": false
+    },
+    {
+     "example": "photo-20261127T040211",
+     "notNull": false,
+     "note": "Gold 실행 id (gold_<task> 단계만)",
+     "pk": false
+    },
+    {
+     "example": "gold_photo_trait",
+     "notNull": true,
+     "note": "단계",
+     "pk": false
+    },
+    {
+     "example": "warn",
+     "notNull": true,
+     "note": "단계 결과",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:02:11+09",
+     "notNull": true,
+     "note": "시작 시각",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:10:40+09",
+     "notNull": false,
+     "note": "끝난 시각",
+     "pk": false
+    },
+    {
+     "example": "212",
+     "notNull": false,
+     "note": "들어온 건수",
+     "pk": false
+    },
+    {
+     "example": "205",
+     "notNull": false,
+     "note": "내보낸 건수",
+     "pk": false
+    },
+    {
+     "example": "7",
+     "notNull": false,
+     "note": "실패 건수 (값 보류는 세지 않음)",
+     "pk": false
+    },
+    {
+     "example": "{\"insert\":286,\"update\":512,\"transitions\":{\"보호중→종료(입양)\":198},\"weight_parse\":{\"ambiguous\":61}}",
+     "notNull": false,
+     "note": "단계별 세부: insert·update·unchanged, 상태 쌍별 건수, 파싱 보류 분포, 호출 수·비용, 동기화 반영 수",
+     "pk": false
+    },
+    {
+     "example": "feeddb8",
+     "notNull": false,
+     "note": "단계를 돌린 코드·이미지 버전",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 04:10:41+09",
+     "notNull": true,
+     "note": "기록 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "id",
@@ -1107,10 +4315,74 @@
     ]
    ],
    "fingerprint": "3e6ade835a57b0ce45256bceb44ab0e8330401a2740e339ae00ba56e48885f81",
+   "group": "ops_record",
    "layer": "rds",
+   "note": "(008) 실행 1번의 단계 1개 = 1행. 탭1 핵심 숫자 카드와 단계 흐름도의 숫자. 지금은 실행 중 메모리에만 있는 Silver insert·update·충돌 수와 RDS 동기화 결과를 여기 남긴다. \"오늘\" = 마지막으로 성공한 Bronze 실행(rescue_state.last_run_id)",
    "source": "docs/schema/rds.dbml"
   },
   "ops_schema_snapshot": {
+   "columnDocs": [
+    {
+     "example": "17",
+     "notNull": false,
+     "note": "행 번호",
+     "pk": true
+    },
+    {
+     "example": "test",
+     "notNull": true,
+     "note": "환경",
+     "pk": false
+    },
+    {
+     "example": "gold",
+     "notNull": true,
+     "note": "silver · gold",
+     "pk": false
+    },
+    {
+     "example": "gold_image_embedding",
+     "notNull": true,
+     "note": "문서 표 이름 (환경 접미사 뺀 이름)",
+     "pk": false
+    },
+    {
+     "example": "rebom_gold.gold_image_embedding_test",
+     "notNull": true,
+     "note": "실제 Glue 표 이름",
+     "pk": false
+    },
+    {
+     "example": "3",
+     "notNull": true,
+     "note": "Iceberg 현재 schema-id (칼럼이 바뀌면 Iceberg 가 올림)",
+     "pk": false
+    },
+    {
+     "example": "9b27…4c18",
+     "notNull": true,
+     "note": "(칼럼 이름, 타입) 정렬 목록의 sha256. 문서 지문과 같은 방식",
+     "pk": false
+    },
+    {
+     "example": "[[\"subject_type\",\"string\"],[\"subject_key\",\"string\"]]",
+     "notNull": true,
+     "note": "칼럼 이름·타입 목록",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 03:58:00+09",
+     "notNull": true,
+     "note": "관측 시각",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "관측한 실행",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "id",
@@ -1154,10 +4426,26 @@
     ]
    ],
    "fingerprint": "012aedb86971adc7b01e01b3de55ce737318824a84d3edae83e64f98f3793f8a",
+   "group": "ops_record",
    "layer": "rds",
+   "note": "(008) Silver·Gold Iceberg 표의 실제 구조를 관측한 기록. 요약 태스크가 실행마다 Glue 에서 읽어 바뀌었을 때만 1행 쓴다. API 는 이 표와 RDS information_schema 만 읽어 문서 지문(schema_catalog.json)과 비교하므로 API 파드에 Glue 권한이 필요 없다",
    "source": "docs/schema/rds.dbml"
   },
   "rescue_state": {
+   "columnDocs": [
+    {
+     "example": "20261127",
+     "notNull": false,
+     "note": "마지막으로 성공한 실행의 수정일 조회 끝 날짜 (YYYYMMDD, KST)",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "마지막으로 성공한 Bronze 실행 id. 운영 화면 \"오늘\"(최종 수집일) 기준",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "last_enupd",
@@ -1169,10 +4457,44 @@
     ]
    ],
    "fingerprint": "ad712171a14d838f540789f6df0606e56afa1e704dd43b219f1ef557ca967f87",
+   "group": "bronze",
    "layer": "bronze",
+   "note": "증분 수집의 기준 상태. 파일 하나(state/rescue_state.json)를 실행마다 덮어씀. 다음 실행은 last_enupd 를 하루 겹쳐 수정일 조회를 시작한다. 업로드가 모두 끝난 실행만 상태를 갱신하므로 last_run_id 가 \"최종 수집일\"의 기준. Silver 가 이어받는 다른 키(보호중·종료 목록)도 같은 파일에 있지만 Silver 단계 소유라 여기 적지 않음",
    "source": "docs/schema/bronze.dbml"
   },
   "schema_migrations": {
+   "columnDocs": [
+    {
+     "example": "004_vector_tables_v01.sql",
+     "notNull": false,
+     "note": "db/migrations 파일 이름",
+     "pk": true
+    },
+    {
+     "example": "9f2c…e1a0 (64자)",
+     "notNull": true,
+     "note": "적용할 때 파일 내용(UTF-8, 줄바꿈 LF 기준)의 sha256. 레포 파일과 다르면 적용 뒤 파일이 고쳐진 것",
+     "pk": false
+    },
+    {
+     "example": "2026-11-25 14:10:00+09",
+     "notNull": true,
+     "note": "적용(또는 기록) 시각",
+     "pk": false
+    },
+    {
+     "example": "lemin",
+     "notNull": true,
+     "note": "적용한 사람 (--by, 없으면 PC 사용자 이름)",
+     "pk": false
+    },
+    {
+     "example": "apply",
+     "notNull": true,
+     "note": "apply = 도구가 실행, baseline = 이미 손으로 적용한 파일의 기록만 넣음",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "filename",
@@ -1196,10 +4518,248 @@
     ]
    ],
    "fingerprint": "d8ac35b2429696c59f56ee4273b50b032585e2e3bbc8becd7a0c4e5347186e76",
+   "group": "ops",
    "layer": "rds",
+   "note": "마이그레이션 적용 기록(파일당 1행). python -m rebom.common.migrate 가 쓴다. 적용한 파일 내용이 레포와 다르면 도구가 멈춤",
    "source": "docs/schema/rds.dbml"
   },
   "service_notice": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": false,
+     "note": "공고 고유키 (API desertionNo)",
+     "pk": true
+    },
+    {
+     "example": "충남-당진-2026-00542",
+     "notNull": false,
+     "note": "공고번호 문자열 (noticeNo)",
+     "pk": false
+    },
+    {
+     "example": "PROTECTING",
+     "notNull": true,
+     "note": "공고 상태. Silver 값 그대로, RDS 가 판단하지 않음. 공고 상태 동기화 경로만 고침",
+     "pk": false
+    },
+    {
+     "example": "보호중 / 종료(입양)",
+     "notNull": false,
+     "note": "상태 원문. 상세에 그대로 표시",
+     "pk": false
+    },
+    {
+     "example": "입양",
+     "notNull": false,
+     "note": "종료 사유. 바뀌어도 30일 연장 안 함",
+     "pk": false
+    },
+    {
+     "example": "2026-11-24 03:12:00+09",
+     "notNull": false,
+     "note": "서비스 시작 이후 보호중→종료를 처음 확인한 시각. 같은 종료 재처리 시 유지, 보호중 복귀 시 비움 (출처는 광훈 님 확인 대기)",
+     "pk": false
+    },
+    {
+     "example": "2026-12-24 03:12:00+09",
+     "notNull": false,
+     "note": "상세 노출 만료 = closed_transition_at + 30일. 재동기화로 늘리지 않음. 서비스 시작 전 종료 공고는 NULL(비노출)",
+     "pk": false
+    },
+    {
+     "example": "417000",
+     "notNull": true,
+     "note": "축종 코드. 벡터 검색의 종 필터는 이 칼럼과 JOIN (벡터 표에 복사 안 함)",
+     "pk": false
+    },
+    {
+     "example": "개",
+     "notNull": false,
+     "note": "축종 이름 (upKindNm)",
+     "pk": false
+    },
+    {
+     "example": "000114",
+     "notNull": false,
+     "note": "품종 코드 (kindCd, 앞자리 0 보존)",
+     "pk": false
+    },
+    {
+     "example": "믹스견",
+     "notNull": false,
+     "note": "품종 원문 (kindNm). 화면 품종은 이 값 (태깅 결과 아님)",
+     "pk": false
+    },
+    {
+     "example": "[개] 믹스견",
+     "notNull": false,
+     "note": "kindFullNm. 기타 축종은 여기에만 실제 이름",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": false,
+     "note": "믹스 여부 (코드 000114 등 또는 이름에 '믹스')",
+     "pk": false
+    },
+    {
+     "example": "F",
+     "notNull": false,
+     "note": "성별",
+     "pk": false
+    },
+    {
+     "example": "U",
+     "notNull": false,
+     "note": "중성화",
+     "pk": false
+    },
+    {
+     "example": "2024",
+     "notNull": false,
+     "note": "출생연도. 화면은 'N년생'만, 나이는 안 보여 줌",
+     "pk": false
+    },
+    {
+     "example": "9.00(Kg)",
+     "notNull": false,
+     "note": "체중 원문 (화면 표시)",
+     "pk": false
+    },
+    {
+     "example": "9.00",
+     "notNull": false,
+     "note": "체중 kg (범위면 큰 값)",
+     "pk": false
+    },
+    {
+     "example": "small",
+     "notNull": false,
+     "note": "크기 (개만). 크기 필터",
+     "pk": false
+    },
+    {
+     "example": "갈색&검정",
+     "notNull": false,
+     "note": "털색 원문 (colorCd)",
+     "pk": false
+    },
+    {
+     "example": "{갈색계열,검정계열}",
+     "notNull": false,
+     "note": "털색 계열 배열 (값은 color_group). 털색 필터",
+     "pk": false
+    },
+    {
+     "example": "얼룩",
+     "notNull": false,
+     "note": "무늬. 없으면 NULL",
+     "pk": false
+    },
+    {
+     "example": "온순. 겁 조금.",
+     "notNull": false,
+     "note": "특이사항 원문 (specialMark)",
+     "pk": false
+    },
+    {
+     "example": "사람을 잘 따름",
+     "notNull": false,
+     "note": "특징(사회성) 원문. 상세 성격 자리",
+     "pk": false
+    },
+    {
+     "example": "피부병 치료 중",
+     "notNull": false,
+     "note": "특징(건강) 원문",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": false,
+     "note": "건강 체크 원문 (healthChk)",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": false,
+     "note": "접종 체크 원문 (vaccinationChk)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-10",
+     "notNull": false,
+     "note": "접수일 (happenDt)",
+     "pk": false
+    },
+    {
+     "example": "당진시 용연동",
+     "notNull": false,
+     "note": "발견 장소 원문. 화면은 읍·면·동/구까지만",
+     "pk": false
+    },
+    {
+     "example": "충청남도 당진시",
+     "notNull": false,
+     "note": "관할 기관 (orgNm)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-11",
+     "notNull": false,
+     "note": "공고 시작일 (noticeSdt)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-23",
+     "notNull": false,
+     "note": "공고 종료일 (noticeEdt)",
+     "pk": false
+    },
+    {
+     "example": "344500202100001",
+     "notNull": false,
+     "note": "보호소 등록번호 (보호소 표는 따로 두지 않고 공고에 펼침)",
+     "pk": false
+    },
+    {
+     "example": "당진시동물보호소",
+     "notNull": false,
+     "note": "보호소 이름",
+     "pk": false
+    },
+    {
+     "example": "000-0000-0000",
+     "notNull": false,
+     "note": "보호소 전화. 화면 표시(11/20 결정), 검색 로그로 보내지 않음",
+     "pk": false
+    },
+    {
+     "example": "충청남도 당진시 ○○로 00",
+     "notNull": false,
+     "note": "보호소 주소",
+     "pk": false
+    },
+    {
+     "example": "9f2c…e1a0 (64자)",
+     "notNull": true,
+     "note": "옮긴 칼럼 값의 sha256. 같으면 UPDATE 건너뜀(재반영 무해)",
+     "pk": false
+    },
+    {
+     "example": "42",
+     "notNull": false,
+     "note": "이 행을 쓴 Silver 완료본 순번 (silver_run_id 방식이 정해지면 교체)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-25 04:00:00+09",
+     "notNull": true,
+     "note": "RDS 반영 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1359,10 +4919,62 @@
     ]
    ],
    "fingerprint": "3fb1b74fb76280f0307e541f58cbe133b14cd1a11d6aaef60e39e8f117df6a3d",
+   "group": "notice_screen",
    "layer": "rds",
+   "note": "공고 화면의 기준 행(공고당 1행). 검색은 PROTECTING 만, 상세는 PROTECTING 이거나 visible_until 이 지나지 않은 종료 공고. 공개 필드만, 보호자 실명(careOwnerNm)·동물등록번호 없음. 원천: Silver silver_animal_notice + silver_shelter",
    "source": "docs/schema/rds.dbml"
   },
   "service_notice_photo": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": true,
+     "note": "공고번호",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": true,
+     "note": "popfile 칸 1~8. 대표 사진 = 키가 있는 가장 작은 칸",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d (64자)",
+     "notNull": true,
+     "note": "표시 중인 원본 사진 sha256. 태그·벡터가 지금 사진 것인지 확인하는 키",
+     "pk": false
+    },
+    {
+     "example": "2",
+     "notNull": true,
+     "note": "사진 교체 순번 (Silver current_version)",
+     "pk": false
+    },
+    {
+     "example": "serving/rescue/images/448567202600123/popfile1_v002.webp",
+     "notNull": true,
+     "note": "화면 이미지 키 (CloudFront /images/*)",
+     "pk": false
+    },
+    {
+     "example": "thumb/rescue/images/448567202600123/popfile1_v002.webp",
+     "notNull": false,
+     "note": "썸네일 키 (~400px WebP)",
+     "pk": false
+    },
+    {
+     "example": "42",
+     "notNull": false,
+     "note": "이 행을 쓴 Silver 공통 완료본 순번",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "RDS 반영 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1398,10 +5010,98 @@
     ]
    ],
    "fingerprint": "2d89584f6c026917c987eb6645bfb3ffdd333d134d6d8bf221a08ba36f187832",
+   "group": "notice_screen",
    "layer": "rds",
+   "note": "공고 화면에 보여줄 사진 칸(칸당 1행). 원천: Silver 현재 사진 표시 키. emptied 확정 칸은 행 삭제, 종료 공고는 마지막 확인 사진 유지",
    "source": "docs/schema/rds.dbml"
   },
   "service_notice_tag": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": true,
+     "note": "공고번호",
+     "pk": false
+    },
+    {
+     "example": "photo",
+     "notNull": true,
+     "note": "결과 대상 종류",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": true,
+     "note": "photo 면 대표 사진 sha256 (service_notice_photo.sha256 과 같아야 함), animal 이면 공고번호",
+     "pk": false
+    },
+    {
+     "example": "photo_trait",
+     "notNull": true,
+     "note": "태그를 만든 작업",
+     "pk": false
+    },
+    {
+     "example": "ear.drop",
+     "notNull": true,
+     "note": "태그 코드 (목록은 Enum tag_code)",
+     "pk": false
+    },
+    {
+     "example": "늘어진 귀",
+     "notNull": true,
+     "note": "화면 이름 (적재 때 tag_codes.py 라벨 복사)",
+     "pk": false
+    },
+    {
+     "example": "photo_trait@1",
+     "notNull": true,
+     "note": "이 태그를 만든 버전 task@N. active_version 과 같아야 검색·표시",
+     "pk": false
+    },
+    {
+     "example": "photo",
+     "notNull": true,
+     "note": "출처",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": true,
+     "note": "검색에 쓰는지 (Gold 행 값). 품종은 유사도 90 이상만 true",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": true,
+     "note": "화면에 보이는지 (Gold 행 값). breed.* 는 false",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "품종 순위 1~3 (photo_breed 만)",
+     "pk": false
+    },
+    {
+     "example": "92",
+     "notNull": false,
+     "note": "품종 유사도 평균 또는 Jev 확률×100. 화면 비표시",
+     "pk": false
+    },
+    {
+     "example": "photo-tags-20261123T0300",
+     "notNull": false,
+     "note": "Gold 실행 ID (추적용)",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "RDS 반영 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1461,10 +5161,56 @@
     ]
    ],
    "fingerprint": "50349874f262c642057c161fe2f622d2408602a711546041bc76e5f16394500f",
+   "group": "notice_screen",
    "layer": "rds",
+   "note": "공고에 연결한 태그 1개 = 1행. Gold gold_animal_tag 중 활성 버전 + 현재 입력(대표 사진 sha256 / 최신 글 해시)만. 검색은 보호중 공고의 searchable, 상세는 displayable",
    "source": "docs/schema/rds.dbml"
   },
   "silver_animal_image": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": false,
+     "note": "공고",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "칸 1~8",
+     "pk": false
+    },
+    {
+     "example": "http://openapi.animal.go.kr/…/popfile1.jpg",
+     "notNull": false,
+     "note": "현재 사진 주소",
+     "pk": false
+    },
+    {
+     "example": "bronze/rescue/images/448567202600123/popfile1_v002.jpg",
+     "notNull": false,
+     "note": "Bronze 원본 키 (모델 입력)",
+     "pk": false
+    },
+    {
+     "example": "images/448567202600123/1_v002.webp",
+     "notNull": false,
+     "note": "화면용 WebP 키",
+     "pk": false
+    },
+    {
+     "example": "images/448567202600123/1_v002_thumb.webp",
+     "notNull": false,
+     "note": "썸네일 키",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": false,
+     "note": "현재 사진 원본 sha256. Gold 사진 결과의 subject_key",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1496,10 +5242,92 @@
     ]
    ],
    "fingerprint": "d3e8a672b4c7bff6dd10ef1240dc86d6c676392d369b0200d975dcccf697810f",
+   "group": "silver",
    "layer": "silver",
+   "note": "공고·칸별 지금 보여줄 사진(현재 사진). Bronze 현재 사진 스냅샷과 사진 manifest 로 갱신. 같은 칸의 교체 이력은 silver_animal_image_version_history. Gold 사진 작업은 sha256 으로, RDS service_notice_photo 는 (desertion_no, image_slot) 으로 이 표를 읽는다. 실제 test 표(silver_animal_image_auto_b_test)의 추가 칸은 광훈 님 확인 뒤 적는다",
    "source": "docs/schema/silver.dbml"
   },
   "silver_animal_image_version_history": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": true,
+     "note": "공고",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": true,
+     "note": "칸 1~8",
+     "pk": false
+    },
+    {
+     "example": "2",
+     "notNull": true,
+     "note": "칸 안의 버전 번호",
+     "pk": false
+    },
+    {
+     "example": "1",
+     "notNull": false,
+     "note": "대신한 이전 버전",
+     "pk": false
+    },
+    {
+     "example": "2026-11-25T03:20:41+09:00",
+     "notNull": false,
+     "note": "이 주소를 처음 본 시각",
+     "pk": false
+    },
+    {
+     "example": "http://openapi.animal.go.kr/…/popfile1.jpg",
+     "notNull": false,
+     "note": "이 버전의 주소",
+     "pk": false
+    },
+    {
+     "example": "bronze/rescue/images/448567202600123/popfile1_v002.jpg",
+     "notNull": false,
+     "note": "원본 키",
+     "pk": false
+    },
+    {
+     "example": "images/448567202600123/1_v002.webp",
+     "notNull": false,
+     "note": "화면용 키",
+     "pk": false
+    },
+    {
+     "example": "images/448567202600123/1_v002_thumb.webp",
+     "notNull": false,
+     "note": "썸네일 키",
+     "pk": false
+    },
+    {
+     "example": "3b7a…c90d",
+     "notNull": false,
+     "note": "이 버전 원본 sha256",
+     "pk": false
+    },
+    {
+     "example": "success",
+     "notNull": false,
+     "note": "success · pending · failed · gave_up",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "실패 원인 (not_found · replaced_not_found 등)",
+     "pk": false
+    },
+    {
+     "example": "20261127T032004-71be0d",
+     "notNull": false,
+     "note": "이 버전을 처리한 사진 실행 id",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1555,10 +5383,284 @@
     ]
    ],
    "fingerprint": "5e5a3cb4acffe4ea43443a427e6aea90050811e9b7941f0d546535ad26229fbf",
+   "group": "silver",
    "layer": "silver",
+   "note": "칸별 사진 버전 이력 (공고 × 칸 × 버전 1행). 주소가 바뀌면 새 버전 행, 이전 행은 남긴다. \"사진이 바뀌었는데 벡터는 옛 사진\" 같은 공고 추적의 근거",
    "source": "docs/schema/silver.dbml"
   },
   "silver_animal_notice": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": false,
+     "note": "공고 고유키 (desertionNo)",
+     "pk": true
+    },
+    {
+     "example": "충남-당진-2026-00542",
+     "notNull": false,
+     "note": "공고번호 문자열",
+     "pk": false
+    },
+    {
+     "example": "344500202100001",
+     "notNull": false,
+     "note": "보호소 등록번호. silver_shelter 와 연결",
+     "pk": false
+    },
+    {
+     "example": "온순. 겁 조금.",
+     "notNull": false,
+     "note": "특이사항 원문",
+     "pk": false
+    },
+    {
+     "example": "사람을 잘 따름 / 온순. 겁 조금.",
+     "notNull": false,
+     "note": "성격·건강·특이사항을 이은 글 (글 카드 재료)",
+     "pk": false
+    },
+    {
+     "example": "false",
+     "notNull": false,
+     "note": "동물등록번호가 있는지만 (값은 옮기지 않음)",
+     "pk": false
+    },
+    {
+     "example": "당진시 ○○면",
+     "notNull": false,
+     "note": "발견 장소",
+     "pk": false
+    },
+    {
+     "example": "충청남도 당진시",
+     "notNull": false,
+     "note": "관할 기관",
+     "pk": false
+    },
+    {
+     "example": "F",
+     "notNull": false,
+     "note": "M · F · Q",
+     "pk": false
+    },
+    {
+     "example": "U",
+     "notNull": false,
+     "note": "Y · N · U",
+     "pk": false
+    },
+    {
+     "example": "입양",
+     "notNull": false,
+     "note": "종료 사유 원문",
+     "pk": false
+    },
+    {
+     "example": "2026-11-26 14:02:11.0",
+     "notNull": false,
+     "note": "API updTm 원문. 변경 감지 비교에서 뺀다",
+     "pk": false
+    },
+    {
+     "example": "2024(년생)",
+     "notNull": false,
+     "note": "나이 원문",
+     "pk": false
+    },
+    {
+     "example": "2024",
+     "notNull": false,
+     "note": "출생연도",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "나이 파싱 메모 (60일 미만 등)",
+     "pk": false
+    },
+    {
+     "example": "9.00(Kg)",
+     "notNull": false,
+     "note": "체중 원문",
+     "pk": false
+    },
+    {
+     "example": "9.0",
+     "notNull": false,
+     "note": "체중 범위 아래 값",
+     "pk": false
+    },
+    {
+     "example": "9.0",
+     "notNull": false,
+     "note": "체중 범위 위 값 (크기 판정 기준)",
+     "pk": false
+    },
+    {
+     "example": "9.0",
+     "notNull": false,
+     "note": "대표 체중",
+     "pk": false
+    },
+    {
+     "example": "small",
+     "notNull": false,
+     "note": "small(10kg 미만) · medium(25kg 미만) · large. 개만, 체중 없으면 null",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "값 보류 사유: missing · ambiguous · ambiguous_unit · over_100kg_unverified. 정상이면 null",
+     "pk": false
+    },
+    {
+     "example": "보호중",
+     "notNull": false,
+     "note": "상태 원문 (processState)",
+     "pk": false
+    },
+    {
+     "example": "PROTECTING",
+     "notNull": false,
+     "note": "PROTECTING · CLOSED · UNKNOWN",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "품질 경고 (상태 비었는데 보호중 목록에서 옴 등)",
+     "pk": false
+    },
+    {
+     "example": "입양",
+     "notNull": false,
+     "note": "종료 사유: 입양 · 반환 · 자연사 · 안락사 · 기증 · 방사 · 사유 미상",
+     "pk": false
+    },
+    {
+     "example": "2026-11-10",
+     "notNull": false,
+     "note": "접수일",
+     "pk": false
+    },
+    {
+     "example": "2026-11-11",
+     "notNull": false,
+     "note": "공고 시작일",
+     "pk": false
+    },
+    {
+     "example": "2026-11-11",
+     "notNull": false,
+     "note": "공고일 (notice_start_date 와 같음)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-21",
+     "notNull": false,
+     "note": "공고 종료일",
+     "pk": false
+    },
+    {
+     "example": "갈색&검정",
+     "notNull": false,
+     "note": "털색 원문",
+     "pk": false
+    },
+    {
+     "example": "갈색,검정",
+     "notNull": false,
+     "note": "털색 정리값",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "값 보류 사유: missing · needs_review. 정상이면 null",
+     "pk": false
+    },
+    {
+     "example": "[\"갈색계열\",\"검정계열\"]",
+     "notNull": false,
+     "note": "털색 계열 태그",
+     "pk": false
+    },
+    {
+     "example": "null",
+     "notNull": false,
+     "note": "무늬 (얼룩·삼색 등)",
+     "pk": false
+    },
+    {
+     "example": "417000",
+     "notNull": false,
+     "note": "축종 코드 417000 · 422400 · 429900",
+     "pk": false
+    },
+    {
+     "example": "개",
+     "notNull": false,
+     "note": "축종 이름",
+     "pk": false
+    },
+    {
+     "example": "000114",
+     "notNull": false,
+     "note": "품종 코드 (앞자리 0 보존)",
+     "pk": false
+    },
+    {
+     "example": "믹스견",
+     "notNull": false,
+     "note": "품종 원문",
+     "pk": false
+    },
+    {
+     "example": "[개] 믹스견",
+     "notNull": false,
+     "note": "축종+품종 전체 이름",
+     "pk": false
+    },
+    {
+     "example": "true",
+     "notNull": false,
+     "note": "믹스 여부",
+     "pk": false
+    },
+    {
+     "example": "false",
+     "notNull": false,
+     "note": "공고 때 60일 미만",
+     "pk": false
+    },
+    {
+     "example": "사람을 잘 따름",
+     "notNull": false,
+     "note": "성격 원문",
+     "pk": false
+    },
+    {
+     "example": "피부병 치료 중",
+     "notNull": false,
+     "note": "건강 원문",
+     "pk": false
+    },
+    {
+     "example": "이상 없음",
+     "notNull": false,
+     "note": "건강검진 원문",
+     "pk": false
+    },
+    {
+     "example": "종합백신 1차",
+     "notNull": false,
+     "note": "접종 원문",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1742,10 +5844,86 @@
     ]
    ],
    "fingerprint": "c69cb5a9754259750e5560161d6ef0af2ab00655cc4bdf555e0cc39e4d213fc4",
+   "group": "silver",
    "layer": "silver",
+   "note": "공고당 정제행 1개. 변경 감지는 updTm(source_updated_at_raw)을 빼고 정제행 JSON 전체를 비교해 INSERT/UPDATE. 같은 공고가 두 목록에서 다른 원본으로 오면 자동 병합하지 않고 실행을 멈춘다(raw_content_conflict). 파싱 못 한 값은 비우고 *_parse_status 에 이유를 남긴다(값 보류, 실행은 계속). 보호자 실명·동물등록번호 값 없음",
    "source": "docs/schema/silver.dbml"
   },
   "silver_animal_status_history": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": false,
+     "note": "공고",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27",
+     "notNull": false,
+     "note": "관측일 (KST)",
+     "pk": false
+    },
+    {
+     "example": "CHANGED",
+     "notNull": false,
+     "note": "INITIAL · CHANGED 등 관측 종류",
+     "pk": false
+    },
+    {
+     "example": "보호중",
+     "notNull": false,
+     "note": "이전 상태 원문",
+     "pk": false
+    },
+    {
+     "example": "종료(입양)",
+     "notNull": false,
+     "note": "현재 상태 원문",
+     "pk": false
+    },
+    {
+     "example": "CLOSED",
+     "notNull": false,
+     "note": "현재 상태 묶음",
+     "pk": false
+    },
+    {
+     "example": "입양",
+     "notNull": false,
+     "note": "종료 사유",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27 02:10:41.0",
+     "notNull": false,
+     "note": "관측 때 API updTm",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "관측한 Bronze 실행 (bronze_run_id)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:00:11+09:00",
+     "notNull": false,
+     "note": "관측 시각",
+     "pk": false
+    },
+    {
+     "example": "updated",
+     "notNull": false,
+     "note": "확인한 목록 (list_protect · updated 등)",
+     "pk": false
+    },
+    {
+     "example": "false",
+     "notNull": false,
+     "note": "목록에서 사라져 추정한 종료인지",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1797,10 +5975,86 @@
     ]
    ],
    "fingerprint": "cce42e7f10bae746765c12ffebac6ec16fef056926fa0545e4509fa741a81ac4",
+   "group": "silver",
    "layer": "silver",
+   "note": "상태를 관측할 때마다 1행. processState 문자열이 바뀌면 CHANGED, 보호중 목록에서 사라진 공고는 추정 종료(is_inferred). 운영 화면 \"상태 변화\" 카드와 상태 쌍별 건수의 출처",
    "source": "docs/schema/silver.dbml"
   },
   "silver_publish": {
+   "columnDocs": [
+    {
+     "example": "silver_20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "발행 id",
+     "pk": true
+    },
+    {
+     "example": "43",
+     "notNull": false,
+     "note": "발행 순번. 발행 뒤 예약(reserve_publish_seq)해서 채움",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "원천 Bronze 실행",
+     "pk": false
+    },
+    {
+     "example": "20261127T030011-9c41a2",
+     "notNull": false,
+     "note": "공고 처리 실행 id",
+     "pk": false
+    },
+    {
+     "example": "20261127T032004-71be0d",
+     "notNull": false,
+     "note": "사진 처리 실행 id",
+     "pk": false
+    },
+    {
+     "example": "rebom_silver.silver_animal_notice_real_20261111_test",
+     "notNull": false,
+     "note": "고정한 공고 표",
+     "pk": false
+    },
+    {
+     "example": "rebom_silver.silver_animal_image_auto_b_test",
+     "notNull": false,
+     "note": "고정한 현재 사진 표",
+     "pk": false
+    },
+    {
+     "example": "5620324469304075651",
+     "notNull": false,
+     "note": "고정한 공고 표 Iceberg 스냅샷",
+     "pk": false
+    },
+    {
+     "example": "1187340021945763302",
+     "notNull": false,
+     "note": "고정한 사진 표 Iceberg 스냅샷",
+     "pk": false
+    },
+    {
+     "example": "READY",
+     "notNull": false,
+     "note": "READY 만 기록 (BLOCKED 는 기록하지 않음)",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:00:11+09:00",
+     "notNull": false,
+     "note": "원천 수집 시각. 더 오래된 입력의 역반영을 막는 비교에 씀",
+     "pk": false
+    },
+    {
+     "example": "2026-11-27T03:52:40+00:00",
+     "notNull": false,
+     "note": "발행 시각 (서버가 채움)",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "publish_id",
@@ -1852,10 +6106,44 @@
     ]
    ],
    "fingerprint": "50a1050b8b1f1b3ef15846ed74393fbf8f8731541fa311e82558dd3d651d2124",
+   "group": "silver",
    "layer": "silver",
+   "note": "Silver 완료본 READY 기록 (S3 <발행 prefix>/<publish_id>.json, 한 번 쓰면 바꾸지 않음). 공고·사진 Iceberg 스냅샷을 고정해 Gold 와 RDS 가 같은 입력을 읽게 한다. publish_seq 가 RDS 반영 순서(sync_state 와 비교)",
    "source": "docs/schema/silver.dbml"
   },
   "silver_shelter": {
+   "columnDocs": [
+    {
+     "example": "344500202100001",
+     "notNull": false,
+     "note": "보호소 등록번호",
+     "pk": true
+    },
+    {
+     "example": "당진시동물보호소",
+     "notNull": false,
+     "note": "보호소 이름",
+     "pk": false
+    },
+    {
+     "example": "충청남도 당진시 ○○로 00",
+     "notNull": false,
+     "note": "주소",
+     "pk": false
+    },
+    {
+     "example": "000-0000-0000",
+     "notNull": false,
+     "note": "보호소 전화 (보호자 연락처 아님)",
+     "pk": false
+    },
+    {
+     "example": "충청남도 당진시",
+     "notNull": false,
+     "note": "관할 기관",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "care_reg_no",
@@ -1879,10 +6167,50 @@
     ]
    ],
    "fingerprint": "3eccfddf51662b67f48c57d92add9a7e353dd9939f7933ebb1e2b9aa7eb9057a",
+   "group": "silver",
    "layer": "silver",
+   "note": "보호소 1곳 = 1행. 공고의 care* 칸을 모아 만든다. 등록번호가 없으면 만들지 않는다. RDS service_notice 의 보호소 칸 원천",
    "source": "docs/schema/silver.dbml"
   },
   "sync_state": {
+   "columnDocs": [
+    {
+     "example": "photo_vector",
+     "notNull": false,
+     "note": "동기화 경로",
+     "pk": true
+    },
+    {
+     "example": "42",
+     "notNull": false,
+     "note": "silver_publish_log 방식일 때 마지막 반영 순번",
+     "pk": false
+    },
+    {
+     "example": "silver_20261124T030012-f65718",
+     "notNull": false,
+     "note": "journal COMPLETED 방식일 때 마지막 반영 실행. 둘 중 하나만 씀(미정)",
+     "pk": false
+    },
+    {
+     "example": "5620324469304075651",
+     "notNull": false,
+     "note": "읽은 Silver 공고 Iceberg 스냅샷",
+     "pk": false
+    },
+    {
+     "example": "800755379067985557",
+     "notNull": false,
+     "note": "읽은 Silver 현재 사진 Iceberg 스냅샷",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "반영 완료 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "route",
@@ -1910,10 +6238,56 @@
     ]
    ],
    "fingerprint": "ed0c7cd1ba5c6a1b6ba3ed78dba187b93d9e27c353ad0ee6e62ff6ff4d2ce37b",
+   "group": "ops",
    "layer": "rds",
+   "note": "동기화 경로별 마지막 반영 Silver 완료본 (워터마크 대신, 11/23 제안). 더 오래된 완료본은 반영 안 함. 순번 비교와 행 변경은 같은 트랜잭션 (표 자체가 제안)",
    "source": "docs/schema/rds.dbml"
   },
   "text_embedding": {
+   "columnDocs": [
+    {
+     "example": "448567202600123",
+     "notNull": true,
+     "note": "공고번호",
+     "pk": false
+    },
+    {
+     "example": "card",
+     "notNull": true,
+     "note": "글 종류 (지금은 card 하나)",
+     "pk": false
+    },
+    {
+     "example": "text_embedding@3",
+     "notNull": true,
+     "note": "text_embedding@N (템플릿 내용·지문·태그 버전 포함 설정)",
+     "pk": false
+    },
+    {
+     "example": "4547c5…6206",
+     "notNull": true,
+     "note": "가린 카드 본문 sha256 (Gold source_hash)",
+     "pk": false
+    },
+    {
+     "example": "text-737c35ec…",
+     "notNull": false,
+     "note": "Gold 실행 ID",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "768차원 벡터. v0.1 은 인덱스 없이 전체 비교",
+     "pk": false
+    },
+    {
+     "example": null,
+     "notNull": true,
+     "note": "RDS 적재 시각",
+     "pk": false
+    }
+   ],
    "columns": [
     [
      "desertion_no",
@@ -1945,7 +6319,9 @@
     ]
    ],
    "fingerprint": "98248cd0a03b658ef3dc4b9ee759762a170dd8c26b1896e9be9257be5735c69d",
+   "group": "search_vector",
    "layer": "rds",
+   "note": "공고 카드의 글 검색 벡터(공고 × 버전). Gold gold_text_embedding 중 현재 카드 해시와 맞는 1행. 키에 version 포함(004). 모델·카드 템플릿(Gold prompt_version)·태그 버전은 version 의 레지스트리 설정에만 두고 행에 적지 않음(006). v0.1 인덱스 없음",
    "source": "docs/schema/rds.dbml"
   }
  }

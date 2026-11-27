@@ -36,3 +36,6 @@
 @import './tag-search.css';
 @import './rank-debug.css'; /* dev 모드 순위 근거 */
 @import './responsive.css';
+
+/* 운영 모니터링 (/ops). .ops 범위 안에서만 */
+@import '../screens/ops/ops.css';

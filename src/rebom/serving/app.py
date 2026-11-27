@@ -100,6 +100,8 @@ def create_app(settings: Settings | None = None,
         allow_origins=settings.cors_origin_list,
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
+        # 운영 화면(/ops) 로그인 쿠키를 로컬 개발(웹 3000 → API 8000)에서도 보내도록. 배포는 같은 주소라 영향 없음
+        allow_credentials=True,
     )
 
     def repo(request: Request) -> AnimalRepository:

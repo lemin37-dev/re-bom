@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { MascotDialog } from '@/components/mascot/MascotDialog'
 import { ThemeToggle } from '@/components/mascot/ThemeToggle'
 import { FilterDialog } from '@/components/search/FilterDialog'
-import { activeNavHref, isAnimalDetail, navTitle, ROUTES } from '@/constants/routes'
+import { activeNavHref, isAnimalDetail, isOpsPage, navTitle, ROUTES } from '@/constants/routes'
 import { MobileHeader } from '@/mobile/layout/MobileHeader'
 import { MobileTabs } from '@/mobile/layout/MobileTabs'
 import { useExperience } from '@/providers/ExperienceProvider'
@@ -29,6 +29,9 @@ export function ExperienceShell({ children }: { children: ReactNode }) {
   const isApp = mode === 'app'
   const detail = isAnimalDetail(pathname)
   const activeHref = activeNavHref(pathname)
+
+  // 운영 모니터링(/ops)은 서비스 화면이 아니라 틀(헤더·탭·푸터·마스코트) 없이 본문만 그린다
+  if (isOpsPage(pathname)) return <div className="ops-shell">{children}</div>
 
   return <div className={`app ${isApp ? 'app-preview-mode' : 'web-preview-mode'}`} data-mascot={theme}>
     <div className="experience-layout">

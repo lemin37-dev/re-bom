@@ -8,6 +8,8 @@ export const ROUTES = {
   shelters: '/shelters',
   about: '/about',
   animal: (id: string) => `/animals/${encodeURIComponent(id)}`,
+  /** 운영 모니터링. 주 메뉴에 넣지 않는다(비밀번호 화면) */
+  ops: '/ops',
 } as const
 
 /** 주 메뉴: 웹 헤더, 앱 하단 탭, 앱 미리보기 안내에서 함께 사용 */
@@ -17,6 +19,10 @@ export const NAV_ITEMS: { href: string; title: string; tabLabel: string; icon: I
   { href: ROUTES.shelters, title: '보호센터', tabLabel: '보호센터', icon: 'pin' },
   { href: ROUTES.about, title: '서비스 소개', tabLabel: '서비스 소개', icon: 'leaf' },
 ]
+
+export function isOpsPage(pathname: string) {
+  return pathname === ROUTES.ops || pathname.startsWith(`${ROUTES.ops}/`)
+}
 
 export function isAnimalDetail(pathname: string) {
   return pathname.startsWith('/animals/')
