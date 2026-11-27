@@ -60,7 +60,7 @@ AWS 테스트 READY 발행본을 직접 지정해 공고와 현재 사진 스냅
 | `sync_notice_status_to_rds` | 공고 전용 `COMPLETED`를 받아 공고 상태와 검색 노출을 갱신합니다. | RDS 동기화 후속, 이름 제안 |
 | `sync_gold_results_to_rds` | 현재 공고·사진에 맞는 활성 태그와 벡터를 서비스 DB에 반영합니다. | RDS 동기화 후속, 이름 제안 |
 
-`embed_text`는 같은 Airflow 실행의 `silver_gold_publish`에서 `publish_id`를 받습니다. 첫 연결은 `text_embedding@3`, `test`, 읽기 전용으로 실행합니다. `@3`는 템플릿 내용과 지문(`template_sha256`, `golden_sha256`, `doc_prefix`)을 Gold에 기록합니다. 지문이 없는 `@1`·`@2`는 계획만 볼 수 있고 저장할 수 없습니다. v0.1(11/23 기준) 한 사이클이 끝날 때까지 `--write`는 켜지 않습니다.
+`embed_text`는 같은 Airflow 실행의 `silver_gold_publish`에서 `publish_id`를 받습니다. 첫 연결은 `text_embedding@3`, `test`, 읽기 전용으로 실행합니다. `@3`는 템플릿 내용과 지문(`template_sha256`, `golden_sha256`, `doc_prefix`)을 Gold에 기록합니다. 지문이 없는 `@1`·`@2`는 계획만 볼 수 있고 저장할 수 없습니다. v0.1(11/23 기준) 한 사이클이 끝날 때까지 `--write`는 켜지 않습니다. v0.2에서 새 태그 이름으로 등록한 버전으로 바꾸고 `--write`를 켜서, 매일 증분(신규·변경 카드)까지 저장합니다. `_test`의 태그 이름이 바뀌어 `@3`으로는 쓰기가 멈추므로(#91, `docs/data_contract.md` 13.7) 그전까지 계획의 `missing_tags`는 정상입니다.
 
 ## 공용 로그 전환
 
